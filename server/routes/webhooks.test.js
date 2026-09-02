@@ -100,7 +100,7 @@ test.beforeEach(() => db.reset());
 
 test('resolves the call from the callId query param', async () => {
   const call = seedCall();
-  const res = await post(`/webhooks/dial-done?callId=${call.id}`, {
+  const res = await post(`/twiml/dial-done?callId=${call.id}`, {
     DialCallStatus: 'completed',
     DialCallDuration: '120',
     CallSid: 'CA_UNRELATED',
@@ -113,7 +113,7 @@ test('resolves the call from the callId query param', async () => {
 
 test('falls back to CallSid when callId is absent', async () => {
   const call = seedCall();
-  await post('/webhooks/dial-done', {
+  await post('/twiml/dial-done', {
     DialCallStatus: 'completed',
     DialCallDuration: '60',
     CallSid: 'CA_PARENT',
@@ -124,7 +124,7 @@ test('falls back to CallSid when callId is absent', async () => {
 
 test('ignores a webhook matching neither callId nor CallSid', async () => {
   seedCall();
-  const res = await post('/webhooks/dial-done?callId=does-not-exist', {
+  const res = await post('/twiml/dial-done?callId=does-not-exist', {
     DialCallStatus: 'completed',
     DialCallDuration: '60',
     CallSid: 'CA_NOPE',
@@ -143,8 +143,8 @@ test('bills a completed call exactly once even if Twilio retries', async () => {
     CallSid: 'CA_PARENT',
   };
 
-  await post(`/webhooks/dial-done?callId=${call.id}`, payload);
-  await post(`/webhooks/dial-done?callId=${call.id}`, payload);
+  await post(`/twiml/dial-done?callId=${call.id}`, payload);
+  await post(`/twiml/dial-done?callId=${call.id}`, payload);
 
   assert.equal(usageWrites().length, 1, 'duplicate webhook must not double-bill');
   assert.equal(usageWrites()[0].params[2], 3); // 180s -> 3 minutes
@@ -152,7 +152,7 @@ test('bills a completed call exactly once even if Twilio retries', async () => {
 
 test('does not bill an unanswered call', async () => {
   const call = seedCall();
-  await post(`/webhooks/dial-done?callId=${call.id}`, {
+  await post(`/twiml/dial-done?callId=${call.id}`, {
     DialCallStatus: 'no-answer',
     DialCallDuration: '0',
     CallSid: 'CA_PARENT',
@@ -201,4 +201,16 @@ test('bridge hangs up rather than dialling when no destination is given', async 
 
   assert.doesNotMatch(xml, /<Dial/);
   assert.match(xml, /<Hangup\/>/);
+});
+
+test('an unmatched path is a 404, not a signature rejection', async () => {
+  const server = app.listen(0);
+  try {
+    const { port } = server.address();
+    const res = await fetch(`http://127.0.0.1:${port}/nope`);
+    assert.equal(res.status, 404);
+    assert.equal((await res.json()).error, 'not_found');
+  } finally {
+    server.close();
+  }
 });

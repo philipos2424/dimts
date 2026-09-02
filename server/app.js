@@ -1,6 +1,6 @@
 import express from 'express';
 import { callsRouter, usageRouter } from './routes/calls.js';
-import { webhooksRouter } from './routes/webhooks.js';
+import { twimlRouter, webhooksRouter } from './routes/webhooks.js';
 
 export function createApp() {
   const app = express();
@@ -16,7 +16,8 @@ export function createApp() {
 
   app.use('/api/calls', callsRouter);
   app.use('/api/usage', usageRouter);
-  app.use(webhooksRouter);
+  app.use('/twiml', twimlRouter);
+  app.use('/webhooks', webhooksRouter);
 
   app.use((_req, res) => {
     res.status(404).json({ error: 'not_found' });

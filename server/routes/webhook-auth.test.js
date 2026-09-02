@@ -34,7 +34,7 @@ async function post(path, body, headers = {}) {
   }
 }
 
-const PATH = '/webhooks/dial-done?callId=abc';
+const PATH = '/twiml/dial-done?callId=abc';
 const BODY = { DialCallStatus: 'completed', DialCallDuration: '60' };
 
 test('rejects an unsigned webhook', async () => {

@@ -9,7 +9,15 @@ import { processRecording } from '../services/process-recording.js';
 
 const { VoiceResponse } = twilio.twiml;
 
+/**
+ * Two routers rather than one mounted at '/', because a router-level guard
+ * mounted at the root also runs for paths the router does not handle - which
+ * made every unmatched URL answer 403 instead of 404.
+ */
+export const twimlRouter = express.Router();
 export const webhooksRouter = express.Router();
+
+twimlRouter.use(verifyTwilioSignature);
 webhooksRouter.use(verifyTwilioSignature);
 
 /**
@@ -31,7 +39,7 @@ async function resolveCall({ callId, callSid }) {
 }
 
 /** TwiML fetched when the user answers leg A: dial the destination, record both. */
-webhooksRouter.post('/twiml/bridge', (req, res) => {
+twimlRouter.post('/bridge', (req, res) => {
   const destination = req.query.dest ?? req.body?.dest;
   const callId = req.query.callId ?? req.body?.callId;
   const base = config.publicBaseUrl;
@@ -51,7 +59,7 @@ webhooksRouter.post('/twiml/bridge', (req, res) => {
     recordingStatusCallback: `${base}/webhooks/recording-ready?callId=${callId}`,
     recordingStatusCallbackMethod: 'POST',
     recordingStatusCallbackEvent: 'completed',
-    action: `${base}/webhooks/dial-done?callId=${callId}`,
+    action: `${base}/twiml/dial-done?callId=${callId}`,
     method: 'POST',
     timeout: 30,
     timeLimit: 7200,
@@ -62,7 +70,7 @@ webhooksRouter.post('/twiml/bridge', (req, res) => {
 });
 
 /** Leg A lifecycle. Drives the status badge in Recents. */
-webhooksRouter.post('/webhooks/call-status', async (req, res) => {
+webhooksRouter.post('/call-status', async (req, res) => {
   const { CallStatus, CallSid } = req.body ?? {};
   const call = await resolveCall({ callId: req.query.callId, callSid: CallSid });
 
@@ -91,7 +99,7 @@ webhooksRouter.post('/webhooks/call-status', async (req, res) => {
  * RecordingDuration arrives separately and must not also increment minutes,
  * or every call is counted twice.
  */
-webhooksRouter.post('/webhooks/dial-done', async (req, res) => {
+twimlRouter.post('/dial-done', async (req, res) => {
   const { DialCallStatus, DialCallDuration, CallSid } = req.body ?? {};
   const call = await resolveCall({ callId: req.query.callId, callSid: CallSid });
 
@@ -130,7 +138,7 @@ webhooksRouter.post('/webhooks/dial-done', async (req, res) => {
  * Recording is ready. ACK immediately — Twilio gives up after ~15s and the
  * transcribe + summarize pipeline takes far longer than that.
  */
-webhooksRouter.post('/webhooks/recording-ready', async (req, res) => {
+webhooksRouter.post('/recording-ready', async (req, res) => {
   const { RecordingUrl, RecordingStatus, CallSid } = req.body ?? {};
   const call = await resolveCall({ callId: req.query.callId, callSid: CallSid });
 
