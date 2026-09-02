@@ -1,0 +1,46 @@
+-- Dimts schema (SPEC.md §5)
+
+CREATE TABLE IF NOT EXISTS users (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  phone TEXT UNIQUE NOT NULL,
+  tier TEXT NOT NULL DEFAULT 'free',            -- free | pro | business
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS calls (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id),
+  user_phone TEXT NOT NULL,
+  destination TEXT NOT NULL,
+  twilio_call_sid TEXT,
+  status TEXT NOT NULL DEFAULT 'initiating',
+  -- initiating | ringing | in-progress | processing | ready | failed
+  duration_sec INT,
+  recording_url TEXT,
+  transcript TEXT,
+  transcript_data JSONB,                        -- full Scribe response
+  language TEXT,
+  language_probability FLOAT,
+  summary TEXT,
+  action_items JSONB,
+  key_points JSONB,
+  error TEXT,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS calls_user_idx ON calls (user_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS usage_minutes (
+  user_id UUID REFERENCES users(id),
+  month TEXT NOT NULL,                          -- 'YYYY-MM'
+  minutes_used NUMERIC NOT NULL DEFAULT 0,
+  PRIMARY KEY (user_id, month)
+);
+
+-- Lookup path for the recording webhook when ?callId= is missing and we can
+-- only match on Twilio's CallSid.
+CREATE INDEX IF NOT EXISTS calls_twilio_sid_idx ON calls (twilio_call_sid);
+
+-- Supports the stale-call reaper's scan for rows stuck in initiating/ringing.
+CREATE INDEX IF NOT EXISTS calls_active_idx ON calls (status, created_at)
+  WHERE status IN ('initiating', 'ringing', 'in-progress');

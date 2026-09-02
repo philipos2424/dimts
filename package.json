@@ -27,7 +27,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "server": "node --env-file=.env server/dev.js",
-    "server:test": "node --test server/**/*.test.js"
+    "server:test": "npm test --prefix server"
   },
   "private": true
 }

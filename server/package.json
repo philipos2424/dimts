@@ -1,0 +1,18 @@
+{
+  "name": "dimts-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "dev": "node --env-file=../.env dev.js",
+    "test": "node --experimental-test-module-mocks --test"
+  },
+  "dependencies": {
+    "@vercel/functions": "^2.0.0",
+    "express": "^5.1.0",
+    "openai": "^4.104.0",
+    "pg": "^8.13.1",
+    "twilio": "^5.4.0"
+  }
+}
