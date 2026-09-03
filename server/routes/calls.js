@@ -9,7 +9,8 @@ import { processRecording } from '../services/process-recording.js';
 export const callsRouter = express.Router();
 
 const LIST_COLUMNS = `
-  id, destination, status, duration_sec, language, summary, created_at
+  c.id, c.destination, c.status, c.duration_sec, c.direction, c.summary,
+  c.created_at, k.display_name AS contact_name, k.company
 `;
 
 /**
@@ -84,9 +85,10 @@ callsRouter.get('/', async (req, res, next) => {
     await reapStaleCalls(user.id);
 
     const { rows } = await query(
-      `SELECT ${LIST_COLUMNS} FROM calls
-        WHERE user_id = $1
-        ORDER BY created_at DESC
+      `SELECT ${LIST_COLUMNS} FROM calls c
+         LEFT JOIN contacts k ON k.id = c.contact_id
+        WHERE c.user_id = $1
+        ORDER BY c.created_at DESC
         LIMIT 100`,
       [user.id]
     );
@@ -101,11 +103,13 @@ callsRouter.get('/:id', async (req, res, next) => {
   try {
     const user = await resolveUser(req);
     const call = await queryOne(
-      `SELECT id, destination, status, duration_sec, recording_url, transcript,
-              language, language_probability, summary, action_items, key_points,
-              error, created_at
-         FROM calls
-        WHERE id = $1 AND user_id = $2`,
+      `SELECT c.id, c.destination, c.status, c.duration_sec, c.direction,
+              c.recording_url, c.transcript, c.summary, c.next_moves,
+              c.action_items, c.key_points, c.error, c.created_at,
+              k.display_name AS contact_name, k.company
+         FROM calls c
+         LEFT JOIN contacts k ON k.id = c.contact_id
+        WHERE c.id = $1 AND c.user_id = $2`,
       [req.params.id, user.id]
     );
 
@@ -188,6 +192,27 @@ usageRouter.get('/', async (req, res, next) => {
       month,
       tier: user.tier,
       minutes_used: Number(row?.minutes_used ?? 0),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+export const meRouter = express.Router();
+
+/** The app needs to know which number to tell the user to publish. */
+meRouter.get('/', async (req, res, next) => {
+  try {
+    const user = await resolveUser(req);
+    const row = await queryOne(
+      'SELECT id, phone, tier, agent_number FROM users WHERE id = $1',
+      [user.id]
+    );
+
+    res.json({
+      phone: row.phone,
+      tier: row.tier,
+      agent_number: row.agent_number ?? null,
     });
   } catch (err) {
     next(err);

@@ -50,6 +50,21 @@ export const config = {
   openaiModel: process.env.OPENAI_MODEL || 'gpt-4o-mini',
 
   /**
+   * Roughly a dozen US states require all-party consent to record. Users are
+   * recording customers, so this is on unless explicitly disabled.
+   */
+  get announceRecording() {
+    return process.env.ANNOUNCE_RECORDING !== 'false';
+  },
+
+  get recordingNotice() {
+    return (
+      process.env.RECORDING_NOTICE ??
+      'This call may be recorded and transcribed for note taking.'
+    );
+  },
+
+  /**
    * Skipping signature checks makes every webhook forgeable. Only ever set
    * this for local replay of captured payloads.
    */

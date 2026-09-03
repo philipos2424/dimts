@@ -2,19 +2,22 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseSummary } from './summarize.js';
 
-test('parses a well-formed summary', () => {
+test('parses a well-formed business summary', () => {
   const result = parseSummary(
     JSON.stringify({
-      language: 'amh',
-      summary: 'ስለ ስብሰባው ተነጋገሩ።',
-      action_items: [{ task: 'ሰነዱን ላክ', owner: 'Abebe' }],
-      key_points: ['ስብሰባ ሰኞ'],
+      summary: 'Phili from Amax wants pricing for 200 units.',
+      next_moves: ['Send the volume price list', 'Confirm the Tuesday call'],
+      action_items: [{ task: 'Send pricing', owner: 'me' }],
+      key_points: ['200 units', 'Budget approved'],
     })
   );
 
-  assert.equal(result.language, 'amh');
-  assert.deepEqual(result.action_items, [{ task: 'ሰነዱን ላክ', owner: 'Abebe' }]);
-  assert.deepEqual(result.key_points, ['ስብሰባ ሰኞ']);
+  assert.deepEqual(result.next_moves, [
+    'Send the volume price list',
+    'Confirm the Tuesday call',
+  ]);
+  assert.deepEqual(result.action_items, [{ task: 'Send pricing', owner: 'me' }]);
+  assert.deepEqual(result.key_points, ['200 units', 'Budget approved']);
 });
 
 test('throws on non-JSON output rather than writing garbage', () => {
@@ -38,7 +41,6 @@ test('throws when summary is blank', () => {
 
 test('tolerates missing optional fields', () => {
   const result = parseSummary(JSON.stringify({ summary: 'Short call.' }));
-  assert.equal(result.language, null);
   assert.deepEqual(result.action_items, []);
   assert.deepEqual(result.key_points, []);
 });
@@ -62,4 +64,23 @@ test('ignores a non-array action_items', () => {
     JSON.stringify({ summary: 'x', action_items: 'send email' })
   );
   assert.deepEqual(result.action_items, []);
+});
+
+test('defaults next_moves to an empty list when absent', () => {
+  const result = parseSummary(JSON.stringify({ summary: 'Short call.' }));
+  assert.deepEqual(result.next_moves, []);
+});
+
+test('ignores a non-array next_moves', () => {
+  const result = parseSummary(
+    JSON.stringify({ summary: 'x', next_moves: 'call them back' })
+  );
+  assert.deepEqual(result.next_moves, []);
+});
+
+test('drops blank next_moves entries', () => {
+  const result = parseSummary(
+    JSON.stringify({ summary: 'x', next_moves: ['Send pricing', '', null] })
+  );
+  assert.deepEqual(result.next_moves, ['Send pricing']);
 });

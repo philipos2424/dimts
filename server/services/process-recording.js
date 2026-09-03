@@ -1,4 +1,7 @@
+import { adoptExtractedName, touchLastCall } from '../db/contacts.js';
 import { query, queryOne } from '../db/pool.js';
+import { shouldAdoptName } from '../lib/contact-policy.js';
+import { identifyCaller } from './identify.js';
 import { fetchRecording } from './originate.js';
 import { transcribe } from './transcribe.js';
 import { summarize } from './summarize.js';
@@ -28,6 +31,33 @@ async function downloadRecording(recordingUrl) {
 }
 
 /**
+ * Name the contact from the conversation.
+ *
+ * Best-effort by design: a call whose notes are perfectly good should not be
+ * marked failed because the identification model was unavailable.
+ */
+async function nameContact(call, transcript) {
+  if (!call.contact_id) return;
+
+  try {
+    await touchLastCall(call.contact_id);
+
+    const identity = await identifyCaller(transcript);
+    const existing = {
+      display_name: call.contact_display_name,
+      name_source: call.contact_name_source,
+      name_confidence: call.contact_name_confidence,
+    };
+
+    if (shouldAdoptName(existing, identity)) {
+      await adoptExtractedName(call.contact_id, identity);
+    }
+  } catch (err) {
+    console.error('[identify] naming failed for call', call.id, err);
+  }
+}
+
+/**
  * Download -> transcribe -> summarize -> mark ready.
  *
  * Idempotent: safe to re-run for a stuck row, which is what
@@ -36,7 +66,13 @@ async function downloadRecording(recordingUrl) {
  */
 export async function processRecording(callId) {
   const call = await queryOne(
-    'SELECT id, recording_url FROM calls WHERE id = $1',
+    `SELECT c.id, c.recording_url, c.contact_id,
+            k.display_name  AS contact_display_name,
+            k.name_source   AS contact_name_source,
+            k.name_confidence AS contact_name_confidence
+       FROM calls c
+       LEFT JOIN contacts k ON k.id = c.contact_id
+      WHERE c.id = $1`,
     [callId]
   );
 
@@ -54,15 +90,16 @@ export async function processRecording(callId) {
 
     const summary = await summarize(result.text);
 
+    await nameContact(call, result.text);
+
     await query(
       `UPDATE calls
           SET transcript = $2,
               transcript_data = $3,
-              language = $4,
-              language_probability = $5,
-              summary = $6,
-              action_items = $7,
-              key_points = $8,
+              summary = $4,
+              next_moves = $5,
+              action_items = $6,
+              key_points = $7,
               error = NULL,
               status = 'ready'
         WHERE id = $1`,
@@ -70,9 +107,8 @@ export async function processRecording(callId) {
         callId,
         result.text,
         JSON.stringify(result.raw),
-        summary.language ?? result.language,
-        result.languageProbability,
         summary.summary,
+        JSON.stringify(summary.next_moves),
         JSON.stringify(summary.action_items),
         JSON.stringify(summary.key_points),
       ]

@@ -26,6 +26,7 @@ export const statusColor: Record<string, string> = {
   initiating: color.faint,
   ringing: color.saffron,
   'in-progress': color.verdigris,
+  missed: color.madder,
   processing: color.saffron,
   ready: color.verdigris,
   failed: color.madder,

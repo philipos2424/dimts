@@ -57,8 +57,12 @@ export default function Recents() {
             })}
           >
             <View style={{ flex: 1, gap: 2 }}>
-              <Txt size="subhead">{item.destination}</Txt>
+              <Txt size="subhead">
+                {item.contact_name ?? item.destination}
+              </Txt>
               <Txt size="caption" tone="muted">
+                {item.direction === 'inbound' ? t('incoming') : t('outgoing')}
+                {'  '}
                 {t(statusKey(item.status))}
                 {item.duration_sec ? `  ${formatDuration(item.duration_sec)}` : ''}
               </Txt>

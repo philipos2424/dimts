@@ -33,7 +33,7 @@ function run(text, params = []) {
     // Mirrors the "AND duration_sec IS NULL" guard in the real statement.
     if (!call || call.duration_sec !== null) return { rows: [] };
     call.duration_sec = params[1];
-    call.status = params[2] ? 'processing' : 'failed';
+    call.status = params[2] ? 'processing' : params[4];
     return { rows: [{ id: call.id, user_id: call.user_id }] };
   }
   if (sql.includes('UPDATE calls')) {
@@ -71,6 +71,7 @@ function seedCall(overrides = {}) {
     user_id: 'user-1',
     twilio_call_sid: 'CA_PARENT',
     status: 'ringing',
+    direction: 'outbound',
     duration_sec: null,
     recording_url: null,
     ...overrides,
@@ -213,4 +214,42 @@ test('an unmatched path is a 404, not a signature rejection', async () => {
   } finally {
     server.close();
   }
+});
+
+test('an unanswered inbound call is recorded as missed, not failed', async () => {
+  const call = seedCall({ direction: 'inbound' });
+
+  await post(`/twiml/dial-done?callId=${call.id}`, {
+    DialCallStatus: 'no-answer',
+    DialCallDuration: '0',
+    CallSid: 'CA_PARENT',
+  });
+
+  assert.equal(call.status, 'missed');
+  assert.equal(usageWrites().length, 0);
+});
+
+test('an answered inbound call still processes and bills normally', async () => {
+  const call = seedCall({ direction: 'inbound' });
+
+  await post(`/twiml/dial-done?callId=${call.id}`, {
+    DialCallStatus: 'completed',
+    DialCallDuration: '120',
+    CallSid: 'CA_PARENT',
+  });
+
+  assert.equal(call.status, 'processing');
+  assert.equal(usageWrites().length, 1);
+});
+
+test('an unanswered outbound call is still failed', async () => {
+  const call = seedCall({ direction: 'outbound' });
+
+  await post(`/twiml/dial-done?callId=${call.id}`, {
+    DialCallStatus: 'no-answer',
+    DialCallDuration: '0',
+    CallSid: 'CA_PARENT',
+  });
+
+  assert.equal(call.status, 'failed');
 });

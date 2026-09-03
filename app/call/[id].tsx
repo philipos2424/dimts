@@ -35,8 +35,9 @@ export default function CallDetailScreen() {
   }, [load]);
 
   useEffect(() => {
-    if (call?.destination) navigation.setOptions({ title: call.destination });
-  }, [call?.destination, navigation]);
+    const title = call?.contact_name ?? call?.destination;
+    if (title) navigation.setOptions({ title });
+  }, [call?.contact_name, call?.destination, navigation]);
 
   // Keep polling while the pipeline is still running.
   useEffect(() => {
@@ -86,6 +87,19 @@ export default function CallDetailScreen() {
       {call.summary && (
         <Section title={t('summary')}>
           <Txt style={{ lineHeight: 26 }}>{call.summary}</Txt>
+        </Section>
+      )}
+
+      {call.next_moves && call.next_moves.length > 0 && (
+        <Section title={t('nextMoves')}>
+          <View style={{ gap: space.xs }}>
+            {call.next_moves.map((move, i) => (
+              <View key={i} style={{ flexDirection: 'row', gap: space.sm }}>
+                <Txt tone="accent">→</Txt>
+                <Txt style={{ flex: 1 }}>{move}</Txt>
+              </View>
+            ))}
+          </View>
         </Section>
       )}
 

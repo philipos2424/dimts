@@ -2,11 +2,24 @@ import OpenAI from 'openai';
 import { config } from '../config.js';
 
 /** Verbatim from SPEC.md §6 step 4. */
-export const SYSTEM_PROMPT = `You process phone call transcripts for an Ethiopian audience.
-The transcript may be in Amharic, English, or a mix.
-Return JSON: { language, summary (3-6 sentences in the call's dominant
-language), action_items: [{task, owner}], key_points: [strings] }.
-Never invent facts. Keep names exactly as transcribed.`;
+/** Speaker labels come from the dual-channel transcript merge. */
+export const SYSTEM_PROMPT = `You process business phone call transcripts.
+The transcript is speaker-labelled: "User:" is the person you work for,
+"Caller:" is the other party.
+
+Return JSON:
+{
+  summary: 3-6 sentences covering what was discussed and agreed,
+  next_moves: 2-4 short imperative suggestions for what the User should do
+              next, ordered by importance,
+  action_items: [{task, owner}] - things someone explicitly committed to,
+  key_points: [strings] - facts worth remembering, such as figures, names,
+              dates and constraints
+}
+
+Never invent facts. Keep names, companies and numbers exactly as transcribed.
+If the call was too short or unclear to summarize, say so in summary and
+return empty arrays.`;
 
 let client;
 function getClient() {
@@ -39,8 +52,10 @@ export function parseSummary(content) {
   const actionItems = Array.isArray(data.action_items) ? data.action_items : [];
 
   return {
-    language: typeof data.language === 'string' ? data.language : null,
     summary: data.summary.trim(),
+    next_moves: (Array.isArray(data.next_moves) ? data.next_moves : [])
+      .map((move) => (typeof move === 'string' ? move.trim() : ''))
+      .filter(Boolean),
     action_items: actionItems
       .map((item) =>
         typeof item === 'string'

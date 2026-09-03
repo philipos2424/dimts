@@ -5,9 +5,11 @@ const BASE = (process.env.EXPO_PUBLIC_API_BASE_URL ?? '').replace(/\/+$/, '');
 export type CallSummary = {
   id: string;
   destination: string;
+  contact_name: string | null;
+  company: string | null;
+  direction: 'inbound' | 'outbound';
   status: string;
   duration_sec: number | null;
-  language: string | null;
   summary: string | null;
   created_at: string;
 };
@@ -18,7 +20,7 @@ export type CallDetail = CallSummary & {
   recording_url: string | null;
   audio_url: string | null;
   transcript: string | null;
-  language_probability: number | null;
+  next_moves: string[] | null;
   action_items: ActionItem[] | null;
   key_points: string[] | null;
   error: string | null;

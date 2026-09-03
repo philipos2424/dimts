@@ -70,7 +70,7 @@ Phase 3 (precomputed briefings, FCM full-screen push), Phase 4 (commitment extra
   - `touchLastCall(contactId: string): Promise<void>`
   - `Contact = { id, user_id, phone, display_name, company, name_source, name_confidence }`
 
-- [ ] **Step 1: Write the failing tests for phone normalisation**
+- [x] **Step 1: Write the failing tests for phone normalisation**
 
 Create `server/lib/phone.test.js`:
 
@@ -112,12 +112,12 @@ test('preserves an already-normalised number', () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `node --test lib/phone.test.js` from `server/`
 Expected: FAIL, `Cannot find module './phone.js'`
 
-- [ ] **Step 3: Implement phone.js**
+- [x] **Step 3: Implement phone.js**
 
 Create `server/lib/phone.js`:
 
@@ -141,12 +141,12 @@ export function normalizePhone(value) {
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `node --test lib/phone.test.js`
 Expected: PASS, 7 tests
 
-- [ ] **Step 5: Point originate.js at the shared helper**
+- [x] **Step 5: Point originate.js at the shared helper**
 
 In `server/services/originate.js`, delete the local `isE164` definition (the `/** Twilio's E.164 requirement... */` comment and the function beneath it) and add this near the other imports:
 
@@ -156,12 +156,12 @@ export { isE164 } from '../lib/phone.js';
 
 The re-export keeps existing importers (`routes/calls.js`) working unchanged.
 
-- [ ] **Step 6: Verify nothing regressed**
+- [x] **Step 6: Verify nothing regressed**
 
 Run: `npm test` from `server/`
 Expected: PASS, all existing tests still green
 
-- [ ] **Step 7: Write the failing tests for the naming policy**
+- [x] **Step 7: Write the failing tests for the naming policy**
 
 Create `server/lib/contact-policy.test.js`:
 
@@ -205,12 +205,12 @@ test('rejects a missing candidate', () => {
 });
 ```
 
-- [ ] **Step 8: Run the tests to verify they fail**
+- [x] **Step 8: Run the tests to verify they fail**
 
 Run: `node --test lib/contact-policy.test.js`
 Expected: FAIL, `Cannot find module './contact-policy.js'`
 
-- [ ] **Step 9: Implement contact-policy.js**
+- [x] **Step 9: Implement contact-policy.js**
 
 Create `server/lib/contact-policy.js`:
 
@@ -239,12 +239,12 @@ export function shouldAdoptName(existing, candidate) {
 }
 ```
 
-- [ ] **Step 10: Run the tests to verify they pass**
+- [x] **Step 10: Run the tests to verify they pass**
 
 Run: `node --test lib/contact-policy.test.js`
 Expected: PASS, 7 tests
 
-- [ ] **Step 11: Add the schema changes**
+- [x] **Step 11: Add the schema changes**
 
 Append to `server/db/schema.sql`:
 
@@ -280,11 +280,16 @@ CREATE INDEX IF NOT EXISTS calls_contact_idx ON calls (contact_id, created_at DE
 
 - [ ] **Step 12: Apply the migration to Supabase**
 
+> **BLOCKED** — the Supabase MCP server disconnected mid-session and needs
+> re-authorisation via claude.ai connector settings. The SQL is committed in
+> `server/db/schema.sql`; apply it before the first real call. Nothing else
+> depends on it, because every test uses a mocked pool.
+
 Apply the SQL from Step 11 to project `gdmmlvnfiidxrqmwkqng` using the Supabase MCP `apply_migration` tool with migration name `call_agent_contacts_and_direction`.
 
 Then verify with `list_tables` on schema `public`: expect `users`, `calls`, `usage_minutes`, `contacts`.
 
-- [ ] **Step 13: Write the failing tests for the contacts store**
+- [x] **Step 13: Write the failing tests for the contacts store**
 
 Create `server/db/contacts.test.js`:
 
@@ -348,12 +353,12 @@ test('touchLastCall stamps the contact', async () => {
 });
 ```
 
-- [ ] **Step 14: Run the tests to verify they fail**
+- [x] **Step 14: Run the tests to verify they fail**
 
 Run: `node --experimental-test-module-mocks --test db/contacts.test.js`
 Expected: FAIL, `Cannot find module './contacts.js'`
 
-- [ ] **Step 15: Implement the contacts store**
+- [x] **Step 15: Implement the contacts store**
 
 Create `server/db/contacts.js`:
 
@@ -407,12 +412,12 @@ export async function touchLastCall(contactId) {
 }
 ```
 
-- [ ] **Step 16: Run the tests to verify they pass**
+- [x] **Step 16: Run the tests to verify they pass**
 
 Run: `node --experimental-test-module-mocks --test db/contacts.test.js`
 Expected: PASS, 4 tests
 
-- [ ] **Step 17: Run the whole suite and commit**
+- [x] **Step 17: Run the whole suite and commit**
 
 Run: `npm test` from `server/`
 Expected: PASS, all tests green
@@ -443,7 +448,7 @@ git commit -m "feat: contacts store, phone normalisation and name-adoption polic
   - `findUserByAgentNumber(agentNumber: string): Promise<{id, phone, agent_number} | undefined>`
   - `meRouter` — Express router serving `GET /api/me`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `server/db/agent-numbers.test.js`:
 
@@ -515,12 +520,12 @@ test('assignAgentNumber rejects a malformed user number', async () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `node --experimental-test-module-mocks --test db/agent-numbers.test.js`
 Expected: FAIL, `Cannot find module './agent-numbers.js'`
 
-- [ ] **Step 3: Implement the store**
+- [x] **Step 3: Implement the store**
 
 Create `server/db/agent-numbers.js`:
 
@@ -566,12 +571,12 @@ export async function assignAgentNumber(userPhone, agentNumber) {
 export { isE164 };
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `node --experimental-test-module-mocks --test db/agent-numbers.test.js`
 Expected: PASS, 6 tests
 
-- [ ] **Step 5: Add the GET /api/me route**
+- [x] **Step 5: Add the GET /api/me route**
 
 Append to `server/routes/calls.js`:
 
@@ -598,7 +603,7 @@ meRouter.get('/', async (req, res, next) => {
 });
 ```
 
-- [ ] **Step 6: Mount the route**
+- [x] **Step 6: Mount the route**
 
 In `server/app.js`, change the calls import and add the mount:
 
@@ -612,7 +617,7 @@ and directly below `app.use('/api/usage', usageRouter);` add:
   app.use('/api/me', meRouter);
 ```
 
-- [ ] **Step 7: Write the operator script**
+- [x] **Step 7: Write the operator script**
 
 Create `server/scripts/assign-number.js`:
 
@@ -647,7 +652,7 @@ try {
 }
 ```
 
-- [ ] **Step 8: Run the whole suite and commit**
+- [x] **Step 8: Run the whole suite and commit**
 
 Run: `npm test` from `server/`
 Expected: PASS, all tests green
@@ -672,7 +677,7 @@ git commit -m "feat: agent number assignment, lookup and GET /api/me"
 - Consumes: `findUserByAgentNumber` from `server/db/agent-numbers.js`; `findOrCreateContact` from `server/db/contacts.js`; `verifyTwilioSignature` from `server/lib/twilio-signature.js`; `query`, `queryOne` from `server/db/pool.js`; `config` from `server/config.js`.
 - Produces: `inboundRouter` — Express router serving `POST /twiml/incoming`.
 
-- [ ] **Step 1: Add the consent configuration**
+- [x] **Step 1: Add the consent configuration**
 
 In `server/config.js`, add these two entries to the `config` object, directly after the `openaiModel` line:
 
@@ -688,7 +693,7 @@ In `server/config.js`, add these two entries to the `config` object, directly af
     'This call may be recorded and transcribed for note taking.',
 ```
 
-- [ ] **Step 2: Write the failing tests**
+- [x] **Step 2: Write the failing tests**
 
 Create `server/routes/inbound.test.js`:
 
@@ -816,12 +821,12 @@ test('still connects the call when the contact lookup fails', async () => {
 });
 ```
 
-- [ ] **Step 3: Run the tests to verify they fail**
+- [x] **Step 3: Run the tests to verify they fail**
 
 Run: `node --experimental-test-module-mocks --test routes/inbound.test.js`
 Expected: FAIL, 404 responses because `/twiml/incoming` does not exist
 
-- [ ] **Step 4: Implement the inbound router**
+- [x] **Step 4: Implement the inbound router**
 
 Create `server/routes/inbound.js`:
 
@@ -910,7 +915,7 @@ inboundRouter.post('/', async (req, res) => {
 });
 ```
 
-- [ ] **Step 5: Mount the router**
+- [x] **Step 5: Mount the router**
 
 In `server/app.js`, add the import beside the other route imports:
 
@@ -931,12 +936,12 @@ second time on `/twiml/bridge` and `/twiml/dial-done` before they fell through
 to `twimlRouter`. That is the same trap that once made every unmatched URL
 answer 403 instead of 404 (commit `bf8d58a`).
 
-- [ ] **Step 6: Run the tests to verify they pass**
+- [x] **Step 6: Run the tests to verify they pass**
 
 Run: `node --experimental-test-module-mocks --test routes/inbound.test.js`
 Expected: PASS, 6 tests
 
-- [ ] **Step 7: Run the whole suite and commit**
+- [x] **Step 7: Run the whole suite and commit**
 
 Run: `npm test` from `server/`
 Expected: PASS, all tests green
@@ -961,7 +966,7 @@ git commit -m "feat: inbound bridge with recording consent announcement"
 
 **Why:** `dial-done` currently assumes the dialled leg is the *destination*. On an inbound call the dialled leg is the *user's own handset*, so a `no-answer` there means the user missed the call — a different outcome from a failed outbound dial, and one that must not be billed as connected time.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `server/routes/webhooks.test.js`:
 
@@ -1017,12 +1022,12 @@ Also update the fake `run()` in that file so the `dial-done` branch stores which
 
 and add `direction: 'outbound'` to the defaults object inside `seedCall`.
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `node --experimental-test-module-mocks --test routes/webhooks.test.js`
 Expected: FAIL — inbound no-answer yields `failed`, not `missed`
 
-- [ ] **Step 3: Update the dial-done handler**
+- [x] **Step 3: Update the dial-done handler**
 
 In `server/routes/webhooks.js`, replace the `queryOne` call inside the `dial-done` handler with:
 
@@ -1045,12 +1050,12 @@ In `server/routes/webhooks.js`, replace the `queryOne` call inside the `dial-don
 `missedStatus` is `$5`, which is what the test fake in Step 1 reads as
 `params[4]`.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `node --experimental-test-module-mocks --test routes/webhooks.test.js`
 Expected: PASS
 
-- [ ] **Step 5: Add `missed` to the documented status set**
+- [x] **Step 5: Add `missed` to the documented status set**
 
 In `server/db/schema.sql`, update the status comment on the `calls` table:
 
@@ -1058,7 +1063,7 @@ In `server/db/schema.sql`, update the status comment on the `calls` table:
   -- initiating | ringing | in-progress | missed | processing | ready | failed
 ```
 
-- [ ] **Step 6: Run the whole suite and commit**
+- [x] **Step 6: Run the whole suite and commit**
 
 Run: `npm test` from `server/`
 Expected: PASS, all tests green
@@ -1081,7 +1086,7 @@ git commit -m "feat: distinguish missed inbound calls from failed outbound dials
   `{ summary, next_moves: string[], action_items: {task, owner}[], key_points: string[] }`.
   The `language` field is dropped — this product is English-first.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 In `server/services/summarize.test.js`, replace the first test and add three more:
 
@@ -1125,12 +1130,12 @@ test('drops blank next_moves entries', () => {
 
 Delete the existing Amharic-specific assertions on `result.language` from the first test in that file.
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `node --test services/summarize.test.js`
 Expected: FAIL, `next_moves` is undefined
 
-- [ ] **Step 3: Update the prompt and parser**
+- [x] **Step 3: Update the prompt and parser**
 
 In `server/services/summarize.js`, replace `SYSTEM_PROMPT` with:
 
@@ -1175,12 +1180,12 @@ In `parseSummary`, remove the `language` line from the returned object and add `
   };
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `node --test services/summarize.test.js`
 Expected: PASS
 
-- [ ] **Step 5: Update the pipeline write**
+- [x] **Step 5: Update the pipeline write**
 
 In `server/services/process-recording.js`, replace the whole `UPDATE calls`
 statement and its parameter array with this. The `language` and
@@ -1212,7 +1217,7 @@ them.
     );
 ```
 
-- [ ] **Step 6: Run the whole suite and commit**
+- [x] **Step 6: Run the whole suite and commit**
 
 Run: `npm test` from `server/`
 Expected: PASS, all tests green
@@ -1239,7 +1244,7 @@ git commit -m "feat: business-call summaries with suggested next moves"
   - `identifyCaller(transcript: string): Promise<{name, company, confidence}>`
   - `openingOf(transcript: string, lines?: number): string`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `server/services/identify.test.js`:
 
@@ -1296,12 +1301,12 @@ test('openingOf handles a transcript shorter than the window', () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `node --test services/identify.test.js`
 Expected: FAIL, `Cannot find module './identify.js'`
 
-- [ ] **Step 3: Implement the identifier**
+- [x] **Step 3: Implement the identifier**
 
 Create `server/services/identify.js`:
 
@@ -1383,12 +1388,12 @@ export async function identifyCaller(transcript) {
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `node --test services/identify.test.js`
 Expected: PASS, 8 tests
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add server/services/identify.js server/services/identify.test.js
@@ -1407,7 +1412,7 @@ git commit -m "feat: extract caller identity from a transcript opening"
 - Consumes: `identifyCaller` (Task 6), `shouldAdoptName` (Task 1), `adoptExtractedName`, `touchLastCall` (Task 1).
 - Produces: no new exports. `processRecording(callId)` gains a naming step.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `server/services/process-recording.test.js`:
 
@@ -1531,12 +1536,12 @@ test('skips naming when the call has no contact', async () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `node --experimental-test-module-mocks --test services/process-recording.test.js`
 Expected: FAIL — nothing is adopted, because the naming step does not exist
 
-- [ ] **Step 3: Add the naming step**
+- [x] **Step 3: Add the naming step**
 
 In `server/services/process-recording.js`, extend the imports:
 
@@ -1598,12 +1603,12 @@ Then call it inside the `try` block, directly after `const summary = await summa
     await nameContact(call, result.text);
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `node --experimental-test-module-mocks --test services/process-recording.test.js`
 Expected: PASS, 5 tests
 
-- [ ] **Step 5: Run the whole suite and commit**
+- [x] **Step 5: Run the whole suite and commit**
 
 Run: `npm test` from `server/`
 Expected: PASS, all tests green
@@ -1630,7 +1635,7 @@ git commit -m "feat: name contacts from the conversation after each call"
 - Consumes: `contacts` table (Task 1), `calls.direction` and `calls.next_moves` (Tasks 1, 5).
 - Produces: `CallSummary` and `CallDetail` gain `contact_name: string | null`, `company: string | null`, `direction: 'inbound' | 'outbound'`; `CallDetail` gains `next_moves: string[] | null`.
 
-- [ ] **Step 1: Join contacts into the list query**
+- [x] **Step 1: Join contacts into the list query**
 
 In `server/routes/calls.js`, replace `LIST_COLUMNS` and the list query body:
 
@@ -1654,7 +1659,7 @@ and in the `GET /` handler replace the query with:
     );
 ```
 
-- [ ] **Step 2: Join contacts into the detail query**
+- [x] **Step 2: Join contacts into the detail query**
 
 In the `GET /:id` handler, replace the query with:
 
@@ -1671,12 +1676,12 @@ In the `GET /:id` handler, replace the query with:
     );
 ```
 
-- [ ] **Step 3: Verify the server still passes**
+- [x] **Step 3: Verify the server still passes**
 
 Run: `npm test` from `server/`
 Expected: PASS, all tests green
 
-- [ ] **Step 4: Update the API types**
+- [x] **Step 4: Update the API types**
 
 In `src/api.ts`, replace the `CallSummary` and `CallDetail` type declarations:
 
@@ -1706,7 +1711,7 @@ export type CallDetail = CallSummary & {
 
 Remove the `language` and `language_probability` fields, which no longer exist server-side.
 
-- [ ] **Step 5: Add the new strings**
+- [x] **Step 5: Add the new strings**
 
 In `src/i18n.ts`, add to the `en` object (before the `// Errors` comment):
 
@@ -1728,7 +1733,7 @@ and the matching entries to `am`:
   unknownCaller: 'ያልታወቀ ደዋይ',
 ```
 
-- [ ] **Step 6: Show contact names and direction in Recents**
+- [x] **Step 6: Show contact names and direction in Recents**
 
 In `app/(tabs)/index.tsx`, inside `renderItem`, replace the row's text block with:
 
@@ -1752,7 +1757,7 @@ Add `missed` to the status colour map in `src/theme.ts`:
   missed: color.madder,
 ```
 
-- [ ] **Step 7: Show next moves in the call detail**
+- [x] **Step 7: Show next moves in the call detail**
 
 In `app/call/[id].tsx`, add this block directly after the `{call.summary && (...)}` section:
 
@@ -1780,7 +1785,7 @@ Also update the header title effect to prefer the contact name:
   }, [call?.contact_name, call?.destination, navigation]);
 ```
 
-- [ ] **Step 8: Show contact names in Notes too**
+- [x] **Step 8: Show contact names in Notes too**
 
 `app/(tabs)/notes.tsx` still titles each card with the raw number, which would
 leave Notes the only screen showing `+14155552671` where the others show
@@ -1800,19 +1805,19 @@ with:
               </Txt>
 ```
 
-- [ ] **Step 9: Typecheck the app**
+- [x] **Step 9: Typecheck the app**
 
 Run: `npx tsc --noEmit` from the repo root
 Expected: exit 0. If `language` or `language_probability` is still referenced
 anywhere outside `src/i18n.ts` and `app/settings.tsx` — where `language` is the
 label for the language toggle and unrelated — remove those references.
 
-- [ ] **Step 10: Verify the app still bundles**
+- [x] **Step 10: Verify the app still bundles**
 
 Run: `npx expo export --platform android --output-dir "$SCRATCH/export-check"` from the repo root, where `$SCRATCH` is any writable temporary directory.
 Expected: "Android Bundled" with no errors.
 
-- [ ] **Step 11: Commit**
+- [x] **Step 11: Commit**
 
 ```bash
 git add server/routes/calls.js src/api.ts src/i18n.ts src/theme.ts \
