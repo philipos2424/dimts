@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "main": "index.js",
+  "main": "app.js",
   "scripts": {
     "dev": "node --env-file=../.env dev.js",
     "test": "node --experimental-test-module-mocks --test"

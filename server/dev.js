@@ -1,5 +1,5 @@
 /** Local entry point. This is what ngrok fronts. */
-import { createApp } from './app.js';
+import { createApp } from './create-app.js';
 
 const port = Number(process.env.PORT ?? 3000);
 

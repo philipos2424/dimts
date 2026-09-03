@@ -62,7 +62,7 @@ mock.module('../services/process-recording.js', {
   namedExports: { processRecording: async () => {} },
 });
 
-const { createApp } = await import('../app.js');
+const { createApp } = await import('../create-app.js');
 const app = createApp();
 
 function seedCall(overrides = {}) {

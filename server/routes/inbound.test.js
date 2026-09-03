@@ -39,7 +39,7 @@ mock.module('../db/pool.js', {
   },
 });
 
-const { createApp } = await import('../app.js');
+const { createApp } = await import('../create-app.js');
 const app = createApp();
 
 async function incoming(body) {
