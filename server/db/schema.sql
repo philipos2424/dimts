@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS calls (
   destination TEXT NOT NULL,
   twilio_call_sid TEXT,
   status TEXT NOT NULL DEFAULT 'initiating',
-  -- initiating | ringing | in-progress | processing | ready | failed
+  -- initiating | ringing | in-progress | missed | processing | ready | failed
   duration_sec INT,
   recording_url TEXT,
   transcript TEXT,

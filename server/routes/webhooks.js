@@ -107,15 +107,19 @@ twimlRouter.post('/dial-done', async (req, res) => {
     const seconds = Number(DialCallDuration ?? 0) || 0;
     const connected = DialCallStatus === 'completed' && seconds > 0;
 
+    // On an inbound call the dialled leg is the user's own handset, so an
+    // unanswered dial means a missed call rather than a failed one.
+    const missedStatus = call.direction === 'inbound' ? 'missed' : 'failed';
+
     // duration_sec IS NULL guards against a webhook retry double-billing.
     const updated = await queryOne(
       `UPDATE calls
           SET duration_sec = $2,
-              status = CASE WHEN $3 THEN 'processing' ELSE 'failed' END,
+              status = CASE WHEN $3 THEN 'processing' ELSE $5 END,
               error = CASE WHEN $3 THEN error ELSE $4 END
         WHERE id = $1 AND duration_sec IS NULL
         RETURNING id, user_id`,
-      [call.id, seconds, connected, `Dial ${DialCallStatus}`]
+      [call.id, seconds, connected, `Dial ${DialCallStatus}`, missedStatus]
     );
 
     if (updated && connected) {
