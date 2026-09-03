@@ -58,11 +58,10 @@ export async function processRecording(callId) {
       `UPDATE calls
           SET transcript = $2,
               transcript_data = $3,
-              language = $4,
-              language_probability = $5,
-              summary = $6,
-              action_items = $7,
-              key_points = $8,
+              summary = $4,
+              next_moves = $5,
+              action_items = $6,
+              key_points = $7,
               error = NULL,
               status = 'ready'
         WHERE id = $1`,
@@ -70,9 +69,8 @@ export async function processRecording(callId) {
         callId,
         result.text,
         JSON.stringify(result.raw),
-        summary.language ?? result.language,
-        result.languageProbability,
         summary.summary,
+        JSON.stringify(summary.next_moves),
         JSON.stringify(summary.action_items),
         JSON.stringify(summary.key_points),
       ]
