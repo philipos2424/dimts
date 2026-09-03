@@ -1,0 +1,117 @@
+import test, { mock } from 'node:test';
+import assert from 'node:assert/strict';
+
+let call;
+let identity;
+let identifyThrows = false;
+const adopted = [];
+const touched = [];
+
+mock.module('../db/pool.js', {
+  namedExports: {
+    query: async () => ({ rows: [] }),
+    queryOne: async () => call,
+    getPool: () => ({}),
+  },
+});
+
+mock.module('./originate.js', {
+  namedExports: {
+    fetchRecording: async () => ({ ok: true, blob: async () => new Blob(['x']) }),
+    isE164: () => true,
+  },
+});
+
+mock.module('./transcribe.js', {
+  namedExports: {
+    transcribe: async () => ({
+      text: 'Caller: hi this is Phili from Amax\nUser: hello',
+      language: 'eng',
+      languageProbability: 0.99,
+      raw: {},
+    }),
+  },
+});
+
+mock.module('./summarize.js', {
+  namedExports: {
+    summarize: async () => ({
+      summary: 'Pricing discussion.',
+      next_moves: ['Send pricing'],
+      action_items: [],
+      key_points: [],
+    }),
+  },
+});
+
+mock.module('./identify.js', {
+  namedExports: {
+    identifyCaller: async () => {
+      if (identifyThrows) throw new Error('openai is down');
+      return identity;
+    },
+  },
+});
+
+mock.module('../db/contacts.js', {
+  namedExports: {
+    adoptExtractedName: async (id, candidate) => adopted.push({ id, candidate }),
+    touchLastCall: async (id) => touched.push(id),
+    findOrCreateContact: async () => ({ id: 'c1' }),
+  },
+});
+
+const { processRecording } = await import('./process-recording.js');
+
+test.beforeEach(() => {
+  call = {
+    id: 'call-1',
+    recording_url: 'https://api.twilio.com/x/Recordings/RE1',
+    contact_id: 'c1',
+    contact_display_name: null,
+    contact_name_source: 'extracted',
+    contact_name_confidence: null,
+  };
+  identity = { name: 'Phili', company: 'Amax', confidence: 0.92 };
+  identifyThrows = false;
+  adopted.length = 0;
+  touched.length = 0;
+});
+
+test('names the contact from a confident identification', async () => {
+  await processRecording('call-1');
+
+  assert.equal(adopted.length, 1);
+  assert.equal(adopted[0].id, 'c1');
+  assert.equal(adopted[0].candidate.name, 'Phili');
+  assert.deepEqual(touched, ['c1']);
+});
+
+test('does not overwrite a name the user set', async () => {
+  call.contact_display_name = 'Phili (procurement)';
+  call.contact_name_source = 'user';
+
+  await processRecording('call-1');
+
+  assert.equal(adopted.length, 0);
+  assert.deepEqual(touched, ['c1'], 'still records that we spoke');
+});
+
+test('skips naming below the confidence floor', async () => {
+  identity = { name: 'Maybe Phil', company: null, confidence: 0.4 };
+  await processRecording('call-1');
+  assert.equal(adopted.length, 0);
+});
+
+test('completes the call even when identification fails', async () => {
+  identifyThrows = true;
+  await assert.doesNotReject(() => processRecording('call-1'));
+  assert.equal(adopted.length, 0);
+});
+
+test('skips naming when the call has no contact', async () => {
+  call.contact_id = null;
+  await processRecording('call-1');
+  assert.equal(adopted.length, 0);
+  assert.equal(touched.length, 0);
+});
