@@ -193,3 +193,24 @@ usageRouter.get('/', async (req, res, next) => {
     next(err);
   }
 });
+
+export const meRouter = express.Router();
+
+/** The app needs to know which number to tell the user to publish. */
+meRouter.get('/', async (req, res, next) => {
+  try {
+    const user = await resolveUser(req);
+    const row = await queryOne(
+      'SELECT id, phone, tier, agent_number FROM users WHERE id = $1',
+      [user.id]
+    );
+
+    res.json({
+      phone: row.phone,
+      tier: row.tier,
+      agent_number: row.agent_number ?? null,
+    });
+  } catch (err) {
+    next(err);
+  }
+});

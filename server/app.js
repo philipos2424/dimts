@@ -1,5 +1,5 @@
 import express from 'express';
-import { callsRouter, usageRouter } from './routes/calls.js';
+import { callsRouter, meRouter, usageRouter } from './routes/calls.js';
 import { twimlRouter, webhooksRouter } from './routes/webhooks.js';
 
 export function createApp() {
@@ -16,6 +16,7 @@ export function createApp() {
 
   app.use('/api/calls', callsRouter);
   app.use('/api/usage', usageRouter);
+  app.use('/api/me', meRouter);
   app.use('/twiml', twimlRouter);
   app.use('/webhooks', webhooksRouter);
 
