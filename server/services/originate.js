@@ -1,17 +1,16 @@
 import twilio from 'twilio';
 import { config } from '../config.js';
 
+// Single source of truth lives in lib/phone.js; re-exported so existing
+// importers of this module keep working.
+export { isE164 } from '../lib/phone.js';
+
 let client;
 function getClient() {
   if (!client) {
     client = twilio(config.twilioAccountSid, config.twilioAuthToken);
   }
   return client;
-}
-
-/** Twilio's E.164 requirement, checked before we spend money on a call. */
-export function isE164(value) {
-  return typeof value === 'string' && /^\+[1-9]\d{6,14}$/.test(value);
 }
 
 /**

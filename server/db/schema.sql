@@ -44,3 +44,31 @@ CREATE INDEX IF NOT EXISTS calls_twilio_sid_idx ON calls (twilio_call_sid);
 -- Supports the stale-call reaper's scan for rows stuck in initiating/ringing.
 CREATE INDEX IF NOT EXISTS calls_active_idx ON calls (status, created_at)
   WHERE status IN ('initiating', 'ringing', 'in-progress');
+
+-- ---------------------------------------------------------------------------
+-- Call agent: contacts, call direction, agent numbers
+-- ---------------------------------------------------------------------------
+
+-- The Twilio number a user publishes as their business line. Inbound calls
+-- are matched to their owner through this column.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS agent_number TEXT UNIQUE;
+
+CREATE TABLE IF NOT EXISTS contacts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id),
+  phone TEXT NOT NULL,
+  display_name TEXT,
+  company TEXT,
+  name_source TEXT NOT NULL DEFAULT 'extracted',  -- user | extracted
+  name_confidence FLOAT,
+  notes TEXT,
+  first_seen_at TIMESTAMPTZ DEFAULT now(),
+  last_call_at TIMESTAMPTZ,
+  UNIQUE (user_id, phone)
+);
+
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS direction TEXT NOT NULL DEFAULT 'outbound';
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS contact_id UUID REFERENCES contacts(id);
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS next_moves JSONB;
+
+CREATE INDEX IF NOT EXISTS calls_contact_idx ON calls (contact_id, created_at DESC);
