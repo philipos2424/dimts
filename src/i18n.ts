@@ -62,6 +62,12 @@ const en = {
   yourNumber: 'Your number',
   changeNumber: 'Change',
 
+  nextMoves: 'Next moves',
+  incoming: 'Incoming',
+  outgoing: 'Outgoing',
+  statusMissed: 'Missed',
+  unknownCaller: 'Unknown caller',
+
   // Errors
   errorNetwork: 'Could not reach the server. Check your connection.',
   errorCallFailed: 'The call could not be started.',
@@ -120,6 +126,12 @@ const am: Record<Key, string> = {
   minutesThisMonth: 'የዚህ ወር ደቂቃዎች',
   yourNumber: 'የእርስዎ ቁጥር',
   changeNumber: 'ቀይር',
+
+  nextMoves: 'ቀጣይ እርምጃዎች',
+  incoming: 'ገቢ ጥሪ',
+  outgoing: 'የወጣ ጥሪ',
+  statusMissed: 'ያመለጠ',
+  unknownCaller: 'ያልታወቀ ደዋይ',
 
   errorNetwork: 'ሰርቨሩ ላይ መድረስ አልተቻለም። ግንኙነትዎን ያረጋግጡ።',
   errorCallFailed: 'ጥሪው ሊጀመር አልቻለም።',

@@ -62,7 +62,7 @@ export default function Notes() {
               style={{ flexDirection: 'row', justifyContent: 'space-between' }}
             >
               <Txt size="subhead" weight="bold">
-                {item.destination}
+                {item.contact_name ?? item.destination}
               </Txt>
               <Txt size="caption" tone="faint">
                 {formatWhen(item.created_at, lang)}
