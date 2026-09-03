@@ -327,6 +327,61 @@ Phase 1 + 2 is the smallest thing that is useful on its own: recorded calls
 with summaries and auto-named contacts. Phase 3 is the first feature that is
 hard to copy.
 
+## 12a. Future phase: app-to-app calling tier
+
+**Decided 2026-09-03: keep the PSTN bridge as the product, add app-to-app
+later as an additional tier. No code changes now.**
+
+Calls placed over WebRTC between two people who both have the app cost
+roughly **$0.004/min** (LiveKit: $0.0004/min participant time, $0.004/min
+audio recording; self-hosting trades that for server cost) against $0.025/min
+for a US bridged call and $0.98/min for an Ethiopian domestic one.
+
+It also removes the hardest technical constraint in §4: Android's recording
+ban applies to *cellular* calls, and audio inside our own app is ours. On this
+path recording is trivial, inbound and outbound are one code path, and there
+are no numbers, carriers, geo permissions or trial restrictions at all.
+
+### Why it cannot replace the bridge
+
+**App-to-app cannot serve cold prospects.** A salesperson's value is capturing
+conversations with people outside their organisation, and a prospect will not
+install an app to take a first call. App-to-app works only where both parties
+are motivated to install — repeat relationships, internal teams, existing
+clients — so it is strictly additive to the PSTN bridge, never a replacement.
+
+### Where it wins
+
+Repeat-relationship calling. The clearest case is diaspora managing affairs in
+Ethiopia: the same four or five contacts — contractor, lawyer, family, bank —
+over and over. That is a five-installs problem, not a network-effects problem,
+and PSTN can never serve it because Twilio sells no Ethiopian numbers
+(Ethiopia is absent from Twilio's phone-number regulatory list while Kenya,
+Nigeria, Ghana, Uganda, Tanzania and South Africa are present), so both legs
+would terminate on Ethiopian mobile at $0.4903/min each.
+
+### Blockers to resolve before building it
+
+- **Legal.** Ethiopia's 2012 Telecom Fraud Proclamation, Article 10(3),
+  criminalises the *commercial* use of VoIP, written to protect the state
+  telecom monopoly. The government stated Skype users would not be prosecuted
+  but never amended the text. Sources are 2012-2014 and the country has
+  liberalised substantially since 2019, so this may have changed — but
+  selling a paid VoIP product is exactly the targeted activity. **Needs an
+  Ethiopian telecoms lawyer before any build for that market.** Tolerated
+  incidental WhatsApp use is not the same permission.
+- **Connectivity.** Ethiopian mobile data quality varies sharply outside
+  Addis, and internet shutdowns have been a recurring pattern. A calling
+  product that dies during a shutdown is a support cost to price in.
+- **Client.** WebRTC needs a custom dev build; Expo Go cannot run it.
+
+### The seam
+
+No preparatory work is needed. `process-recording.js` already depends on a
+single audio-retrieval function (`fetchRecording` in `services/originate.js`);
+an app-to-app source substitutes there. Adding a `calls.source` discriminator
+now would be speculative — do it when the second source exists.
+
 ## 13. Relationship to SPEC.md
 
 This is a **different product**, not an extension:
