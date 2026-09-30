@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 process.env.PUBLIC_BASE_URL = 'https://dimts.ngrok-free.app';
 process.env.TWILIO_AUTH_TOKEN = 'test-auth-token';
+process.env.TWILIO_NUMBER = '+15555550999';
 process.env.SKIP_TWILIO_SIGNATURE_CHECK = 'true';
 
 /**
@@ -194,7 +195,7 @@ test('recording-ready ignores a non-completed status', async () => {
 });
 
 test('bridge TwiML dials the destination with dual-channel recording', async () => {
-  const call = seedCall();
+  const call = seedCall({ agent_number: '+15555550888', max_duration_sec: 60 });
   const initial = await post(`/twiml/bridge?dest=%2B15559999999&callId=${call.id}`, { CallSid: 'CA_PARENT' });
   const prompt = await initial.text();
   assert.match(prompt, /<Gather/);
@@ -203,6 +204,8 @@ test('bridge TwiML dials the destination with dual-channel recording', async () 
   const xml = await res.text();
 
   assert.match(xml, /record="record-from-answer-dual"/);
+  assert.match(xml, /callerId="\+15555550888"/);
+  assert.match(xml, /timeLimit="60"/);
   assert.match(xml, /<Number[^>]*>\+251911234567<\/Number>/);
   assert.match(xml, /party-consent/);
   assert.match(xml, /recording-ready\?callId=11111111/);

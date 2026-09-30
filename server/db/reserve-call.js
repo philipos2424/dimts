@@ -39,8 +39,8 @@ export async function reserveCallInTransaction(db, user, destination, record, re
   if (remaining < 60) throw new HttpError(429, 'call_minutes_limit', 'Call minute limit reached.');
   const contactId = options.contactId !== undefined ? options.contactId : (await db.query(`INSERT INTO contacts(user_id,phone) VALUES($1,$2)
     ON CONFLICT(user_id,phone) DO UPDATE SET phone=EXCLUDED.phone RETURNING id`, [user.id, destination])).rows[0].id;
-  const call = (await db.query(`INSERT INTO calls(user_id,user_phone,destination,contact_id,record_enabled,request_key,max_duration_sec,status,direction,twilio_call_sid)
-    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
-    [user.id, user.phone, destination, contactId, record, requestKey, remaining, direction === 'inbound' ? 'ringing' : 'initiating', direction, options.callSid ?? null])).rows[0];
+  const call = (await db.query(`INSERT INTO calls(user_id,user_phone,destination,contact_id,record_enabled,request_key,max_duration_sec,status,direction,twilio_call_sid,agent_number)
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+    [user.id, user.phone, destination, contactId, record, requestKey, remaining, direction === 'inbound' ? 'ringing' : 'initiating', direction, options.callSid ?? null, user.agent_number ?? null])).rows[0];
   return { call, created: true };
 }

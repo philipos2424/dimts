@@ -7,6 +7,10 @@ Implemented and checked:
 
 - OTP signup/sign-in, opaque sessions, logout and account isolation tests.
 - OS keystore storage on native; tab session storage on web.
+- Self-service business-number claim from an operator-stocked, routed pool;
+  repeated and concurrent claims, account isolation and authentication tested.
+  Recents and Settings expose assignment and sharing. Real pool stocking awaits
+  a working public incoming webhook; Twilio still has its demo Voice URL.
 - Local PostgreSQL option and schema execution test.
 - Chronological transcript merge and correct incoming speaker labels.
 - Ollama summaries and contact extraction with actual local model testing.
@@ -22,6 +26,10 @@ Implemented and checked:
   bridge duration cap that respects the remaining allowance. SQL and HTTP
   tests cover retries, changed parameters, active calls and exhausted budgets.
 - Two-party recording agreement flow and outgoing recording toggle.
+- In-call recording agreement label requires both consent timestamps and an
+  enabled recording; answering the first leg alone no longer displays it.
+- Assigned business numbers are stored on each call and used as the bridge's
+  caller ID, rather than showing every account's calls from the default line.
 - Expo web build, TypeScript and dependency compatibility checks.
 - Local backend and Whisper worker health checks.
 - Synthetic stereo audio transcribed with alternating speaker turns; actual
@@ -41,7 +49,7 @@ Still required:
 - Verify minute limits on a real bridge and configure provider spend controls.
 - Pre-call contact memory/briefings, proposal evidence, rejection and action
   receipts remain required by the approved caller design.
-- Self-service incoming-number assignment and retention/deletion controls.
+- Verify real pool stocking/assignment, and implement retention/deletion controls.
 - Deployment with reachable AI services and hosted PostgreSQL.
 - Resolve applicable dependency advisories without downgrading Expo.
 

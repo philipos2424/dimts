@@ -6,6 +6,7 @@ import { defer } from '../lib/defer.js';
 import { fetchRecording, isE164, originateCall } from '../services/originate.js';
 import { processRecording } from '../services/process-recording.js';
 import { reserveCall } from '../db/reserve-call.js';
+import { claimNumber } from '../db/claim-number.js';
 
 export const callsRouter = express.Router();
 
@@ -65,6 +66,7 @@ callsRouter.post('/', async (req, res, next) => {
         callId: call.id,
         userPhone: user.phone,
         destination,
+        agentNumber: call.agent_number,
       });
       await query('UPDATE calls SET twilio_call_sid = $2 WHERE id = $1', [
         call.id,
@@ -113,6 +115,7 @@ callsRouter.get('/:id', async (req, res, next) => {
       `SELECT c.id, c.destination, c.status, c.duration_sec, c.direction,
               c.recording_url, c.transcript, c.summary, c.next_moves,
               c.action_items, c.key_points, c.followups, c.error, c.created_at,
+              c.record_enabled, c.parent_consent_at, c.child_consent_at,
               k.display_name AS contact_name, k.company
          FROM calls c
          LEFT JOIN contacts k ON k.id = c.contact_id
@@ -206,6 +209,16 @@ usageRouter.get('/', async (req, res, next) => {
 });
 
 export const meRouter = express.Router();
+meRouter.post('/number', async (req, res, next) => {
+  try {
+    const user = await resolveUser(req);
+    if (user.agent_number) return res.json({ agent_number: user.agent_number });
+    if (!process.env.PUBLIC_BASE_URL) throw new HttpError(503, 'routing_unavailable', 'Business-number routing is not configured yet.');
+    const base = new URL(config.publicBaseUrl);
+    if (base.protocol !== 'https:') throw new HttpError(503, 'routing_unavailable');
+    res.json(await claimNumber(user.id, `${config.publicBaseUrl}/twiml/incoming`));
+  } catch (err) { next(err); }
+});
 
 /** The app needs to know which number to tell the user to publish. */
 meRouter.get('/', async (req, res, next) => {

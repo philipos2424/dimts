@@ -17,7 +17,7 @@ export function dialCall(twiml, call) {
     answerOnBridge: true,
     action: `${base}/twiml/dial-done?callId=${call.id}`, method: 'POST', timeout: 30,
     timeLimit: call.max_duration_sec ?? 1800,
-    ...(call.direction === 'inbound' ? { callerId: config.twilioNumber } : {}),
+    callerId: call.agent_number || config.twilioNumber,
   });
   const target = call.direction === 'inbound' ? call.user_phone : call.destination;
   dial.number(recording ? { url: `${base}/twiml/party-consent?callId=${call.id}`, method: 'POST' } : {}, target);

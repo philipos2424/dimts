@@ -78,6 +78,7 @@ ALTER TABLE calls ADD COLUMN IF NOT EXISTS parent_consent_at TIMESTAMPTZ;
 ALTER TABLE calls ADD COLUMN IF NOT EXISTS child_consent_at TIMESTAMPTZ;
 ALTER TABLE calls ADD COLUMN IF NOT EXISTS child_call_sid TEXT;
 ALTER TABLE calls ADD COLUMN IF NOT EXISTS request_key TEXT;
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS agent_number TEXT;
 ALTER TABLE calls ADD COLUMN IF NOT EXISTS max_duration_sec INT NOT NULL DEFAULT 1800;
 ALTER TABLE calls ADD COLUMN IF NOT EXISTS budget_released BOOLEAN NOT NULL DEFAULT false;
 CREATE UNIQUE INDEX IF NOT EXISTS calls_request_key_idx ON calls(user_id, request_key) WHERE request_key IS NOT NULL;
@@ -93,6 +94,13 @@ CREATE TABLE IF NOT EXISTS sessions (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS sessions_expiry_idx ON sessions (expires_at);
+CREATE TABLE IF NOT EXISTS agent_number_pool (
+  phone TEXT PRIMARY KEY,
+  provider_sid TEXT UNIQUE NOT NULL,
+  voice_url TEXT NOT NULL,
+  enabled BOOLEAN NOT NULL DEFAULT true,
+  checked_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 CREATE TABLE IF NOT EXISTS auth_rate_limits (
   key TEXT NOT NULL,
   window_start TIMESTAMPTZ NOT NULL,

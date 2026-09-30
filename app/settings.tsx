@@ -4,6 +4,7 @@ import { useApp } from '../src/AppContext';
 import { getUsage, type Usage } from '../src/api';
 import { Section } from '../src/components/Section';
 import { Txt } from '../src/components/Txt';
+import { BusinessNumber } from '../src/components/BusinessNumber';
 import type { Lang } from '../src/i18n';
 import { color, radius, space } from '../src/theme';
 
@@ -24,6 +25,7 @@ export default function Settings() {
 
   return (
     <ScrollView contentContainerStyle={{ padding: space.md, gap: space.xl }}>
+      <BusinessNumber />
       <Section title={t('language')}>
         <View style={{ flexDirection: 'row', gap: space.sm }}>
           {LANGUAGES.map(({ code, label }) => {

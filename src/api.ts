@@ -30,6 +30,9 @@ export function saveFollowups(id: string, draft: Followups) {
 }
 
 export type CallDetail = CallSummary & {
+  record_enabled: boolean;
+  parent_consent_at: string | null;
+  child_consent_at: string | null;
   recording_url: string | null;
   audio_url: string | null;
   transcript: string | null;
@@ -72,6 +75,9 @@ export function verifyLoginCode(phone: string, code: string) {
 }
 export function getMe() {
   return request<{ phone: string; tier: string; agent_number: string | null }>('/api/me', '');
+}
+export function claimBusinessNumber() {
+  return request<{ agent_number: string }>('/api/me/number', '', { method: 'POST' });
 }
 export function logout() {
   return request('/api/auth/logout', '', { method: 'POST' });

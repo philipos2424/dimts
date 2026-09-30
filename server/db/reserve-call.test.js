@@ -34,11 +34,13 @@ test('call reservations enforce idempotency, concurrency and minute budgets usin
     assert.equal((await db.query('SELECT count(*)::int AS n FROM calls')).rows[0].n, 2);
     process.env.GLOBAL_CALL_MINUTES_PER_MONTH = '2';
     const other = (await db.query("INSERT INTO users(phone) VALUES('+15555550104') RETURNING *")).rows[0];
+    other.agent_number = '+15555550999';
     const inbound = () => db.transaction(tx => reserveCallInTransaction(tx, other, 'anonymous', true, 'incoming-CA_TEST',
       { direction: 'inbound', callSid: 'CA_TEST', contactId: null }));
     const incoming = await inbound();
     assert.equal(incoming.call.direction, 'inbound');
     assert.equal(incoming.call.twilio_call_sid, 'CA_TEST');
+    assert.equal(incoming.call.agent_number, other.agent_number);
     assert.equal(incoming.call.max_duration_sec, 60);
     assert.equal((await inbound()).created, false);
     await assert.rejects(reserve('request-three'), { code: 'call_minutes_limit' });

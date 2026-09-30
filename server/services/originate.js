@@ -23,13 +23,13 @@ function getClient() {
  * SDK connection would replace the PSTN leg later. Nothing outside this module
  * should know how leg A is established.
  */
-export async function originateCall({ callId, userPhone, destination }) {
+export async function originateCall({ callId, userPhone, destination, agentNumber }) {
   const base = config.publicBaseUrl;
   const params = new URLSearchParams({ callId, dest: destination });
 
   const call = await getClient().calls.create({
     to: userPhone,
-    from: config.twilioNumber,
+    from: agentNumber || config.twilioNumber,
     url: `${base}/twiml/bridge?${params}`,
     method: 'POST',
     statusCallback: `${base}/webhooks/call-status?callId=${callId}`,

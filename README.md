@@ -86,6 +86,23 @@ stores only its hash and rejects expired/revoked sessions. Native clients keep
 tokens in the OS keystore; the web client uses tab session storage.
 The old `x-user-phone` header no longer grants access.
 
+After signup, **Get my business number** on Recents or Settings claims one
+operator-stocked number. Assignment is transactional and repeatable; it never
+purchases numbers and cannot take another user's assigned number or a registered
+handset. If the pool is empty, the account remains usable and shows availability
+feedback. To stock an existing number, first configure its Twilio Voice webhook
+to POST directly to the current `PUBLIC_BASE_URL/twiml/incoming`, then run:
+
+```powershell
+node --env-file=.env server/scripts/stock-number.js +14754053943
+```
+
+The script checks Twilio ownership, Voice capability and matching webhook
+configuration before adding the number. It does not change routing. Numbers
+stocked for a different backend URL are not offered by this deployment. This
+check is at stocking time; operators must recheck or disable pool entries when
+changing/releasing numbers at Twilio.
+
 Call history and audio are filtered by the authenticated owner. Recordings are
 proxied by the backend. Duplicate processing workers are prevented with atomic
 database leases. Expired leases can be reclaimed with the retry endpoint.
