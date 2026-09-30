@@ -5,6 +5,7 @@ import { HttpError, currentMonth, resolveUser } from '../lib/users.js';
 import { defer } from '../lib/defer.js';
 import { fetchRecording, isE164, originateCall } from '../services/originate.js';
 import { processRecording } from '../services/process-recording.js';
+import { findOrCreateContact } from '../db/contacts.js';
 
 export const callsRouter = express.Router();
 
@@ -36,7 +37,11 @@ async function reapStaleCalls(userId) {
 callsRouter.post('/', async (req, res, next) => {
   try {
     const user = await resolveUser(req);
-    const { destination } = req.body ?? {};
+    const { destination, record = true } = req.body ?? {};
+    if (typeof record !== 'boolean') throw new HttpError(400, 'invalid_recording_option');
+    if ([user.phone, user.agent_number, process.env.TWILIO_NUMBER].includes(destination)) {
+      throw new HttpError(400, 'call_loop', 'Choose a different destination from your own handset and Twilio number.');
+    }
 
     if (!isE164(destination)) {
       throw new HttpError(
@@ -46,11 +51,12 @@ callsRouter.post('/', async (req, res, next) => {
       );
     }
 
+    const contact = await findOrCreateContact(user.id, destination);
     const call = await queryOne(
-      `INSERT INTO calls (user_id, user_phone, destination, status)
-       VALUES ($1, $2, $3, 'initiating')
+      `INSERT INTO calls (user_id, user_phone, destination, contact_id, record_enabled, status)
+       VALUES ($1, $2, $3, $4, $5, 'initiating')
        RETURNING id, status`,
-      [user.id, user.phone, destination]
+      [user.id, user.phone, destination, contact.id, record]
     );
 
     try {
@@ -138,7 +144,7 @@ callsRouter.post('/:id/process', async (req, res, next) => {
     if (!call) throw new HttpError(404, 'call_not_found');
     if (!call.recording_url) throw new HttpError(409, 'no_recording_yet');
 
-    defer(processRecording(call.id), `reprocess:${call.id}`);
+    defer(processRecording(call.id, { force: true }), `reprocess:${call.id}`);
     res.status(202).json({ status: 'processing' });
   } catch (err) {
     next(err);

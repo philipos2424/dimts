@@ -39,9 +39,12 @@ function run(text, params = []) {
   if (sql.includes('UPDATE calls')) {
     const call = db.calls.find((c) => c.id === params[0]);
     if (call && sql.includes('recording_url = $2')) {
+      if (call.recording_url || call.status === 'ready') return { rows: [] };
       call.recording_url = params[1];
       call.status = 'processing';
+      return { rows: [{ id: call.id }] };
     } else if (call && params[1]) {
+      if (sql.includes("status IN ('initiating', 'ringing')") && !['initiating', 'ringing'].includes(call.status)) return { rows: [] };
       call.status = String(params[1]).startsWith('Call ') ? 'failed' : params[1];
     }
     return { rows: [] };
@@ -72,8 +75,11 @@ function seedCall(overrides = {}) {
     twilio_call_sid: 'CA_PARENT',
     status: 'ringing',
     direction: 'outbound',
+    destination: '+251911234567',
     duration_sec: null,
     recording_url: null,
+    parent_consent_at: '2026-10-01T00:00:00Z',
+    child_consent_at: '2026-10-01T00:00:01Z',
     ...overrides,
   };
   db.calls.push(call);
@@ -104,7 +110,7 @@ test('resolves the call from the callId query param', async () => {
   const res = await post(`/twiml/dial-done?callId=${call.id}`, {
     DialCallStatus: 'completed',
     DialCallDuration: '120',
-    CallSid: 'CA_UNRELATED',
+    CallSid: 'CA_PARENT',
   });
 
   assert.equal(res.status, 200);
@@ -187,13 +193,20 @@ test('recording-ready ignores a non-completed status', async () => {
 });
 
 test('bridge TwiML dials the destination with dual-channel recording', async () => {
-  const res = await post('/twiml/bridge?dest=%2B251911234567&callId=abc', {});
+  const call = seedCall();
+  const initial = await post(`/twiml/bridge?dest=%2B15559999999&callId=${call.id}`, { CallSid: 'CA_PARENT' });
+  const prompt = await initial.text();
+  assert.match(prompt, /<Gather/);
+  assert.doesNotMatch(prompt, /<Dial/);
+  const res = await post(`/twiml/accept?callId=${call.id}`, { CallSid: 'CA_PARENT', Digits: '1' });
   const xml = await res.text();
 
   assert.match(xml, /record="record-from-answer-dual"/);
-  assert.match(xml, /<Number>\+251911234567<\/Number>/);
-  assert.match(xml, /recording-ready\?callId=abc/);
-  assert.match(xml, /dial-done\?callId=abc/);
+  assert.match(xml, /<Number[^>]*>\+251911234567<\/Number>/);
+  assert.match(xml, /party-consent/);
+  assert.match(xml, /recording-ready\?callId=11111111/);
+  assert.match(xml, /dial-done\?callId=11111111/);
+  assert.doesNotMatch(xml, /15559999999/);
 });
 
 test('bridge hangs up rather than dialling when no destination is given', async () => {
@@ -252,4 +265,52 @@ test('an unanswered outbound call is still failed', async () => {
   });
 
   assert.equal(call.status, 'failed');
+});
+
+test('a supplied call ID cannot redirect callbacks from another call SID', async () => {
+  const call = seedCall();
+  await post(`/twiml/dial-done?callId=${call.id}`, {
+    CallSid: 'CA_OTHER', DialCallStatus: 'completed', DialCallDuration: '60',
+  });
+  assert.equal(call.duration_sec, null);
+  assert.equal(usageWrites().length, 0);
+});
+
+test('duplicate recording callbacks do not revert a completed summary', async () => {
+  const call = seedCall({ status: 'ready', recording_url: 'original' });
+  await post(`/webhooks/recording-ready?callId=${call.id}`, {
+    CallSid: 'CA_PARENT', RecordingStatus: 'completed', RecordingUrl: 'duplicate',
+  });
+  assert.equal(call.status, 'ready');
+  assert.equal(call.recording_url, 'original');
+});
+
+test('late ringing callbacks cannot regress a completed call', async () => {
+  const call = seedCall({ status: 'ready' });
+  await post(`/webhooks/call-status?callId=${call.id}`, { CallSid: 'CA_PARENT', CallStatus: 'ringing' });
+  assert.equal(call.status, 'ready');
+});
+
+test('declining recording never connects the call', async () => {
+  const call = seedCall();
+  const response = await post(`/twiml/accept?callId=${call.id}`, { CallSid: 'CA_PARENT', Digits: '2' });
+  const xml = await response.text();
+  assert.doesNotMatch(xml, /<Dial/);
+  assert.match(xml, /<Hangup/);
+});
+
+test('recording callbacks without both consent timestamps are ignored', async () => {
+  const call = seedCall({ child_consent_at: null });
+  await post(`/webhooks/recording-ready?callId=${call.id}`, {
+    CallSid: 'CA_PARENT', RecordingStatus: 'completed', RecordingUrl: 'unconsented',
+  });
+  assert.equal(call.recording_url, null);
+});
+
+test('recording-off calls connect without requesting recording', async () => {
+  const call = seedCall({ record_enabled: false });
+  const response = await post(`/twiml/bridge?callId=${call.id}`, { CallSid: 'CA_PARENT' });
+  const xml = await response.text();
+  assert.match(xml, /<Dial/);
+  assert.doesNotMatch(xml, /record=|recordingStatusCallback|party-consent|<Gather/);
 });

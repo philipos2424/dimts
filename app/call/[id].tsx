@@ -41,7 +41,7 @@ export default function CallDetailScreen() {
 
   // Keep polling while the pipeline is still running.
   useEffect(() => {
-    if (!call || call.status === 'ready' || call.status === 'failed') return;
+    if (!call || ['ready', 'failed', 'completed', 'missed'].includes(call.status)) return;
     const timer = setTimeout(load, 5000);
     return () => clearTimeout(timer);
   }, [call, load]);
@@ -68,7 +68,9 @@ export default function CallDetailScreen() {
             {t(statusKey(call.status))}
           </Txt>
           <Txt tone="muted">
-            {call.status === 'failed' ? call.error ?? t('errorGeneric') : t('processingBody')}
+            {call.status === 'failed' ? call.error ?? t('errorGeneric') :
+              call.status === 'completed' ? 'Recording was off for this call.' :
+              call.status === 'missed' ? 'This call was not answered.' : t('processingBody')}
           </Txt>
           {call.status === 'failed' && call.recording_url && (
             <Pressable

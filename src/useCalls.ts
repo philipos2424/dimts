@@ -5,7 +5,7 @@ import { ApiError, type CallSummary, listCalls } from './api';
 import type { Key } from './i18n';
 
 const POLL_MS = 5000;
-const SETTLED = new Set(['ready', 'failed']);
+const SETTLED = new Set(['ready', 'failed', 'missed', 'completed']);
 
 /**
  * Call history, refreshed on focus and polled only while something is still

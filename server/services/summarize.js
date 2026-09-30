@@ -1,5 +1,4 @@
-import OpenAI from 'openai';
-import { config } from '../config.js';
+import { completeJson } from './llm.js';
 
 /** Verbatim from SPEC.md §6 step 4. */
 /** Speaker labels come from the dual-channel transcript merge. */
@@ -18,14 +17,15 @@ Return JSON:
 }
 
 Never invent facts. Keep names, companies and numbers exactly as transcribed.
+Include every explicit commitment in action_items, including commitments made
+by Caller. owner must be "User" or "Caller" when labelled, otherwise null.
+next_moves are useful actions for User only. Never tell User to fulfil a
+commitment that Caller made. A confirmed meeting and promised email are
+explicit commitments. Separate confirmed agreements from suggestions.
+Do not add AM or PM, a timezone, a date, a recipient address or a duration
+when the speakers did not specify them. Preserve ambiguous times as ambiguous.
 If the call was too short or unclear to summarize, say so in summary and
 return empty arrays.`;
-
-let client;
-function getClient() {
-  if (!client) client = new OpenAI({ apiKey: config.openaiApiKey });
-  return client;
-}
 
 /**
  * Coerce the model's JSON into the shape the database and app expect.
@@ -69,15 +69,25 @@ export function parseSummary(content) {
   };
 }
 
-export async function summarize(transcript) {
-  const completion = await getClient().chat.completions.create({
-    model: config.openaiModel,
-    response_format: { type: 'json_object' },
-    messages: [
-      { role: 'system', content: SYSTEM_PROMPT },
-      { role: 'user', content: transcript },
-    ],
-  });
+export function preserveTimeAmbiguity(summary, transcript) {
+  if (/\b(?:[ap]\.?m\.?|morning|afternoon|evening|noon|midnight)\b/i.test(transcript)) return summary;
+  const clean = value => value.replace(/\b(\d{1,2}(?::\d{2})?)\s*[ap]\.?m\.?\b/gi, '$1 (AM/PM not specified)');
+  return { ...summary, summary: clean(summary.summary),
+    next_moves: summary.next_moves.map(clean), key_points: summary.key_points.map(clean),
+    action_items: summary.action_items.map(item => ({ ...item, task: clean(item.task) })) };
+}
 
-  return parseSummary(completion.choices[0]?.message?.content ?? '');
+export async function summarize(transcript) {
+  const result = parseSummary(await completeJson(SYSTEM_PROMPT, transcript, {
+    type: 'object', additionalProperties: false,
+    properties: {
+      summary: { type: 'string' },
+      next_moves: { type: 'array', items: { type: 'string' } },
+      action_items: { type: 'array', items: { type: 'object',
+        properties: { task: { type: 'string' }, owner: { type: ['string', 'null'], enum: ['User', 'Caller', null] } },
+        required: ['task', 'owner'], additionalProperties: false } },
+      key_points: { type: 'array', items: { type: 'string' } },
+    }, required: ['summary', 'next_moves', 'action_items', 'key_points'],
+  }));
+  return preserveTimeAmbiguity(result, transcript);
 }

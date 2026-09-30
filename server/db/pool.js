@@ -1,7 +1,10 @@
 import pg from 'pg';
 import { config } from '../config.js';
+import { readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 
 let pool;
+let localDatabase;
 
 /**
  * Lazily-created connection pool.
@@ -29,7 +32,19 @@ export function getPool() {
   return pool;
 }
 
-export function query(text, params) {
+export async function query(text, params) {
+  if (process.env.DATABASE_MODE === 'local') {
+    if (process.env.VERCEL) throw new Error('Local database cannot run on Vercel; configure DATABASE_URL.');
+    if (!localDatabase) localDatabase = (async () => {
+      const { PGlite } = await import('@electric-sql/pglite');
+      const path = process.env.LOCAL_DATABASE_PATH || fileURLToPath(new URL('../../.data/postgres', import.meta.url));
+      const db = new PGlite(path);
+      const schema = await readFile(new URL('./schema.sql', import.meta.url), 'utf8');
+      await db.exec(schema);
+      return db;
+    })();
+    return (await localDatabase).query(text, params);
+  }
   return getPool().query(text, params);
 }
 
@@ -37,4 +52,9 @@ export function query(text, params) {
 export async function queryOne(text, params) {
   const { rows } = await query(text, params);
   return rows[0];
+}
+
+export async function closeDatabase() {
+  if (localDatabase) { await (await localDatabase).close(); localDatabase = undefined; }
+  if (pool) { await pool.end(); pool = undefined; }
 }

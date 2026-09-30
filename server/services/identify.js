@@ -1,5 +1,4 @@
-import OpenAI from 'openai';
-import { config } from '../config.js';
+import { completeJson } from './llm.js';
 
 /** People introduce themselves early; the rest of the call is noise here. */
 const OPENING_LINES = 12;
@@ -17,12 +16,6 @@ Return JSON: { name, company, confidence }.
   0.7 when the introduction is explicit and unambiguous.
 
 Never invent a name. Absent an introduction, return nulls with confidence 0.`;
-
-let client;
-function getClient() {
-  if (!client) client = new OpenAI({ apiKey: config.openaiApiKey });
-  return client;
-}
 
 export function openingOf(transcript, lines = OPENING_LINES) {
   return String(transcript ?? '')
@@ -61,15 +54,5 @@ export function parseIdentity(content) {
 }
 
 export async function identifyCaller(transcript) {
-  const completion = await getClient().chat.completions.create({
-    model: config.openaiModel,
-    response_format: { type: 'json_object' },
-    temperature: 0,
-    messages: [
-      { role: 'system', content: IDENTIFY_PROMPT },
-      { role: 'user', content: openingOf(transcript) },
-    ],
-  });
-
-  return parseIdentity(completion.choices[0]?.message?.content ?? '');
+  return parseIdentity(await completeJson(IDENTIFY_PROMPT, openingOf(transcript)));
 }

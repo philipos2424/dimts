@@ -5,6 +5,7 @@ import { identifyCaller } from './identify.js';
 import { fetchRecording } from './originate.js';
 import { transcribe } from './transcribe.js';
 import { summarize } from './summarize.js';
+import { randomUUID } from 'node:crypto';
 
 const DOWNLOAD_ATTEMPTS = 3;
 const DOWNLOAD_BACKOFF_MS = 2000;
@@ -60,29 +61,39 @@ async function nameContact(call, transcript) {
 /**
  * Download -> transcribe -> summarize -> mark ready.
  *
- * Idempotent: safe to re-run for a stuck row, which is what
- * POST /api/calls/:id/process relies on. Any failure is recorded on the row so
+ * An atomic lease prevents duplicate webhook deliveries from buying duplicate
+ * transcriptions. Expired leases can be reclaimed after a worker dies.
+ * Any failure is recorded on the row so
  * the app can show why rather than spinning on 'processing' forever.
  */
-export async function processRecording(callId) {
+export async function processRecording(callId, { force = false } = {}) {
+  const lease = randomUUID();
   const call = await queryOne(
-    `SELECT c.id, c.recording_url, c.contact_id,
+    `WITH claimed AS (
+       UPDATE calls SET processing_token = $2,
+         processing_until = now() + interval '10 minutes', status = 'processing'
+       WHERE id = $1 AND recording_url IS NOT NULL
+         AND (status <> 'ready' OR $3)
+         AND (processing_until IS NULL OR processing_until < now())
+       RETURNING *
+     )
+     SELECT c.id, c.recording_url, c.contact_id, c.direction,
             k.display_name  AS contact_display_name,
             k.name_source   AS contact_name_source,
             k.name_confidence AS contact_name_confidence
-       FROM calls c
+       FROM claimed c
        LEFT JOIN contacts k ON k.id = c.contact_id
       WHERE c.id = $1`,
-    [callId]
+    [callId, lease, force]
   );
 
   if (!call?.recording_url) {
-    throw new Error(`Call ${callId} has no recording to process`);
+    return { status: 'skipped' };
   }
 
   try {
     const audio = await downloadRecording(call.recording_url);
-    const result = await transcribe(audio);
+    const result = await transcribe(audio, { direction: call.direction });
 
     if (!result.text.trim()) {
       throw new Error('Transcription returned no speech');
@@ -101,8 +112,12 @@ export async function processRecording(callId) {
               action_items = $6,
               key_points = $7,
               error = NULL,
+              language = $8,
+              language_probability = $9,
+              processing_token = NULL,
+              processing_until = NULL,
               status = 'ready'
-        WHERE id = $1`,
+        WHERE id = $1 AND processing_token = $10`,
       [
         callId,
         result.text,
@@ -111,12 +126,17 @@ export async function processRecording(callId) {
         JSON.stringify(summary.next_moves),
         JSON.stringify(summary.action_items),
         JSON.stringify(summary.key_points),
+        result.language,
+        result.languageProbability,
+        lease,
       ]
     );
   } catch (err) {
     await query(
-      `UPDATE calls SET status = 'failed', error = $2 WHERE id = $1`,
-      [callId, String(err?.message ?? err).slice(0, 500)]
+      `UPDATE calls SET status = 'failed', error = $2,
+        processing_token = NULL, processing_until = NULL
+       WHERE id = $1 AND processing_token = $3`,
+      [callId, String(err?.message ?? err).slice(0, 500), lease]
     );
     throw err;
   }

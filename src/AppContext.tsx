@@ -8,6 +8,8 @@ import React, {
   useState,
 } from 'react';
 import { type Key, type Lang, translate } from './i18n';
+import { getMe, logout, setApiSession } from './api';
+import { readSession, storeSession } from './session';
 
 const KEYS = {
   lang: 'dimts.lang',
@@ -22,6 +24,7 @@ type AppState = {
   autoRecord: boolean;
   setLang: (lang: Lang) => void;
   setUserPhone: (phone: string | null) => void;
+  signIn: (token: string, phone: string) => Promise<void>;
   setAutoRecord: (on: boolean) => void;
   t: (key: Key) => string;
 };
@@ -43,7 +46,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (storedLang[1] === 'am' || storedLang[1] === 'en') {
           setLangState(storedLang[1]);
         }
-        if (storedPhone[1]) setPhoneState(storedPhone[1]);
+        const token = await readSession();
+        if (token) {
+          setApiSession(token);
+          try { setPhoneState((await getMe()).phone); }
+          catch { setApiSession(null); await storeSession(null); }
+        }
         if (storedAuto[1] !== null) setAutoRecordState(storedAuto[1] === 'true');
       } catch {
         // A device with unreadable storage still gets a usable app.
@@ -59,11 +67,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const setUserPhone = useCallback((next: string | null) => {
+    if (next) return; // Account identity may only come from verified login.
+    logout().catch(() => {});
+    setApiSession(null);
+    storeSession(null).catch(() => {});
     setPhoneState(next);
     (next
       ? AsyncStorage.setItem(KEYS.phone, next)
       : AsyncStorage.removeItem(KEYS.phone)
     ).catch(() => {});
+  }, []);
+
+  const signIn = useCallback(async (token: string, phone: string) => {
+    await storeSession(token);
+    setApiSession(token);
+    setPhoneState(phone);
   }, []);
 
   const setAutoRecord = useCallback((next: boolean) => {
@@ -79,10 +97,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       autoRecord,
       setLang,
       setUserPhone,
+      signIn,
       setAutoRecord,
       t: (key: Key) => translate(lang, key),
     }),
-    [ready, lang, userPhone, autoRecord, setLang, setUserPhone, setAutoRecord]
+    [ready, lang, userPhone, autoRecord, setLang, setUserPhone, signIn, setAutoRecord]
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

@@ -45,10 +45,18 @@ export async function originateCall({ callId, userPhone, destination }) {
  * recording is `completed`, and briefly 404s right after the webhook fires.
  */
 export async function fetchRecording(recordingUrl, { channels = 2 } = {}) {
+  const url = new URL(recordingUrl);
+  if (url.protocol !== 'https:' || url.hostname !== 'api.twilio.com' || url.username || url.password ||
+      !url.pathname.startsWith(`/2010-04-01/Accounts/${config.twilioAccountSid}/Recordings/`)) {
+    throw new Error('Untrusted recording URL');
+  }
+  if (![1, 2].includes(channels)) throw new Error('Invalid recording channel count');
+  url.pathname = `${url.pathname.replace(/\.(mp3|wav)$/, '')}.mp3`;
+  url.search = new URLSearchParams({ RequestedChannels: String(channels) }).toString();
   const auth = Buffer.from(
     `${config.twilioAccountSid}:${config.twilioAuthToken}`
   ).toString('base64');
 
-  const url = `${recordingUrl}.mp3?RequestedChannels=${channels}`;
-  return fetch(url, { headers: { Authorization: `Basic ${auth}` } });
+  return fetch(url, { headers: { Authorization: `Basic ${auth}` },
+    redirect: 'error', signal: AbortSignal.timeout(30_000) });
 }

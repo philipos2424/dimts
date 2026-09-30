@@ -67,29 +67,27 @@ test.beforeEach(() => {
   process.env.ANNOUNCE_RECORDING = 'true';
 });
 
-test('dials the owner with dual-channel recording', async () => {
+test('asks for agreement before dialling or recording', async () => {
   const { xml } = await incoming(CALL);
 
-  assert.match(xml, /record="record-from-answer-dual"/);
-  assert.match(xml, /<Number>\+14155550000<\/Number>/);
-  assert.match(xml, /recording-ready\?callId=call-1/);
-  assert.match(xml, /dial-done\?callId=call-1/);
+  assert.match(xml, /<Gather/);
+  assert.match(xml, /accept\?callId=call-1/);
+  assert.doesNotMatch(xml, /<Dial|record=/);
 });
 
 test('announces recording to the caller before connecting', async () => {
   const { xml } = await incoming(CALL);
 
   const sayAt = xml.indexOf('<Say');
-  const dialAt = xml.indexOf('<Dial');
   assert.ok(sayAt > -1, 'expected a consent announcement');
-  assert.ok(sayAt < dialAt, 'announcement must play before the dial');
-  assert.match(xml, /may be recorded/i);
+  assert.doesNotMatch(xml, /<Dial/);
+  assert.match(xml, /will be recorded/i);
 });
 
-test('omits the announcement when disabled', async () => {
+test('cannot disable consent with the legacy announcement flag', async () => {
   process.env.ANNOUNCE_RECORDING = 'false';
   const { xml } = await incoming(CALL);
-  assert.doesNotMatch(xml, /<Say/);
+  assert.match(xml, /<Gather/);
 });
 
 test('records the call as inbound and links the contact', async () => {
@@ -112,10 +110,10 @@ test('rejects a call to a number nobody has claimed', async () => {
   assert.match(xml, /<Hangup\/>/);
 });
 
-test('still connects the call when the contact lookup fails', async () => {
+test('still offers connection when the contact lookup fails', async () => {
   failContactLookup = true;
   const { xml } = await incoming(CALL);
 
   // The AI layer must never be able to break a phone call.
-  assert.match(xml, /<Number>\+14155550000<\/Number>/);
+  assert.match(xml, /accept\?callId=call-1/);
 });

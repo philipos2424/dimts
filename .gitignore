@@ -42,6 +42,9 @@ yarn-error.*
 
 # env
 .env
+.data/
+__pycache__/
+*.pyc
 
 # IDE
 .idea/

@@ -1,4 +1,8 @@
 import express from 'express';
+import { fileURLToPath } from 'node:url';
+import { existsSync } from 'node:fs';
+import { authRouter } from './routes/auth.js';
+import { contactsRouter } from './routes/contacts.js';
 import { callsRouter, meRouter, usageRouter } from './routes/calls.js';
 import { inboundRouter } from './routes/inbound.js';
 import { twimlRouter, webhooksRouter } from './routes/webhooks.js';
@@ -8,12 +12,18 @@ export function createApp() {
 
   // Twilio signature validation anchors on PUBLIC_BASE_URL rather than the
   // request host, but trusting the proxy keeps req.ip and friends honest.
-  app.set('trust proxy', true);
+  app.set('trust proxy', 1);
 
   app.use(express.json());
   app.use(express.urlencoded({ extended: false })); // Twilio posts form-encoded
 
   app.get('/health', (_req, res) => res.json({ ok: true }));
+  app.use('/api', (_req, res, next) => {
+    res.set('Cache-Control', 'no-store');
+    next();
+  });
+  app.use('/api/auth', authRouter);
+  app.use('/api/contacts', contactsRouter);
 
   app.use('/api/calls', callsRouter);
   app.use('/api/usage', usageRouter);
@@ -21,6 +31,9 @@ export function createApp() {
   app.use('/twiml/incoming', inboundRouter);
   app.use('/twiml', twimlRouter);
   app.use('/webhooks', webhooksRouter);
+
+  const webRoot = fileURLToPath(new URL('../dist/', import.meta.url));
+  if (existsSync(webRoot)) app.use(express.static(webRoot, { extensions: ['html'] }));
 
   app.use((_req, res) => {
     res.status(404).json({ error: 'not_found' });

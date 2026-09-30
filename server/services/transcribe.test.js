@@ -42,6 +42,33 @@ test('orders turns by start time, not by channel index', () => {
   assert.equal(merged, 'Caller: first\nUser: second');
 });
 
+test('preserves alternating dialogue across the entire conversation', () => {
+  assert.equal(mergeMultiChannel([
+    { words: [{ text: 'Hello', start: 0 }, { text: 'Yes', start: 3 }] },
+    { words: [{ text: 'Tomorrow?', start: 2 }, { text: 'Great', start: 4 }] },
+  ]), 'User: Hello\nCaller: Tomorrow?\nUser: Yes\nCaller: Great');
+});
+
+test('maps the incoming parent channel to Caller', () => {
+  const result = normalizeScribeResponse(multichannel, { direction: 'inbound' });
+  assert.equal(result.text, 'Caller: ሰላም ነው\nUser: እሺ አመሰግናለሁ');
+});
+
+test('uses whole channel text rather than fabricating missing timings', () => {
+  assert.equal(mergeMultiChannel([
+    { text: 'Hello again', words: [{ text: 'Hello' }] },
+    { text: 'Hi', words: [{ text: 'Hi', start: 1 }] },
+  ]), 'User: Hello again\nCaller: Hi');
+});
+
+test('does not append audio events to speech', () => {
+  assert.equal(mergeMultiChannel([{ words: [
+    { text: 'Hello', type: 'word', start: 0 },
+    { text: '(laughs)', type: 'audio_event', start: 1 },
+    { text: 'again', type: 'word', start: 2 },
+  ] }]), 'User: Hello again');
+});
+
 test('falls back to channel text when word timings are absent', () => {
   const merged = mergeMultiChannel([{ text: 'no timings here', words: [] }]);
   assert.equal(merged, 'User: no timings here');

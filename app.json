@@ -34,6 +34,7 @@
       "expo-router",
       "expo-status-bar",
       "expo-audio",
+      "expo-secure-store",
       [
         "expo-font",
         {

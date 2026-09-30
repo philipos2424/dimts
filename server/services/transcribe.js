@@ -5,44 +5,36 @@ const ENDPOINT = 'https://api.elevenlabs.io/v1/speech-to-text';
 /**
  * Interleave a multichannel Scribe response into speaker-labelled dialogue.
  *
- * Twilio's record-from-answer-dual puts the user on channel 0 and the
- * destination on channel 1, so channel index maps directly to speaker.
+ * Twilio puts the parent leg on channel 0 and the dialled leg on channel 1.
+ * For incoming calls the caller is the parent; for outgoing calls it is User.
  *
  * This assumes per-channel word `start` values share one timeline. If they
  * ever don't, the interleave would scramble the conversation, so
  * `sequentialTranscript` is kept as the fallback shape.
  */
 export function mergeMultiChannel(transcripts, labels = ['User', 'Caller']) {
-  const turns = [];
-
+  const tokens = [];
   for (const [channel, transcript] of transcripts.entries()) {
     const speaker = labels[channel] ?? `Speaker ${channel + 1}`;
-    const words = transcript?.words ?? [];
-
-    let current = null;
+    const words = (transcript?.words ?? []).filter(
+      (word) => !word.type || word.type === 'word'
+    );
     for (const word of words) {
-      // Scribe emits spacing/audio-event tokens alongside words; only `word`
-      // entries carry content worth attributing to a speaker.
-      if (word.type && word.type !== 'word') {
-        if (current) current.text += word.text ?? ' ';
-        continue;
-      }
-      if (!current) {
-        current = { speaker, start: word.start ?? 0, text: word.text ?? '' };
-      } else {
-        current.text += ` ${word.text ?? ''}`;
-      }
+      // Never invent a timeline when a provider omits timing information.
+      if (!Number.isFinite(word.start)) return sequentialTranscript(transcripts, labels);
+      tokens.push({ speaker, start: word.start, text: word.text ?? '' });
     }
-    if (current) turns.push(current);
-
-    // No word-level timings: fall back to the channel's whole text as one turn.
-    if (!current && transcript?.text) {
-      turns.push({ speaker, start: 0, text: transcript.text });
+    if (!words.length && transcript?.text) {
+      return sequentialTranscript(transcripts, labels);
     }
   }
-
+  const turns = [];
+  for (const token of tokens.sort((a, b) => a.start - b.start)) {
+    const previous = turns.at(-1);
+    if (previous?.speaker === token.speaker) previous.text += ` ${token.text}`;
+    else turns.push({ ...token });
+  }
   return turns
-    .sort((a, b) => a.start - b.start)
     .map((turn) => `${turn.speaker}: ${turn.text.trim().replace(/\s+/g, ' ')}`)
     .join('\n');
 }
@@ -61,11 +53,12 @@ export function sequentialTranscript(transcripts, labels = ['User', 'Caller']) {
  * Multichannel returns `transcripts[]`; single-channel returns the same fields
  * at the top level. Callers should not have to care which one came back.
  */
-export function normalizeScribeResponse(data) {
+export function normalizeScribeResponse(data, { direction = 'outbound' } = {}) {
   if (Array.isArray(data?.transcripts) && data.transcripts.length > 0) {
     const primary = data.transcripts[0];
     return {
-      text: mergeMultiChannel(data.transcripts),
+      text: mergeMultiChannel(data.transcripts,
+        direction === 'inbound' ? ['Caller', 'User'] : ['User', 'Caller']),
       language: primary?.language_code ?? null,
       languageProbability: primary?.language_probability ?? null,
       raw: data,
@@ -92,6 +85,7 @@ async function callScribe(audio, fields) {
     method: 'POST',
     headers: { 'xi-api-key': config.elevenLabsApiKey },
     body: form,
+    signal: AbortSignal.timeout(120_000),
   });
 
   return response;
@@ -104,7 +98,19 @@ async function callScribe(audio, fields) {
  * more reliable than diarization. SPEC prescribes falling back to diarize on a
  * 400 — the two options cannot be combined.
  */
-export async function transcribe(audioBlob) {
+export async function transcribe(audioBlob, options = {}) {
+  if (config.transcribeProvider === 'whisper') {
+    const form = new FormData();
+    form.set('file', audioBlob, 'recording.mp3');
+    const response = await fetch(`${config.whisperBaseUrl}/transcribe`, {
+      method: 'POST', body: form,
+      headers: { Authorization: `Bearer ${config.whisperApiToken}` },
+      signal: AbortSignal.timeout(300_000),
+    });
+    if (!response.ok) throw new Error(`Local Whisper failed (HTTP ${response.status})`);
+    return normalizeScribeResponse(await response.json(), options);
+  }
+  if (config.transcribeProvider !== 'elevenlabs') throw new Error('Unsupported TRANSCRIBE_PROVIDER');
   let response = await callScribe(audioBlob, { use_multi_channel: true });
 
   if (response.status === 400) {
@@ -118,5 +124,5 @@ export async function transcribe(audioBlob) {
     throw new Error(`ElevenLabs ${response.status}: ${detail.slice(0, 500)}`);
   }
 
-  return normalizeScribeResponse(await response.json());
+  return normalizeScribeResponse(await response.json(), options);
 }

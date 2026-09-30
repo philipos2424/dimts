@@ -70,5 +70,25 @@ CREATE TABLE IF NOT EXISTS contacts (
 ALTER TABLE calls ADD COLUMN IF NOT EXISTS direction TEXT NOT NULL DEFAULT 'outbound';
 ALTER TABLE calls ADD COLUMN IF NOT EXISTS contact_id UUID REFERENCES contacts(id);
 ALTER TABLE calls ADD COLUMN IF NOT EXISTS next_moves JSONB;
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS processing_token UUID;
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS processing_until TIMESTAMPTZ;
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS record_enabled BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS parent_consent_at TIMESTAMPTZ;
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS child_consent_at TIMESTAMPTZ;
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS child_call_sid TEXT;
 
 CREATE INDEX IF NOT EXISTS calls_contact_idx ON calls (contact_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS sessions (
+  token_hash TEXT PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS sessions_expiry_idx ON sessions (expires_at);
+CREATE TABLE IF NOT EXISTS auth_rate_limits (
+  key TEXT NOT NULL,
+  window_start TIMESTAMPTZ NOT NULL,
+  attempts INT NOT NULL DEFAULT 0,
+  PRIMARY KEY (key, window_start)
+);

@@ -1,109 +1,117 @@
 # Dimts (ድምፅ)
 
-AI call recorder for Amharic and English speakers. The app places a call, the
-server records both legs through Twilio, then transcribes with ElevenLabs
-Scribe and summarizes with OpenAI.
+Call capture and follow-up assistant for Android, iPhone and the web. Twilio
+rings your mobile handset and connects the other person. Both people press 1
+to agree before a recorded conversation connects. After the call, the server
+transcribes the separate audio channels, summarizes the conversation, extracts
+commitments and identifies the contact from their introduction.
 
-```
-Expo app  ──►  Express (server/)  ──►  Postgres (Supabase)
-                     │
-                     ├─ Twilio        originates and records the call
-                     ├─ ElevenLabs    scribe_v2, dual-channel transcript
-                     └─ OpenAI        summary, action items, key points
-```
+The default local AI stack uses Whisper for transcription and Ollama for
+summaries and contact extraction. ElevenLabs and OpenAI remain optional
+providers. Calendar booking and email execution are not implemented yet.
+See [MVP status](docs/MVP_STATUS.md).
 
-## Before the first call
+## Local setup
 
-These are account settings, not code, and each one can stop a call dead.
+Requires Node 22.13 or later, Python 3.12, Ollama and a Twilio account.
 
-1. **Upgrade Twilio off trial.** A trial account can only dial verified
-   numbers and is restricted to your signup country, so it cannot reach
-   Ethiopia at all. Trials also play a spoken message that ends up inside the
-   recording and therefore inside the transcript.
-2. **Enable Ethiopia in Voice → Settings → Geo permissions** (low-risk ranges).
-   International destinations are off by default.
-3. Have a **voice-capable** Twilio number for `TWILIO_NUMBER`.
-4. **Claim ngrok's free static domain.** Without it the tunnel URL changes on
-   every restart and every Twilio callback goes stale.
-5. Get an ElevenLabs API key with speech-to-text credit.
-
-### What a call costs
-
-Twilio bills **both** legs. At published rates a 10-minute call from a US
-number to an Ethiopian mobile is about **$5.11**, of which $5.04 is Twilio
-voice. Transcription and summarization together come to roughly **four cents**.
-
-A user *inside* Ethiopia costs about twice that (~$0.98/min), because both legs
-terminate on Ethiopian mobile. Replacing leg A with the Twilio Voice SDK
-(WebRTC, $0.0040/min) is the fix; `server/services/originate.js` is the seam
-where that swap happens.
-
-Keep test calls short.
-
-## Running it
-
-```bash
-npm install
-npm install --prefix server
-cp .env.example .env          # then fill it in
-
-npm run server                # http://localhost:3000
-ngrok http 3000 --url=<your-static>.ngrok-free.app
+```powershell
+npm ci
+npm ci --prefix server
+Copy-Item .env.example .env
 ```
 
-Set `PUBLIC_BASE_URL` and `EXPO_PUBLIC_API_BASE_URL` to the ngrok URL, then:
+Fill in `.env`, which Git ignores. Never put credentials in `EXPO_PUBLIC_`
+variables; those are embedded in the client bundle.
 
-```bash
-npm start                     # Expo dev server
+- `TWILIO_ACCOUNT_SID`: your AC account identifier.
+- `TWILIO_AUTH_TOKEN`: account token for API access and webhook validation.
+- `TWILIO_NUMBER`: a voice-enabled Twilio number, separate from your handset.
+- `TWILIO_VERIFY_SERVICE_SID`: a Twilio Verify service for SMS signup/sign-in.
+- `DATABASE_MODE=local`: persistent embedded PostgreSQL in ignored `.data/`.
+- `LLM_PROVIDER=ollama`, `OLLAMA_MODEL=llama3:latest`: use an installed model.
+- `TRANSCRIBE_PROVIDER=whisper`, `WHISPER_API_TOKEN`: a random token shared
+  by the backend and local transcription worker.
+
+```powershell
+python -m pip install --target .data/python -r server/whisper/requirements.txt
+ollama pull llama3
+python server/whisper/local-server.py
 ```
 
-Apply `server/db/schema.sql` to your database if it is not already applied.
+The worker listens only on `127.0.0.1:3104`. Its first transcription downloads
+the Whisper model into `.data/whisper-models`. Keep this port private.
 
-### Checks
+In a second terminal:
 
-```bash
-npx tsc --noEmit              # app typecheck, includes i18n completeness
-npx expo-doctor
-npm run server:test           # 37 tests, no network calls
+```powershell
+npx expo export --platform web --output-dir dist
+npm run server
 ```
 
-## Deploying the server
+Open the backend URL (port 3000 by default, or `PORT` from `.env`) for the web
+app. Web requests use the same origin. Native builds use
+`EXPO_PUBLIC_API_BASE_URL`, which must be reachable from the phone.
 
-`server/` is a standalone package so Vercel's zero-config Express detection
-targets it without colliding with the Expo app at the repo root.
+## Real calls
 
-- Set the Vercel project's **Root Directory to `server/`**.
-- Add every `server/` variable from `.env.example` as a project environment
-  variable, with `PUBLIC_BASE_URL` set to the deployment URL.
-- `server/index.js` is the Vercel entry; `server/dev.js` is the local one.
-  Both build the same app from `server/app.js`.
+Expose the backend through an authorized public HTTPS tunnel, set
+`PUBLIC_BASE_URL` to that origin and restart the backend. Configure your Twilio
+number's incoming voice webhook to POST to `/twiml/incoming`. Assign that
+number to its account owner with `server/scripts/assign-number.js`.
 
-Webhooks acknowledge Twilio immediately and finish the transcribe/summarize
-pipeline in the background via `waitUntil`, inside the 300s Fluid compute
-budget. Twilio abandons a webhook after roughly 15 seconds.
+Sign in with your actual mobile number and its SMS code. On a trial account,
+verify test phones in Twilio and check Voice geographic permissions for the
+countries used in the test.
 
-## Building the APK
+Outgoing calls ring your handset first. Press 1 to agree to recording; Dimts
+then rings the destination, asks that person to press 1 and connects you.
+Unanswered agreement prompts hang up. Turning recording off in Settings omits
+the recording flow for outgoing calls. Calls have a 30-minute cap.
 
-```bash
-eas build -p android --profile preview
+Do not use the Twilio number as your own handset or dial it as an outgoing
+destination: that would route the call back into itself.
+
+## Accounts and data
+
+`/api/auth/start` sends a verification code; `/api/auth/verify` checks it and
+creates or signs into the account. The server issues a random 30-day session,
+stores only its hash and rejects expired/revoked sessions. Native clients keep
+tokens in the OS keystore; the web client uses tab session storage.
+The old `x-user-phone` header no longer grants access.
+
+Call history and audio are filtered by the authenticated owner. Recordings are
+proxied by the backend. Duplicate processing workers are prevented with atomic
+database leases. Expired leases can be reclaimed with the retry endpoint.
+
+## Checks
+
+```powershell
+npm run server:test
+npx tsc --noEmit
+npx expo install --check
+npx expo export --platform web --output-dir dist
 ```
 
-Point `EXPO_PUBLIC_API_BASE_URL` at the deployed server, not the tunnel. The
-free EAS tier allows 15 Android builds a month on a low-priority queue where
-peak waits exceed 90 minutes, so batch device testing rather than rebuilding
-per change.
+Synthetic audio check on Windows, without a phone call or microphone:
 
-## Known limitations
+```powershell
+./server/scripts/audio-smoke.ps1
+python server/scripts/audio-smoke.py
+node --env-file=.env server/scripts/smoke-local-audio.js
+```
 
-- **`x-user-phone` is not authentication.** The header is spoofable and anyone
-  who guesses a phone number can read that user's calls. Replacing it with
-  verified OTP plus a JWT is the first thing to do before anyone else installs
-  the app.
-- **No recording-consent disclosure.** Many jurisdictions require all parties
-  to be told. The bridge TwiML should play one before `<Dial>` connects.
-- **No tier enforcement.** `usage_minutes` is recorded but nothing stops a call
-  at a limit, which matters at roughly $0.50 a minute.
-- **The `free` tier in the schema is not viable as priced.** Thirty free
-  minutes costs about $15 a month per user in carrier fees alone.
-- The Supabase free plan pauses a project after a week of inactivity, which
-  surfaces as connection errors long after everything last worked.
+The result is written to ignored `.data/audio-smoke/result.json`. This checks
+local audio-to-notes behavior, not carrier connectivity or real call agreement.
+
+## Deployment
+
+`server/api/index.js` is the Vercel entry; it creates the same Express app as
+`server/dev.js`. Set the Vercel project root to `server/`. Production must use
+hosted PostgreSQL (`DATABASE_URL`) and reachable transcription/LLM services.
+A cloud function cannot reach Ollama at `127.0.0.1` on your laptop. Local
+database mode is explicitly rejected on Vercel.
+
+Apply `server/db/schema.sql` to hosted PostgreSQL before using this server.
+Keep Twilio webhook signature checks enabled. Background processing uses
+`waitUntil` on Vercel; long jobs need a durable worker before production scaling.

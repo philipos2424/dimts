@@ -7,7 +7,7 @@ import { Txt } from '../src/components/Txt';
 import { statusKey } from '../src/i18n';
 import { color, radius, space } from '../src/theme';
 
-const SETTLED = new Set(['processing', 'ready', 'failed']);
+const SETTLED = new Set(['processing', 'ready', 'failed', 'missed', 'completed']);
 
 export default function InCall() {
   const { t } = useApp();

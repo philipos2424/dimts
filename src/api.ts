@@ -1,6 +1,9 @@
 import type { Key } from './i18n';
+import { Platform } from 'react-native';
 
-const BASE = (process.env.EXPO_PUBLIC_API_BASE_URL ?? '').replace(/\/+$/, '');
+const BASE = Platform.OS === 'web' ? '' : (process.env.EXPO_PUBLIC_API_BASE_URL ?? '').replace(/\/+$/, '');
+let sessionToken: string | null = null;
+export function setApiSession(token: string | null) { sessionToken = token; }
 
 export type CallSummary = {
   id: string;
@@ -43,7 +46,22 @@ export function audioUrlFor(callId: string): string {
 
 /** expo-audio's AudioSource accepts headers, so the proxy stays authenticated. */
 export function authHeaders(userPhone: string): Record<string, string> {
-  return { 'x-user-phone': userPhone };
+  return sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {};
+}
+
+export function sendLoginCode(phone: string) {
+  return request('/api/auth/start', '', { method: 'POST', body: JSON.stringify({ phone }) });
+}
+export function verifyLoginCode(phone: string, code: string) {
+  return request<{ token: string; phone: string }>('/api/auth/verify', '', {
+    method: 'POST', body: JSON.stringify({ phone, code }),
+  });
+}
+export function getMe() {
+  return request<{ phone: string; tier: string; agent_number: string | null }>('/api/me', '');
+}
+export function logout() {
+  return request('/api/auth/logout', '', { method: 'POST' });
 }
 
 async function request<T>(
@@ -84,12 +102,12 @@ export function getCall(id: string, userPhone: string) {
   return request<CallDetail>(`/api/calls/${id}`, userPhone);
 }
 
-export async function startCall(destination: string, userPhone: string) {
+export async function startCall(destination: string, userPhone: string, record = true) {
   try {
     return await request<{ callId: string; status: string }>(
       '/api/calls',
       userPhone,
-      { method: 'POST', body: JSON.stringify({ destination }) }
+      { method: 'POST', body: JSON.stringify({ destination, record }) }
     );
   } catch (err) {
     if (err instanceof ApiError && err.messageKey === 'errorGeneric') {
@@ -107,4 +125,19 @@ export function reprocessCall(id: string, userPhone: string) {
 
 export function getUsage(userPhone: string) {
   return request<Usage>('/api/usage', userPhone);
+}
+
+export type Contact = { id: string; phone: string; display_name: string | null;
+  company: string | null; notes: string | null; name_source: string; last_call_at: string | null };
+export function listContacts(userPhone: string) {
+  return request<{ contacts: Contact[] }>('/api/contacts', userPhone).then(r => r.contacts);
+}
+export function saveContact(contact: Contact, userPhone: string) {
+  return request<Contact>(`/api/contacts/${contact.id}`, userPhone,
+    { method: 'PATCH', body: JSON.stringify(contact) });
+}
+export async function exportContact(id: string, userPhone: string) {
+  const response = await fetch(`${BASE}/api/contacts/${id}/vcard`, { headers: authHeaders(userPhone) });
+  if (!response.ok) throw new ApiError('errorGeneric', 'Unable to export contact');
+  return response.text();
 }

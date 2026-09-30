@@ -11,9 +11,9 @@ import { color, radius, space, type } from '../../src/theme';
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '*', '0', '#'];
 
 export default function Dialer() {
-  const { t, lang, userPhone } = useApp();
+  const { t, lang, userPhone, autoRecord } = useApp();
   const router = useRouter();
-  const [number, setNumber] = useState('+251');
+  const [number, setNumber] = useState('+1');
   const [errorKey, setErrorKey] = useState<Key | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -23,7 +23,7 @@ export default function Dialer() {
     if (!userPhone || !dialable || busy) return;
     setBusy(true);
     try {
-      const { callId } = await startCall(number, userPhone);
+      const { callId } = await startCall(number, userPhone, autoRecord);
       router.push(`/in-call?id=${callId}&dest=${encodeURIComponent(number)}`);
     } catch (err) {
       setErrorKey(err instanceof ApiError ? err.messageKey : 'errorCallFailed');

@@ -5,6 +5,7 @@ import { findUserByAgentNumber } from '../db/agent-numbers.js';
 import { findOrCreateContact } from '../db/contacts.js';
 import { queryOne } from '../db/pool.js';
 import { verifyTwilioSignature } from '../lib/twilio-signature.js';
+import { askRecordingConsent, dialCall } from '../lib/recording-consent.js';
 
 const { VoiceResponse } = twilio.twiml;
 
@@ -60,23 +61,9 @@ inboundRouter.post('/', async (req, res) => {
     console.error('[inbound] could not create call row', err);
   }
 
-  if (config.announceRecording) {
-    twiml.say(config.recordingNotice);
-  }
-
   const base = config.publicBaseUrl;
-  const dial = twiml.dial({
-    record: 'record-from-answer-dual',
-    recordingStatusCallback: `${base}/webhooks/recording-ready?callId=${callId}`,
-    recordingStatusCallbackMethod: 'POST',
-    recordingStatusCallbackEvent: 'completed',
-    action: `${base}/twiml/dial-done?callId=${callId}`,
-    method: 'POST',
-    timeout: 25,
-    timeLimit: 7200,
-    callerId: agentNumber,
-  });
-  dial.number(user.phone);
+  if (callId) askRecordingConsent(twiml, `${base}/twiml/accept?callId=${callId}`);
+  else dialCall(twiml, { id: null, direction: 'inbound', user_phone: user.phone, record_enabled: false });
 
   res.type('text/xml').send(twiml.toString());
 });

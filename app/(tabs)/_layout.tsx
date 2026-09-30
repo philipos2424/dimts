@@ -52,6 +52,7 @@ export default function TabsLayout() {
         name="notes"
         options={{ title: t('notes'), tabBarIcon: () => null }}
       />
+      <Tabs.Screen name="contacts" options={{ title: 'Contacts', tabBarIcon: () => null }} />
     </Tabs>
   );
 }

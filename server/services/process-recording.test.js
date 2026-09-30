@@ -6,11 +6,18 @@ let identity;
 let identifyThrows = false;
 const adopted = [];
 const touched = [];
+const transcriptions = [];
+const updates = [];
+let claimed = false;
 
 mock.module('../db/pool.js', {
   namedExports: {
-    query: async () => ({ rows: [] }),
-    queryOne: async () => call,
+    query: async (sql, params) => { updates.push({ sql, params }); return { rows: [] }; },
+    queryOne: async () => {
+      if (claimed) return undefined;
+      claimed = true;
+      return call;
+    },
     getPool: () => ({}),
   },
 });
@@ -24,12 +31,12 @@ mock.module('./originate.js', {
 
 mock.module('./transcribe.js', {
   namedExports: {
-    transcribe: async () => ({
+    transcribe: async (_audio, options) => { transcriptions.push(options); return ({
       text: 'Caller: hi this is Phili from Amax\nUser: hello',
       language: 'eng',
       languageProbability: 0.99,
       raw: {},
-    }),
+    }); },
   },
 });
 
@@ -66,6 +73,7 @@ const { processRecording } = await import('./process-recording.js');
 test.beforeEach(() => {
   call = {
     id: 'call-1',
+    direction: 'outbound',
     recording_url: 'https://api.twilio.com/x/Recordings/RE1',
     contact_id: 'c1',
     contact_display_name: null,
@@ -76,6 +84,9 @@ test.beforeEach(() => {
   identifyThrows = false;
   adopted.length = 0;
   touched.length = 0;
+  transcriptions.length = 0;
+  updates.length = 0;
+  claimed = false;
 });
 
 test('names the contact from a confident identification', async () => {
@@ -114,4 +125,20 @@ test('skips naming when the call has no contact', async () => {
   await processRecording('call-1');
   assert.equal(adopted.length, 0);
   assert.equal(touched.length, 0);
+});
+
+test('only one concurrent worker transcribes a recording', async () => {
+  await Promise.all([processRecording('call-1'), processRecording('call-1')]);
+  assert.equal(transcriptions.length, 1);
+  assert.equal(adopted.length, 1);
+});
+
+test('passes incoming direction and saves language with the notes', async () => {
+  call.direction = 'inbound';
+  await processRecording('call-1');
+  assert.equal(transcriptions[0].direction, 'inbound');
+  const saved = updates.find((update) => update.sql.includes('transcript = $2'));
+  assert.equal(saved.params[7], 'eng');
+  assert.equal(saved.params[8], 0.99);
+  assert.match(saved.sql, /processing_token = \$10/);
 });

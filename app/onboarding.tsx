@@ -1,15 +1,28 @@
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, TextInput, View } from 'react-native';
 import { useApp } from '../src/AppContext';
+import { sendLoginCode, verifyLoginCode } from '../src/api';
 import { Txt } from '../src/components/Txt';
 import { color, font, radius, space, type } from '../src/theme';
 
 export default function Onboarding() {
-  const { t, setUserPhone } = useApp();
-  const [value, setValue] = useState('+251');
+  const { t, signIn } = useApp();
+  const [value, setValue] = useState('+1');
+  const [code, setCode] = useState('');
+  const [sent, setSent] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
   const [touched, setTouched] = useState(false);
 
   const valid = /^\+[1-9]\d{6,14}$/.test(value);
+  async function submit() {
+    setBusy(true); setError('');
+    try {
+      if (!sent) { await sendLoginCode(value); setSent(true); }
+      else { const session = await verifyLoginCode(value, code); await signIn(session.token, session.phone); }
+    } catch (err) { setError(err instanceof Error ? err.message : 'Unable to sign in.'); }
+    finally { setBusy(false); }
+  }
 
   return (
     <KeyboardAvoidingView
@@ -32,6 +45,7 @@ export default function Onboarding() {
           onBlur={() => setTouched(true)}
           keyboardType="phone-pad"
           autoFocus
+          editable={!sent && !busy}
           placeholder={t('phonePlaceholder')}
           placeholderTextColor={color.faint}
           accessibilityLabel={t('onboardingTitle')}
@@ -49,12 +63,17 @@ export default function Onboarding() {
         />
 
         {touched && !valid && <Txt size="caption" tone="muted">{t('invalidPhone')}</Txt>}
+        {sent && <TextInput value={code} onChangeText={setCode} keyboardType="number-pad"
+          textContentType="oneTimeCode" autoComplete="sms-otp" placeholder="Verification code"
+          placeholderTextColor={color.faint} accessibilityLabel="Verification code"
+          style={{ color: color.parchment, padding: space.md, backgroundColor: color.surface }} />}
+        {error ? <Txt tone="muted">{error}</Txt> : null}
 
         <Pressable
           accessibilityRole="button"
           accessibilityState={{ disabled: !valid }}
-          disabled={!valid}
-          onPress={() => setUserPhone(value)}
+          disabled={!valid || busy || (sent && !/^\d{4,10}$/.test(code))}
+          onPress={submit}
           style={{
             alignItems: 'center',
             paddingVertical: space.md,
@@ -67,9 +86,12 @@ export default function Onboarding() {
             weight="bold"
             style={{ color: valid ? color.ink : color.faint }}
           >
-            {t('continue')}
+            {busy ? 'Please wait…' : sent ? 'Verify and continue' : 'Send verification code'}
           </Txt>
         </Pressable>
+        {sent && <Pressable onPress={() => { setSent(false); setCode(''); setError(''); }}>
+          <Txt tone="accent">Change number or send another code</Txt>
+        </Pressable>}
       </View>
     </KeyboardAvoidingView>
   );

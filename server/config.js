@@ -26,6 +26,9 @@ export const config = {
   get twilioNumber() {
     return requireEnv('TWILIO_NUMBER');
   },
+  get twilioVerifyServiceSid() {
+    return requireEnv('TWILIO_VERIFY_SERVICE_SID');
+  },
   get elevenLabsApiKey() {
     return requireEnv('ELEVENLABS_API_KEY');
   },
@@ -48,6 +51,12 @@ export const config = {
   scribeModelId: process.env.SCRIBE_MODEL_ID || 'scribe_v2',
 
   openaiModel: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+  get llmProvider() { return process.env.LLM_PROVIDER || 'ollama'; },
+  get ollamaBaseUrl() { return (process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434').replace(/\/+$/, ''); },
+  get ollamaModel() { return process.env.OLLAMA_MODEL || 'llama3:latest'; },
+  get transcribeProvider() { return process.env.TRANSCRIBE_PROVIDER || 'whisper'; },
+  get whisperBaseUrl() { return (process.env.WHISPER_BASE_URL || 'http://127.0.0.1:3104').replace(/\/+$/, ''); },
+  get whisperApiToken() { return requireEnv('WHISPER_API_TOKEN'); },
 
   /**
    * Roughly a dozen US states require all-party consent to record. Users are

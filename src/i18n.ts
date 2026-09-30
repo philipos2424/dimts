@@ -148,6 +148,7 @@ export function translate(lang: Lang, key: Key): string {
 
 /** Status values from the API map onto the status* keys. */
 export function statusKey(status: string): Key {
+  if (status === 'completed') return 'statusReady';
   const key = `status${status.charAt(0).toUpperCase()}${status.slice(1)}`;
   return (key in dictionaries.en ? key : 'statusFailed') as Key;
 }

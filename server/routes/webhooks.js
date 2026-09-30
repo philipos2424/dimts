@@ -6,6 +6,7 @@ import { defer } from '../lib/defer.js';
 import { verifyTwilioSignature } from '../lib/twilio-signature.js';
 import { currentMonth } from '../lib/users.js';
 import { processRecording } from '../services/process-recording.js';
+import { askRecordingConsent, dialCall } from '../lib/recording-consent.js';
 
 const { VoiceResponse } = twilio.twiml;
 
@@ -30,7 +31,10 @@ webhooksRouter.use(verifyTwilioSignature);
 async function resolveCall({ callId, callSid }) {
   if (callId) {
     const byId = await queryOne('SELECT * FROM calls WHERE id = $1', [callId]);
-    if (byId) return byId;
+    if (byId) {
+      if (!callSid || (byId.twilio_call_sid && byId.twilio_call_sid !== callSid)) return undefined;
+      return byId;
+    }
   }
   if (callSid) {
     return queryOne('SELECT * FROM calls WHERE twilio_call_sid = $1', [callSid]);
@@ -39,9 +43,10 @@ async function resolveCall({ callId, callSid }) {
 }
 
 /** TwiML fetched when the user answers leg A: dial the destination, record both. */
-twimlRouter.post('/bridge', (req, res) => {
-  const destination = req.query.dest ?? req.body?.dest;
+twimlRouter.post('/bridge', async (req, res) => {
   const callId = req.query.callId ?? req.body?.callId;
+  const call = await resolveCall({ callId, callSid: req.body?.CallSid });
+  const destination = call?.direction === 'outbound' ? call.destination : null;
   const base = config.publicBaseUrl;
 
   const twiml = new VoiceResponse();
@@ -52,20 +57,37 @@ twimlRouter.post('/bridge', (req, res) => {
     return res.type('text/xml').send(twiml.toString());
   }
 
-  twiml.pause({ length: 1 });
+  if (call.record_enabled !== false) askRecordingConsent(twiml, `${base}/twiml/accept?callId=${call.id}`);
+  else dialCall(twiml, call);
 
-  const dial = twiml.dial({
-    record: 'record-from-answer-dual',
-    recordingStatusCallback: `${base}/webhooks/recording-ready?callId=${callId}`,
-    recordingStatusCallbackMethod: 'POST',
-    recordingStatusCallbackEvent: 'completed',
-    action: `${base}/twiml/dial-done?callId=${callId}`,
-    method: 'POST',
-    timeout: 30,
-    timeLimit: 7200,
-  });
-  dial.number(destination);
+  res.type('text/xml').send(twiml.toString());
+});
 
+twimlRouter.post('/accept', async (req, res) => {
+  const call = await resolveCall({ callId: req.query.callId, callSid: req.body?.CallSid });
+  const twiml = new VoiceResponse();
+  if (call && req.body?.Digits === '1') {
+    await query('UPDATE calls SET parent_consent_at = now() WHERE id = $1', [call.id]);
+    dialCall(twiml, call);
+  } else twiml.hangup();
+  res.type('text/xml').send(twiml.toString());
+});
+
+// Runs on the dialled party's leg before Twilio bridges the two people.
+twimlRouter.post('/party-consent', async (req, res) => {
+  const call = await queryOne('SELECT * FROM calls WHERE id = $1', [req.query.callId]);
+  const twiml = new VoiceResponse();
+  if (!call?.parent_consent_at || !req.body?.CallSid ||
+      (call.child_call_sid && call.child_call_sid !== req.body.CallSid)) twiml.hangup();
+  else if (req.body.Digits === '1') {
+    await query(`UPDATE calls SET child_consent_at = now(), child_call_sid = $2
+      WHERE id = $1 AND (child_call_sid IS NULL OR child_call_sid = $2)`, [call.id, req.body.CallSid]);
+  } else if (req.body.Digits) twiml.hangup();
+  else {
+    await query(`UPDATE calls SET child_call_sid = $2
+      WHERE id = $1 AND child_call_sid IS NULL`, [call.id, req.body.CallSid]);
+    askRecordingConsent(twiml, `${config.publicBaseUrl}/twiml/party-consent?callId=${call.id}`);
+  }
   res.type('text/xml').send(twiml.toString());
 });
 
@@ -78,7 +100,8 @@ webhooksRouter.post('/call-status', async (req, res) => {
     const mapped = { ringing: 'ringing', 'in-progress': 'in-progress' }[CallStatus];
 
     if (mapped) {
-      await query('UPDATE calls SET status = $2 WHERE id = $1', [call.id, mapped]);
+      await query(`UPDATE calls SET status = $2 WHERE id = $1
+        AND status IN ('initiating', 'ringing')`, [call.id, mapped]);
     } else if (
       ['busy', 'no-answer', 'failed', 'canceled'].includes(CallStatus) &&
       // A completed dial has already moved the row on; don't drag it back.
@@ -115,7 +138,9 @@ twimlRouter.post('/dial-done', async (req, res) => {
     const updated = await queryOne(
       `UPDATE calls
           SET duration_sec = $2,
-              status = CASE WHEN $3 THEN 'processing' ELSE $5 END,
+              status = CASE WHEN status = 'ready' THEN status
+                            WHEN $3 AND record_enabled THEN 'processing'
+                            WHEN $3 THEN 'completed' ELSE $5 END,
               error = CASE WHEN $3 THEN error ELSE $4 END
         WHERE id = $1 AND duration_sec IS NULL
         RETURNING id, user_id`,
@@ -146,12 +171,14 @@ webhooksRouter.post('/recording-ready', async (req, res) => {
   const { RecordingUrl, RecordingStatus, CallSid } = req.body ?? {};
   const call = await resolveCall({ callId: req.query.callId, callSid: CallSid });
 
-  if (call && RecordingStatus === 'completed' && RecordingUrl) {
-    await query(
-      `UPDATE calls SET recording_url = $2, status = 'processing' WHERE id = $1`,
+  if (call && call.record_enabled !== false && call.parent_consent_at && call.child_consent_at && RecordingStatus === 'completed' && RecordingUrl) {
+    const accepted = await queryOne(
+      `UPDATE calls SET recording_url = $2, status = 'processing'
+       WHERE id = $1 AND recording_url IS NULL AND status <> 'ready'
+       RETURNING id`,
       [call.id, RecordingUrl]
     );
-    defer(processRecording(call.id), `process:${call.id}`);
+    if (accepted) defer(processRecording(call.id), `process:${call.id}`);
   }
 
   res.status(204).end();
