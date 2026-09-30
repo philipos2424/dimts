@@ -18,6 +18,16 @@ export type CallSummary = {
 };
 
 export type ActionItem = { task: string; owner: string | null };
+export type Followups = {
+  email: { subject: string; body: string; recipient: string } | null;
+  meeting: { title: string; notes: string; time_text: string; start: string; end: string } | null;
+};
+export function generateFollowups(id: string) {
+  return request<Followups>(`/api/calls/${id}/followups`, '', { method: 'POST' });
+}
+export function saveFollowups(id: string, draft: Followups) {
+  return request<Followups>(`/api/calls/${id}/followups`, '', { method: 'PATCH', body: JSON.stringify(draft) });
+}
 
 export type CallDetail = CallSummary & {
   recording_url: string | null;
@@ -27,6 +37,7 @@ export type CallDetail = CallSummary & {
   action_items: ActionItem[] | null;
   key_points: string[] | null;
   error: string | null;
+  followups: Followups | null;
 };
 
 export type Usage = { month: string; tier: string; minutes_used: number };

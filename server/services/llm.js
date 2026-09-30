@@ -9,18 +9,33 @@ export async function completeJson(system, input, schema = 'json') {
     { role: 'user', content: input },
   ];
   if (config.llmProvider === 'ollama') {
+    const base = new URL(config.ollamaBaseUrl);
+    const cloud = base.hostname === 'ollama.com';
+    if (cloud && base.protocol !== 'https:') throw new Error('Ollama Cloud requires HTTPS');
+    if (cloud && !process.env.OLLAMA_API_KEY) throw new Error('Missing OLLAMA_API_KEY for Ollama Cloud');
+    // Cloud currently does not support the native structured-output parameter.
+    // Specify the schema in the prompt, then validate the returned JSON here.
+    if (cloud) messages[0].content += '\nReturn only a valid JSON object, without Markdown or commentary.' +
+      (typeof schema === 'object' ? `\nUse this JSON schema: ${JSON.stringify(schema)}` : '');
     const response = await fetch(`${config.ollamaBaseUrl}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json',
         ...(process.env.OLLAMA_API_KEY ? { Authorization: `Bearer ${process.env.OLLAMA_API_KEY}` } : {}) },
       body: JSON.stringify({ model: config.ollamaModel, messages,
-        stream: false, think: false, format: schema, options: { temperature: 0, num_predict: 1400 } }),
+        stream: false, ...(cloud ? {} : { think: false, format: schema }),
+        options: { temperature: 0, num_predict: 1400 } }),
+      redirect: 'error',
       signal: AbortSignal.timeout(180_000),
     });
     if (!response.ok) throw new Error(`Ollama request failed (HTTP ${response.status})`);
     const result = await response.json();
     if (!result.message?.content) throw new Error('Ollama returned no content');
-    return result.message.content;
+    const content = result.message.content.trim().replace(/^```(?:json)?\s*\n?([\s\S]*?)\n?```$/i, '$1');
+    let parsed;
+    try { parsed = JSON.parse(content); }
+    catch { throw new Error('Ollama returned invalid JSON'); }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Ollama returned no JSON object');
+    return JSON.stringify(parsed);
   }
   if (config.llmProvider !== 'openai') throw new Error('Unsupported LLM_PROVIDER');
   const client = new OpenAI({ apiKey: config.openaiApiKey, timeout: 90_000, maxRetries: 1 });

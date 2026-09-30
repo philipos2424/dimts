@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
 import { authRouter } from './routes/auth.js';
 import { contactsRouter } from './routes/contacts.js';
+import { followupsRouter } from './routes/followups.js';
 import { callsRouter, meRouter, usageRouter } from './routes/calls.js';
 import { inboundRouter } from './routes/inbound.js';
 import { twimlRouter, webhooksRouter } from './routes/webhooks.js';
@@ -26,6 +27,7 @@ export function createApp() {
   app.use('/api/contacts', contactsRouter);
 
   app.use('/api/calls', callsRouter);
+  app.use('/api/calls', followupsRouter);
   app.use('/api/usage', usageRouter);
   app.use('/api/me', meRouter);
   app.use('/twiml/incoming', inboundRouter);

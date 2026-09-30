@@ -6,6 +6,7 @@ import { ApiError, type CallDetail, getCall, reprocessCall } from '../../src/api
 import { ActionList } from '../../src/components/ActionList';
 import { Banner } from '../../src/components/Banner';
 import { CallPlayer } from '../../src/components/CallPlayer';
+import { FollowupReview } from '../../src/components/FollowupReview';
 import { Section } from '../../src/components/Section';
 import { Txt } from '../../src/components/Txt';
 import { type Key, statusKey } from '../../src/i18n';
@@ -123,6 +124,8 @@ export default function CallDetailScreen() {
           </View>
         </Section>
       )}
+
+      {call.status === 'ready' && call.transcript && <FollowupReview key={call.id} callId={call.id} initial={call.followups} />}
 
       {call.transcript && (
         <Section title={t('transcript')}>

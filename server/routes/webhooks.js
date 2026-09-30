@@ -5,6 +5,7 @@ import { query, queryOne } from '../db/pool.js';
 import { defer } from '../lib/defer.js';
 import { verifyTwilioSignature } from '../lib/twilio-signature.js';
 import { currentMonth } from '../lib/users.js';
+import { finishCall } from '../db/finish-call.js';
 import { processRecording } from '../services/process-recording.js';
 import { askRecordingConsent, dialCall } from '../lib/recording-consent.js';
 
@@ -127,35 +128,7 @@ twimlRouter.post('/dial-done', async (req, res) => {
   const call = await resolveCall({ callId: req.query.callId, callSid: CallSid });
 
   if (call) {
-    const seconds = Number(DialCallDuration ?? 0) || 0;
-    const connected = DialCallStatus === 'completed' && seconds > 0;
-
-    // On an inbound call the dialled leg is the user's own handset, so an
-    // unanswered dial means a missed call rather than a failed one.
-    const missedStatus = call.direction === 'inbound' ? 'missed' : 'failed';
-
-    // duration_sec IS NULL guards against a webhook retry double-billing.
-    const updated = await queryOne(
-      `UPDATE calls
-          SET duration_sec = $2,
-              status = CASE WHEN status = 'ready' THEN status
-                            WHEN $3 AND record_enabled THEN 'processing'
-                            WHEN $3 THEN 'completed' ELSE $5 END,
-              error = CASE WHEN $3 THEN error ELSE $4 END
-        WHERE id = $1 AND duration_sec IS NULL
-        RETURNING id, user_id`,
-      [call.id, seconds, connected, `Dial ${DialCallStatus}`, missedStatus]
-    );
-
-    if (updated && connected) {
-      await query(
-        `INSERT INTO usage_minutes (user_id, month, minutes_used)
-         VALUES ($1, $2, $3)
-         ON CONFLICT (user_id, month)
-         DO UPDATE SET minutes_used = usage_minutes.minutes_used + EXCLUDED.minutes_used`,
-        [updated.user_id, currentMonth(), seconds / 60]
-      );
-    }
+    await finishCall(call, Number(DialCallDuration ?? 0), DialCallStatus, currentMonth());
   }
 
   const twiml = new VoiceResponse();

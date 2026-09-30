@@ -34,6 +34,7 @@ function run(text, params = []) {
     if (!call || call.duration_sec !== null) return { rows: [] };
     call.duration_sec = params[1];
     call.status = params[2] ? 'processing' : params[4];
+    db.statements.at(-1).billed = params[2];
     return { rows: [{ id: call.id, user_id: call.user_id }] };
   }
   if (sql.includes('UPDATE calls')) {
@@ -101,7 +102,7 @@ async function post(path, body) {
 }
 
 const usageWrites = () =>
-  db.statements.filter((s) => s.text.includes('INSERT INTO usage_minutes'));
+  db.statements.filter((s) => s.text.includes('INSERT INTO usage_minutes') && s.billed);
 
 test.beforeEach(() => db.reset());
 
@@ -154,7 +155,7 @@ test('bills a completed call exactly once even if Twilio retries', async () => {
   await post(`/twiml/dial-done?callId=${call.id}`, payload);
 
   assert.equal(usageWrites().length, 1, 'duplicate webhook must not double-bill');
-  assert.equal(usageWrites()[0].params[2], 3); // 180s -> 3 minutes
+  assert.equal(usageWrites()[0].params[1] / 60, 3); // 180s -> 3 minutes
 });
 
 test('does not bill an unanswered call', async () => {

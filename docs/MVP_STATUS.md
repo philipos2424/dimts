@@ -10,23 +10,31 @@ Implemented and checked:
 - Local PostgreSQL option and schema execution test.
 - Chronological transcript merge and correct incoming speaker labels.
 - Ollama summaries and contact extraction with actual local model testing.
+- Ollama Cloud summaries and contact extraction verified with a synthetic
+  conversation using gemma4:31b; API key stored only in ignored server config.
 - Outgoing and incoming contact linking.
 - Processing leases, provider timeouts and recording URL validation.
 - Callback SID checks and duplicate/late callback protection.
+- Atomic call completion and minute accounting; database failure and retry
+  behavior verified using actual PostgreSQL-compatible queries.
 - Two-party recording agreement flow and outgoing recording toggle.
 - Expo web build, TypeScript and dependency compatibility checks.
 - Local backend and Whisper worker health checks.
 - Synthetic stereo audio transcribed with alternating speaker turns; actual
   Ollama output checked for caller identity and email commitment ownership.
 - Contacts editing and vCard export, including cross-owner access tests.
+- Editable follow-up email and meeting drafts stored per call. Mail and Google
+  Calendar handoff require reviewed recipients and explicit UTC meeting times.
+  Cloud generation checked for both meeting and email examples; isolation and
+  date validation tests pass. Actual sending/booking is not yet verified.
 
 Still required:
 
 - Real SMS signup and owner handset verification.
 - Public callback endpoint and real inbound/outbound two-person calls.
 - Confirm playback, transcript, summary and contact on a real call.
-- Follow-up drafts, calendar proposal review and calendar/email execution.
-- Call initiation idempotency, spending limits and atomic usage accounting.
+- End-to-end follow-up review and confirmed calendar/email execution.
+- Call initiation idempotency and spending limits.
 - Deployment with reachable AI services and hosted PostgreSQL.
 - Resolve applicable dependency advisories without downgrading Expo.
 
@@ -38,3 +46,5 @@ Operational notes:
   `blocked by policy`; it returned no specific reason.
 - The separate handset number for the next test awaits user clarification.
 - The full working MVP goal remains active.
+- Automatic approval review rejected the backend restart after configuring
+  Ollama Cloud with `blocked by policy`; restart remains required.

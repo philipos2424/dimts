@@ -111,7 +111,7 @@ callsRouter.get('/:id', async (req, res, next) => {
     const call = await queryOne(
       `SELECT c.id, c.destination, c.status, c.duration_sec, c.direction,
               c.recording_url, c.transcript, c.summary, c.next_moves,
-              c.action_items, c.key_points, c.error, c.created_at,
+              c.action_items, c.key_points, c.followups, c.error, c.created_at,
               k.display_name AS contact_name, k.company
          FROM calls c
          LEFT JOIN contacts k ON k.id = c.contact_id

@@ -55,6 +55,12 @@ app. Web requests use the same origin. Native builds use
 
 ## Real calls
 
+To run summaries and contact extraction on Ollama Cloud, use
+`OLLAMA_BASE_URL=https://ollama.com`, `OLLAMA_MODEL=gemma4:31b` and a server-only
+`OLLAMA_API_KEY`. The backend sends transcripts to Ollama Cloud; audio
+transcription remains on the configured Whisper/ElevenLabs provider. Cloud
+responses are prompted as JSON and parsed before being used.
+
 Expose the backend through an authorized public HTTPS tunnel, set
 `PUBLIC_BASE_URL` to that origin and restart the backend. Configure your Twilio
 number's incoming voice webhook to POST to `/twiml/incoming`. Assign that
@@ -85,6 +91,18 @@ proxied by the backend. Duplicate processing workers are prevented with atomic
 database leases. Expired leases can be reclaimed with the retry endpoint.
 
 ## Checks
+
+On a ready call, choose **Prepare follow-ups** to generate an email draft and
+an agreed meeting proposal. Edit and save them before opening your mail app or
+Google Calendar. A recipient is required for email; meeting start and end times
+must be explicitly confirmed in UTC. Relative times from the call remain text
+until you fill these in. The handoff opens a review screen; it does not establish
+that the message was sent or the event booked. Drafts remain private to the
+call's owner and repeated generation preserves saved edits.
+
+Call duration and minute accounting commit together in one database statement.
+Failed accounting leaves the callback retryable, and duplicate completion
+callbacks do not add usage again.
 
 ```powershell
 npm run server:test
