@@ -77,6 +77,12 @@ ALTER TABLE calls ADD COLUMN IF NOT EXISTS record_enabled BOOLEAN NOT NULL DEFAU
 ALTER TABLE calls ADD COLUMN IF NOT EXISTS parent_consent_at TIMESTAMPTZ;
 ALTER TABLE calls ADD COLUMN IF NOT EXISTS child_consent_at TIMESTAMPTZ;
 ALTER TABLE calls ADD COLUMN IF NOT EXISTS child_call_sid TEXT;
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS request_key TEXT;
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS max_duration_sec INT NOT NULL DEFAULT 1800;
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS budget_released BOOLEAN NOT NULL DEFAULT false;
+CREATE UNIQUE INDEX IF NOT EXISTS calls_request_key_idx ON calls(user_id, request_key) WHERE request_key IS NOT NULL;
+CREATE TABLE IF NOT EXISTS call_budget_lock (id INT PRIMARY KEY CHECK (id = 1));
+INSERT INTO call_budget_lock(id) VALUES (1) ON CONFLICT DO NOTHING;
 
 CREATE INDEX IF NOT EXISTS calls_contact_idx ON calls (contact_id, created_at DESC);
 

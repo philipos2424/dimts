@@ -8,7 +8,15 @@ process.env.SKIP_TWILIO_SIGNATURE_CHECK = 'true';
 let user;
 let contact;
 let failContactLookup = false;
+let failReservation = false;
 const inserted = [];
+mock.module('../db/reserve-call.js', { namedExports: {
+  reserveCall: async (owner, caller, record, key, options) => {
+    if (failReservation) throw new Error('budget exceeded');
+    inserted.push([owner.id, owner.phone, caller, options.callSid, options.contactId]);
+    return { call: { id: 'call-1', status: 'ringing' }, created: true };
+  },
+} });
 
 mock.module('../db/agent-numbers.js', {
   namedExports: { findUserByAgentNumber: async () => user },
@@ -63,6 +71,7 @@ test.beforeEach(() => {
   user = { id: 'u1', phone: '+14155550000', agent_number: '+14155551111' };
   contact = { id: 'c1', phone: '+14155552671', display_name: null };
   failContactLookup = false;
+  failReservation = false;
   inserted.length = 0;
   process.env.ANNOUNCE_RECORDING = 'true';
 });
@@ -116,4 +125,11 @@ test('still offers connection when the contact lookup fails', async () => {
 
   // The AI layer must never be able to break a phone call.
   assert.match(xml, /accept\?callId=call-1/);
+});
+
+test('cannot bridge when budget reservation fails', async () => {
+  failReservation = true;
+  const { xml } = await incoming(CALL);
+  assert.match(xml, /<Hangup/);
+  assert.doesNotMatch(xml, /<Dial|<Gather/);
 });

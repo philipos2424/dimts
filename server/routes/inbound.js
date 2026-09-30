@@ -3,9 +3,9 @@ import twilio from 'twilio';
 import { config } from '../config.js';
 import { findUserByAgentNumber } from '../db/agent-numbers.js';
 import { findOrCreateContact } from '../db/contacts.js';
-import { queryOne } from '../db/pool.js';
+import { reserveCall } from '../db/reserve-call.js';
 import { verifyTwilioSignature } from '../lib/twilio-signature.js';
-import { askRecordingConsent, dialCall } from '../lib/recording-consent.js';
+import { askRecordingConsent } from '../lib/recording-consent.js';
 
 const { VoiceResponse } = twilio.twiml;
 
@@ -46,24 +46,20 @@ inboundRouter.post('/', async (req, res) => {
 
   const contactId = await resolveContact(user.id, caller);
 
-  let callId = null;
+  let call;
   try {
-    const row = await queryOne(
-      `INSERT INTO calls (user_id, user_phone, destination, twilio_call_sid,
-                          contact_id, direction, status)
-       VALUES ($1, $2, $3, $4, $5, 'inbound', 'ringing')
-       RETURNING id`,
-      [user.id, user.phone, caller, CallSid, contactId]
-    );
-    callId = row?.id ?? null;
+    if (!CallSid || !caller || caller === agentNumber || caller === user.phone) throw new Error('Invalid incoming call');
+    ({ call } = await reserveCall(user, caller, true, `incoming-${CallSid}`, { direction: 'inbound', callSid: CallSid, contactId }));
   } catch (err) {
-    // Losing the row means losing the notes, not the conversation.
-    console.error('[inbound] could not create call row', err);
+    console.error('[inbound] call reservation refused', err);
+    twiml.say('We cannot connect this call right now. Please try again later.');
+    twiml.hangup();
+    return res.type('text/xml').send(twiml.toString());
   }
 
   const base = config.publicBaseUrl;
-  if (callId) askRecordingConsent(twiml, `${base}/twiml/accept?callId=${callId}`);
-  else dialCall(twiml, { id: null, direction: 'inbound', user_phone: user.phone, record_enabled: false });
+  if (['initiating', 'ringing'].includes(call.status)) askRecordingConsent(twiml, `${base}/twiml/accept?callId=${call.id}`);
+  else twiml.hangup();
 
   res.type('text/xml').send(twiml.toString());
 });

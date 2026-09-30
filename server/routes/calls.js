@@ -5,7 +5,7 @@ import { HttpError, currentMonth, resolveUser } from '../lib/users.js';
 import { defer } from '../lib/defer.js';
 import { fetchRecording, isE164, originateCall } from '../services/originate.js';
 import { processRecording } from '../services/process-recording.js';
-import { findOrCreateContact } from '../db/contacts.js';
+import { reserveCall } from '../db/reserve-call.js';
 
 export const callsRouter = express.Router();
 
@@ -38,6 +38,8 @@ callsRouter.post('/', async (req, res, next) => {
   try {
     const user = await resolveUser(req);
     const { destination, record = true } = req.body ?? {};
+    const requestKey = req.get('Idempotency-Key');
+    if (!requestKey || !/^[a-zA-Z0-9_-]{8,120}$/.test(requestKey)) throw new HttpError(400, 'request_key_required', 'A valid Idempotency-Key is required.');
     if (typeof record !== 'boolean') throw new HttpError(400, 'invalid_recording_option');
     if ([user.phone, user.agent_number, process.env.TWILIO_NUMBER].includes(destination)) {
       throw new HttpError(400, 'call_loop', 'Choose a different destination from your own handset and Twilio number.');
@@ -51,13 +53,12 @@ callsRouter.post('/', async (req, res, next) => {
       );
     }
 
-    const contact = await findOrCreateContact(user.id, destination);
-    const call = await queryOne(
-      `INSERT INTO calls (user_id, user_phone, destination, contact_id, record_enabled, status)
-       VALUES ($1, $2, $3, $4, $5, 'initiating')
-       RETURNING id, status`,
-      [user.id, user.phone, destination, contact.id, record]
-    );
+    // Validate callback configuration before reserving or spending anything.
+    const callback = new URL(config.publicBaseUrl);
+    if (callback.protocol !== 'https:') throw new HttpError(503, 'callbacks_unavailable');
+    await reapStaleCalls(user.id);
+    const { call, created } = await reserveCall(user, destination, record, requestKey);
+    if (!created) return res.status(200).json({ callId: call.id, status: call.status });
 
     try {
       const sid = await originateCall({
@@ -73,8 +74,8 @@ callsRouter.post('/', async (req, res, next) => {
       // Keep the row so the failure is visible in Recents rather than the
       // call vanishing with only a toast.
       await query(
-        `UPDATE calls SET status = 'failed', error = $2 WHERE id = $1`,
-        [call.id, String(err?.message ?? err).slice(0, 500)]
+        `UPDATE calls SET status = 'failed', error = $2, budget_released = $3 WHERE id = $1`,
+        [call.id, String(err?.message ?? err).slice(0, 500), [400, 401, 403, 404, 422].includes(err?.status)]
       );
       throw err;
     }

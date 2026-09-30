@@ -45,9 +45,11 @@ export type Usage = { month: string; tier: string; minutes_used: number };
 /** Carries an i18n key so callers can surface the failure in either language. */
 export class ApiError extends Error {
   messageKey: Key;
-  constructor(messageKey: Key, detail?: string) {
+  status?: number;
+  constructor(messageKey: Key, detail?: string, status?: number) {
     super(detail ?? messageKey);
     this.messageKey = messageKey;
+    this.status = status;
   }
 }
 
@@ -97,7 +99,7 @@ async function request<T>(
 
   if (!response.ok) {
     const detail = await response.text().catch(() => '');
-    throw new ApiError('errorGeneric', `HTTP ${response.status}: ${detail}`);
+    throw new ApiError('errorGeneric', `HTTP ${response.status}: ${detail}`, response.status);
   }
 
   return response.json() as Promise<T>;
@@ -113,16 +115,19 @@ export function getCall(id: string, userPhone: string) {
   return request<CallDetail>(`/api/calls/${id}`, userPhone);
 }
 
-export async function startCall(destination: string, userPhone: string, record = true) {
+export function newCallRequestKey() {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+}
+export async function startCall(destination: string, userPhone: string, record = true, requestKey = newCallRequestKey()) {
   try {
     return await request<{ callId: string; status: string }>(
       '/api/calls',
       userPhone,
-      { method: 'POST', body: JSON.stringify({ destination, record }) }
+      { method: 'POST', headers: { 'Idempotency-Key': requestKey }, body: JSON.stringify({ destination, record }) }
     );
   } catch (err) {
     if (err instanceof ApiError && err.messageKey === 'errorGeneric') {
-      throw new ApiError('errorCallFailed', err.message);
+      throw new ApiError('errorCallFailed', err.message, err.status);
     }
     throw err;
   }

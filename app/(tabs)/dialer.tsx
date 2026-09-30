@@ -1,8 +1,8 @@
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useApp } from '../../src/AppContext';
-import { ApiError, startCall } from '../../src/api';
+import { ApiError, startCall, newCallRequestKey } from '../../src/api';
 import { Banner } from '../../src/components/Banner';
 import { Txt } from '../../src/components/Txt';
 import { geezDigits, type Key } from '../../src/i18n';
@@ -16,19 +16,29 @@ export default function Dialer() {
   const [number, setNumber] = useState('+1');
   const [errorKey, setErrorKey] = useState<Key | null>(null);
   const [busy, setBusy] = useState(false);
+  const pending = useRef<{ key: string; number: string; record: boolean } | null>(null);
+  const submitting = useRef(false);
 
   const dialable = /^\+[1-9]\d{6,14}$/.test(number);
 
   async function placeCall() {
-    if (!userPhone || !dialable || busy) return;
+    if (!userPhone || !dialable || submitting.current) return;
+    submitting.current = true;
+    if (!pending.current || pending.current.number !== number || pending.current.record !== autoRecord) {
+      pending.current = { key: newCallRequestKey(), number, record: autoRecord };
+    }
     setBusy(true);
     try {
-      const { callId } = await startCall(number, userPhone, autoRecord);
+      const { callId } = await startCall(number, userPhone, autoRecord, pending.current.key);
+      pending.current = null;
       router.push(`/in-call?id=${callId}&dest=${encodeURIComponent(number)}`);
     } catch (err) {
+      // Retain the key after a lost response: retry must resolve the same call.
+      if (err instanceof ApiError && err.status && err.status < 500) pending.current = null;
       setErrorKey(err instanceof ApiError ? err.messageKey : 'errorCallFailed');
     } finally {
       setBusy(false);
+      submitting.current = false;
     }
   }
 

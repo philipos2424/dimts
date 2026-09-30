@@ -104,6 +104,20 @@ Call duration and minute accounting commit together in one database statement.
 Failed accounting leaves the callback retryable, and duplicate completion
 callbacks do not add usage again.
 
+Call initiation requires an `Idempotency-Key`; the dialer retains it after a
+lost response. A retry returns the existing call, and reusing a key with changed
+parameters is rejected. Twilio incoming call IDs similarly prevent duplicate
+inbound rows. Budget reservations serialize in the database before any outgoing
+API call or incoming bridge. Defaults are one active call per account, ten call
+attempts per UTC day, 120 connected minutes per account per UTC month, and 300
+connected minutes across the pilot per UTC month. The bridge duration shortens
+when fewer minutes remain. Uncertain initiation outcomes retain their full
+reservation; only definitive provider rejections release it. A failed budget
+check or unavailable database prevents bridging, including incoming calls.
+These are minute limits, not a dollar cap: setup time, both phone legs, SMS and
+number rental have separate costs. Configure Twilio geographic permissions and
+account spending controls for the destinations permitted in your pilot.
+
 ```powershell
 npm run server:test
 npx tsc --noEmit

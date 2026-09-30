@@ -32,20 +32,38 @@ export function getPool() {
   return pool;
 }
 
+async function getLocalDatabase() {
+  if (process.env.VERCEL) throw new Error('Local database cannot run on Vercel; configure DATABASE_URL.');
+  if (!localDatabase) localDatabase = (async () => {
+    const { PGlite } = await import('@electric-sql/pglite');
+    const path = process.env.LOCAL_DATABASE_PATH || fileURLToPath(new URL('../../.data/postgres', import.meta.url));
+    const db = new PGlite(path);
+    const schema = await readFile(new URL('./schema.sql', import.meta.url), 'utf8');
+    await db.exec(schema);
+    return db;
+  })();
+  return localDatabase;
+}
+
 export async function query(text, params) {
   if (process.env.DATABASE_MODE === 'local') {
-    if (process.env.VERCEL) throw new Error('Local database cannot run on Vercel; configure DATABASE_URL.');
-    if (!localDatabase) localDatabase = (async () => {
-      const { PGlite } = await import('@electric-sql/pglite');
-      const path = process.env.LOCAL_DATABASE_PATH || fileURLToPath(new URL('../../.data/postgres', import.meta.url));
-      const db = new PGlite(path);
-      const schema = await readFile(new URL('./schema.sql', import.meta.url), 'utf8');
-      await db.exec(schema);
-      return db;
-    })();
-    return (await localDatabase).query(text, params);
+    return (await getLocalDatabase()).query(text, params);
   }
   return getPool().query(text, params);
+}
+
+export async function withTransaction(work) {
+  if (process.env.DATABASE_MODE === 'local') return (await getLocalDatabase()).transaction(work);
+  const client = await getPool().connect();
+  try {
+    await client.query('BEGIN');
+    const result = await work(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally { client.release(); }
 }
 
 /** First row, or undefined. Most of our reads want exactly this. */

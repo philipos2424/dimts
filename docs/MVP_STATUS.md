@@ -17,6 +17,10 @@ Implemented and checked:
 - Callback SID checks and duplicate/late callback protection.
 - Atomic call completion and minute accounting; database failure and retry
   behavior verified using actual PostgreSQL-compatible queries.
+- Transactional call reservations, outgoing HTTP idempotency, incoming SID
+  deduplication, daily attempt limits, shared monthly minute ceilings and a
+  bridge duration cap that respects the remaining allowance. SQL and HTTP
+  tests cover retries, changed parameters, active calls and exhausted budgets.
 - Two-party recording agreement flow and outgoing recording toggle.
 - Expo web build, TypeScript and dependency compatibility checks.
 - Local backend and Whisper worker health checks.
@@ -34,7 +38,10 @@ Still required:
 - Public callback endpoint and real inbound/outbound two-person calls.
 - Confirm playback, transcript, summary and contact on a real call.
 - End-to-end follow-up review and confirmed calendar/email execution.
-- Call initiation idempotency and spending limits.
+- Verify minute limits on a real bridge and configure provider spend controls.
+- Pre-call contact memory/briefings, proposal evidence, rejection and action
+  receipts remain required by the approved caller design.
+- Self-service incoming-number assignment and retention/deletion controls.
 - Deployment with reachable AI services and hosted PostgreSQL.
 - Resolve applicable dependency advisories without downgrading Expo.
 

@@ -16,7 +16,7 @@ export function dialCall(twiml, call) {
       recordingStatusCallbackMethod: 'POST', recordingStatusCallbackEvent: 'completed' } : {}),
     answerOnBridge: true,
     action: `${base}/twiml/dial-done?callId=${call.id}`, method: 'POST', timeout: 30,
-    timeLimit: 1800,
+    timeLimit: call.max_duration_sec ?? 1800,
     ...(call.direction === 'inbound' ? { callerId: config.twilioNumber } : {}),
   });
   const target = call.direction === 'inbound' ? call.user_phone : call.destination;

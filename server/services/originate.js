@@ -8,7 +8,7 @@ export { isE164 } from '../lib/phone.js';
 let client;
 function getClient() {
   if (!client) {
-    client = twilio(config.twilioAccountSid, config.twilioAuthToken);
+    client = twilio(config.twilioAccountSid, config.twilioAuthToken, { timeout: 15_000, autoRetry: false });
   }
   return client;
 }
