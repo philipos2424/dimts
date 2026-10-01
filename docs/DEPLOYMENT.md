@@ -56,6 +56,16 @@ schema application across instances. Startup fails if migration/configuration
 fails. The startup error avoids logging database URLs or query details; the
 separate validation command names invalid settings.
 
+On SIGTERM/SIGINT, production stops accepting HTTP connections, lets active
+responses finish, waits for tracked background tasks (including tasks spawned
+by those tasks), then closes the database. One 45-second deadline covers all
+three stages; Compose allows 60 seconds before forced termination. Repeated
+signals share the same shutdown. A timeout or teardown failure exits with an
+incomplete-shutdown message and a nonzero status, without logging provider
+exceptions. It does not cancel or roll back external actions. Investigate saved
+leases and unknown provider outcomes after restarting; no automatic replay is
+introduced by this shutdown handling.
+
 Only the proxy exposes public ports. Database and Whisper have no host ports;
 backend port 3103 is bound to host loopback for diagnostics. Keep it that way.
 Caddy forwards paths unchanged to the backend. Its certificate volume persists
@@ -96,7 +106,8 @@ verify that backup policy.
 Before updates, record the running source revision and protect existing data.
 The present schema contains additive creation/alteration statements; future
 schema changes still need review and a restore test. A container restart can
-interrupt in-flight AI work; lease expiry and transcript checkpoints make it
+interrupt in-flight AI work after the drain deadline; lease expiry and
+transcript checkpoints make it
 retryable, but live interruption/recovery must be tested. No reliable automatic
 replay of every pending job or zero-downtime update is claimed.
 

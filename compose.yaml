@@ -46,6 +46,7 @@ services:
   backend:
     build: .
     restart: unless-stopped
+    stop_grace_period: 60s
     env_file: .env.pilot.local
     environment:
       DATABASE_MODE: postgres

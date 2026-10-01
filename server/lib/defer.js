@@ -1,4 +1,10 @@
 import { isServerless } from '../config.js';
+const pending = new Set();
+
+/** Called only after HTTP intake is closed; include jobs spawned by other jobs. */
+export async function drainDeferredWork() {
+  while (pending.size) await Promise.all([...pending]);
+}
 
 /**
  * Run work that must outlive the HTTP response.
@@ -10,17 +16,20 @@ import { isServerless } from '../config.js';
  * On Vercel a plain floating promise would be killed the moment the response
  * is sent; `waitUntil` keeps the invocation alive instead, sharing the
  * function's 300s maxDuration. Locally the process is long-lived, so a
- * floating promise is already correct.
+ * tracked promise lets production shutdown wait for work already started.
  */
 export function defer(promise, label = 'task') {
-  const guarded = Promise.resolve(promise).catch((err) => {
-    console.error(`[defer:${label}]`, err);
+  const guarded = Promise.resolve(promise).catch(() => {
+    // Provider exceptions can contain request headers or private call content.
+    console.error(`[defer:${label}] Background task failed; inspect its saved state.`);
   });
+  pending.add(guarded);
+  guarded.then(() => pending.delete(guarded));
 
   if (isServerless) {
     import('@vercel/functions')
       .then(({ waitUntil }) => waitUntil(guarded))
-      .catch((err) => console.error('[defer] waitUntil unavailable', err));
+      .catch(() => console.error('[defer] waitUntil unavailable'));
   }
 
   return guarded;

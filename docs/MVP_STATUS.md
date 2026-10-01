@@ -9,8 +9,8 @@ configuration blocks provider requests and never confirms removal from another
 account's absence response. Previously scrubbed legacy rows without account
 evidence require operator investigation. All 216 backend tests, targeted
 SQL/provider checks and TypeScript pass on 1 October 2026; live deletion across
-account configuration changes is unverified. The current local backend and
-Whisper worker return healthy responses, but Twilio still uses its demo Voice
+account configuration changes is unverified. Earlier local backend and
+Whisper health checks succeeded, but Twilio still uses its demo Voice
 webhook and public callbacks, a hosted database and Google OAuth are unconfigured.
 The account-association changes have not been rolled out to those live processes.
 The later transcript-timestamp change passes all 220 backend tests, TypeScript
@@ -24,6 +24,21 @@ this is not a Linux image test. Docker is unavailable here, and no container,
 public endpoint or hosted database deployment has been verified. Review research
 now covers thirteen recording store listings plus Notta, with platform-specific
 evidence and priorities tied to the twenty pilot scenarios.
+
+Production shutdown now stops new HTTP intake, waits for active responses and
+tracked background jobs, then closes the database under one 45-second deadline.
+Compose gives the backend 60 seconds. All 234 backend tests pass, including a
+real HTTP server drain test, nested tasks, repeated signals and sanitized
+timeout/teardown failure results. A shutdown deadline does not prove a provider
+action was cancelled; leases and unknown outcomes still need reconciliation.
+These changes have not been deployed or verified in a Linux container.
+
+The latest live audit on 1 October 2026 found no TCP listener on ports 3103 or
+3104 and neither health endpoint reachable. The previous backend PID is absent;
+the old worker PID now identifies a console host, so it is not proof of a live
+Whisper worker. Twilio's number still has the demo Voice webhook. Public origin,
+hosted database and Google OAuth client configuration remain absent. No service
+was restarted or public routing changed during this audit.
 
 Implemented and checked:
 
