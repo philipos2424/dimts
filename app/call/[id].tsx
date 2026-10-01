@@ -23,6 +23,15 @@ export default function CallDetailScreen() {
   const [errorKey, setErrorKey] = useState<Key | null>(null);
   const [exporting, setExporting] = useState<'notes' | 'audio' | null>(null);
   const [exportError, setExportError] = useState('');
+  const [retryingProcessing, setRetryingProcessing] = useState(false);
+  const [retryError, setRetryError] = useState('');
+  async function retryProcessing() {
+    if (!id || !userPhone || retryingProcessing) return;
+    setRetryingProcessing(true); setRetryError('');
+    try { await reprocessCall(id, userPhone); await load(); }
+    catch { setRetryError('Unable to restart processing. It may already be running. Refresh and try again.'); }
+    finally { setRetryingProcessing(false); }
+  }
   const [checkingRecording, setCheckingRecording] = useState(false);
   const [recoveryMessage, setRecoveryMessage] = useState('');
   async function checkRecording() {
@@ -129,14 +138,16 @@ export default function CallDetailScreen() {
           {call.status === 'failed' && call.recording_url && (
             <Pressable
               accessibilityRole="button"
-              onPress={() => userPhone && reprocessCall(call.id, userPhone).then(load)}
+              disabled={retryingProcessing}
+              onPress={retryProcessing}
               style={{ paddingVertical: space.sm }}
             >
               <Txt tone="accent" weight="bold">
-                {t('retry')}
+                {retryingProcessing ? 'Restarting processing…' : t('retry')}
               </Txt>
             </Pressable>
           )}
+          {retryError ? <Txt tone="muted" accessibilityRole="alert">{retryError}</Txt> : null}
         </View>
       )}
 

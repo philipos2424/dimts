@@ -167,7 +167,7 @@ webhooksRouter.post('/recording-ready', async (req, res) => {
     if (call.recording_start_status && (!/^RE[a-f0-9]{32}$/i.test(req.body.RecordingSid ?? '') ||
       (call.recording_sid && call.recording_sid !== req.body.RecordingSid))) return res.status(204).end();
     const accepted = await queryOne(
-      `UPDATE calls SET recording_url = $2, status = 'processing', error=NULL,
+      `UPDATE calls SET recording_url = $2, status = 'processing', error=NULL,processing_requested_at=now(),
         recording_sid=COALESCE(recording_sid,$3),recording_start_status='started'
        WHERE id = $1 AND recording_url IS NULL AND status <> 'ready'
          AND record_enabled AND parent_consent_at IS NOT NULL AND child_consent_at IS NOT NULL

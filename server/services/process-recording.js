@@ -71,13 +71,14 @@ export async function processRecording(callId, { force = false } = {}) {
   const call = await queryOne(
     `WITH claimed AS (
        UPDATE calls SET processing_token = $2,
-         processing_until = now() + interval '10 minutes', status = 'processing'
+         processing_until = now() + interval '10 minutes', processing_requested_at=now(),status = 'processing'
        WHERE id = $1 AND recording_url IS NOT NULL
          AND (status <> 'ready' OR $3)
          AND (processing_until IS NULL OR processing_until < now())
        RETURNING *
      )
-     SELECT c.id, c.recording_url, c.contact_id, c.direction,
+     SELECT c.id, c.recording_url, c.contact_id, c.direction,c.transcript,c.transcript_data,
+            c.transcript_recording_url,c.language,c.language_probability,
             k.display_name  AS contact_display_name,
             k.name_source   AS contact_name_source,
             k.name_confidence AS contact_name_confidence
@@ -92,18 +93,36 @@ export async function processRecording(callId, { force = false } = {}) {
   }
 
   try {
-    const audio = await downloadRecording(call.recording_url);
-    const result = await transcribe(audio, { direction: call.direction });
+    async function renew() {
+      const owned = await queryOne(`UPDATE calls SET processing_until=now()+interval '10 minutes'
+        WHERE id=$1 AND processing_token=$2 AND status='processing' RETURNING id`, [callId, lease]);
+      if (!owned) throw new Error('Processing ownership changed');
+    }
+    let result;
+    if (!force && call.transcript_recording_url === call.recording_url && call.transcript?.trim()) {
+      result = { text: call.transcript, raw: call.transcript_data,
+        language: call.language, languageProbability: call.language_probability };
+    } else {
+      const audio = await downloadRecording(call.recording_url);
+      await renew();
+      result = await transcribe(audio, { direction: call.direction });
+      if (!result.text.trim()) throw new Error('Transcription returned no speech');
+      const saved = await queryOne(`UPDATE calls SET transcript=$3,transcript_data=$4,
+        language=$5,language_probability=$6,transcript_recording_url=$7,
+        processing_until=now()+interval '10 minutes'
+        WHERE id=$1 AND processing_token=$2 AND status='processing' RETURNING id`,
+        [callId, lease, result.text, JSON.stringify(result.raw), result.language, result.languageProbability, call.recording_url]);
+      if (!saved) throw new Error('Processing ownership changed');
+    }
 
     if (!result.text.trim()) {
       throw new Error('Transcription returned no speech');
     }
 
+    await renew();
     const summary = await summarize(result.text);
 
-    await nameContact(call, result.text);
-
-    await query(
+    const saved = await query(
       `UPDATE calls
           SET transcript = $2,
               transcript_data = $3,
@@ -117,7 +136,7 @@ export async function processRecording(callId, { force = false } = {}) {
               processing_token = NULL,
               processing_until = NULL,
               status = 'ready'
-        WHERE id = $1 AND processing_token = $10`,
+        WHERE id = $1 AND processing_token = $10 RETURNING id`,
       [
         callId,
         result.text,
@@ -131,6 +150,9 @@ export async function processRecording(callId, { force = false } = {}) {
         lease,
       ]
     );
+    // Only the worker that committed the notes may spend on identification or
+    // update a contact. A stale worker cannot apply its old result.
+    if (saved.rows.length) await nameContact(call, result.text);
   } catch (err) {
     await query(
       `UPDATE calls SET status = 'failed', error = $2,

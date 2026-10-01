@@ -10,6 +10,7 @@ import { reserveCall } from '../db/reserve-call.js';
 import { claimNumber } from '../db/claim-number.js';
 import { expireRecordingWait } from '../db/expire-recording-wait.js';
 import { callNotes } from '../lib/call-export.js';
+import { expireProcessing } from '../db/expire-processing.js';
 
 export const callsRouter = express.Router();
 
@@ -28,6 +29,7 @@ const LIST_COLUMNS = `
  */
 async function reapStaleCalls(userId) {
   await expireRecordingWait(userId);
+  await expireProcessing(userId);
   await query(
     `UPDATE calls
         SET status = 'failed',
@@ -116,6 +118,7 @@ callsRouter.get('/:id', async (req, res, next) => {
   try {
     const user = await resolveUser(req);
     await expireRecordingWait(user.id);
+    await expireProcessing(user.id);
     const call = await queryOne(
       `SELECT c.id, c.destination, c.status, c.duration_sec, c.direction,
               c.recording_url, c.transcript, c.summary, c.next_moves,
@@ -157,14 +160,16 @@ callsRouter.post('/:id/process', async (req, res, next) => {
   try {
     const user = await resolveUser(req);
     const call = await queryOne(
-      'SELECT id, recording_url FROM calls WHERE id = $1 AND user_id = $2',
+      'SELECT id, recording_url, status, processing_until FROM calls WHERE id = $1 AND user_id = $2',
       [req.params.id, user.id]
     );
 
     if (!call) throw new HttpError(404, 'call_not_found');
     if (!call.recording_url) throw new HttpError(409, 'no_recording_yet');
+    if (!['failed', 'processing'].includes(call.status)) throw new HttpError(409, 'processing_not_retryable');
+    if (call.processing_until && new Date(call.processing_until) > new Date()) throw new HttpError(409, 'processing_active');
 
-    defer(processRecording(call.id, { force: true }), `reprocess:${call.id}`);
+    defer(processRecording(call.id), `reprocess:${call.id}`);
     res.status(202).json({ status: 'processing' });
   } catch (err) {
     next(err);

@@ -29,7 +29,7 @@ recordingRecoveryRouter.post('/:id/recording/reconcile', async (req, res) => {
   catch { throw new HttpError(503, 'recording_lookup_failed', 'The recording provider could not be checked. Please try again in a minute.'); }
   if (recording.status !== 'found') return res.json({ status: recording.status });
   const saved = await queryOne(`UPDATE calls SET recording_url=$4,recording_sid=$5,
-      recording_start_status='started',status='processing',error=NULL
+      recording_start_status='started',status='processing',error=NULL,processing_requested_at=now()
     WHERE id=$1 AND user_id=$2 AND recording_lookup_token=$3 AND recording_url IS NULL
       AND record_enabled AND parent_consent_at IS NOT NULL AND child_consent_at IS NOT NULL
       AND duration_sec IS NOT NULL AND (recording_sid IS NULL OR recording_sid=$5) RETURNING id`,

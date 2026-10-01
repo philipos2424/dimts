@@ -22,6 +22,16 @@ Implemented and checked:
   isolation, prior-call cutoff and omission of failed/future/current records.
   Background delivery and physical-device presentation remain unverified.
 - Processing leases, provider timeouts and recording URL validation.
+- Transcript checkpoints bound to the recording URL survive summary failure.
+  Retry resumes from that checkpoint without another audio download/STT request;
+  a changed recording requires new transcription. Leases renew between expensive
+  stages. Authenticated list/detail reads expose expired workers or queued jobs
+  as retryable failures without removing audio/transcript; legacy queued rows
+  get a fresh waiting deadline on their first authenticated observation. The retry API rejects ready notes
+  and active workers, and no longer forces completed notes to regenerate. Only
+  a worker that commits notes may identify/update its contact. Real SQL/HTTP
+  tests cover checkpoint reuse, expiry, owner isolation, concurrent retries and
+  stale workers losing the final write. Live worker-interruption testing remains.
 - Browser playback fetches audio with bearer authentication into a private blob,
   revokes that URL on unmount, and shows loading/errors with retry. Native streams
   retain bearer headers; the proxy preserves validated byte-range responses for

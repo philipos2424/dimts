@@ -75,6 +75,13 @@ confident external action.
    and metadata does not prove both people are audible. Remaining: partial audio,
    physical-device export checks, retention/deletion including provider copies,
    and restore checks. Never require reinstalling to troubleshoot access.
+   Processing now also checkpoints the transcript before asking for a summary.
+   A failed summary can resume without paying for another transcription of the
+   same recording. Leases renew between stages; expired jobs become visible
+   retryable failures, and stale workers cannot overwrite newer notes or identify
+   contacts after losing their final write. SQL/HTTP tests cover these cases.
+   Legacy queued jobs receive a fresh observation deadline instead of timing out
+   based on when the call began. Real interruption tests remain unverified.
 3. **Accessible playback.** The player now has 15-second skip controls, explicit
    replay, loading/failure feedback and reload. Browser audio is fetched with
    bearer authentication into a private blob; the blob URL is revoked on unmount.

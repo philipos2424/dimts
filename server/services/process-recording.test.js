@@ -12,8 +12,9 @@ let claimed = false;
 
 mock.module('../db/pool.js', {
   namedExports: {
-    query: async (sql, params) => { updates.push({ sql, params }); return { rows: [] }; },
-    queryOne: async () => {
+    query: async (sql, params) => { updates.push({ sql, params }); return { rows: [{ id: call.id }] }; },
+    queryOne: async (sql) => {
+      if (!sql.includes('WITH claimed')) return { id: call.id };
       if (claimed) return undefined;
       claimed = true;
       return call;
