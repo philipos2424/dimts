@@ -6,7 +6,10 @@ must be validated separately for routing, language, carrier and pricing.
 ## Scope and confidence
 
 This is a qualitative sample of publicly visible App Store and Google Play
-reviews across nine call-recording apps and one adjacent transcription app.
+reviews across thirteen call-recording store listings and one adjacent
+transcription app. Cube ACR's iOS and Android listings are counted separately
+because their capture methods and reviews differ; this is not thirteen distinct
+brands. The original nine-listing sample is expanded below.
 It is not every app, every review, a random sample, or a measured failure rate.
 Searches included failure-related terms, so this sample intentionally surfaces
 problems and cannot establish how often they happen. Positive reviews were also
@@ -73,6 +76,45 @@ The m24apps page could not be reopened during this refresh. Its evidence above
 is retained as a historical observation from the earlier research, not newly
 verified availability. Store pages show a limited, changing selection of reviews;
 this refresh does not represent all reviews, rankings or worldwide availability.
+
+## Expanded platform-specific sample
+
+Checked 1 October 2026. These four additional store listings broaden the sample;
+they do not make it exhaustive. Dates without years remain without years.
+
+| Listing | Selected evidence, paraphrased | Decision and validation |
+| --- | --- | --- |
+| [SKVALEX — Google Play, org.skvalex.cr](https://play.google.com/store/apps/details?hl=en_US&id=org.skvalex.cr) | J. Smith, 2 February 2026: values migration across phones, reports occasional missed calls and explicitly cannot assign the cause. A Google user, 20 September 2018: an hour-long call yielded about nine minutes of audio despite call-start/end notifications. The listing separately warns about device and Bluetooth support. | A call event is not audio proof. R06/R07 must compare intended capture interval with actual audio, not just call duration; R13 checks migration. Preserve usable partial audio. |
+| [Acr call recorder for iPhone — id1362975885](https://apps.apple.com/us/app/acr-call-recorder-for-iphone/id1362975885?platform=iphone&see-all=reviews) | KZMaximus, 9 June 2023: silent playback and a support link that did not help. Jillian EL Green, 29 May 2023: reports charges after attempted cancellation and unsuccessful refund support. Allen E. Rutherford, 10 June 2018: values helpful support, labels and navigating recordings. kohn kathi, 9 July, year omitted: values recovering names and numbers from freelance interviews. | Test both the failure and help path, R09/R20. Cancellation/charge disputes are reports, not independently verified billing defects. R19 requires understandable renewal and cancellation; labels and evidence retrieval matter as much as summaries. |
+| [Cube ACR for iOS — id1613607637](https://apps.apple.com/us/app/call-recorder-cube-acr/id1613607637?see-all=reviews) | Betty39145, 30 September 2023: expected automatic recording; the developer distinguishes its Android and iOS products. Bad app2.0, 29 September 2025: reports missing the conversation opening while arranging the merge. Myra Mc, 30 May 2024: inaccessible interview and failed in-app support submission. Pumpkin166, 16 April 2024: associates silent audio with AirPods; the developer suggests an unmerged call instead. | Do not diagnose Bluetooth from a review title. Test routing and audio route separately, R01/R04/R18. Explain supported calls before signup, inspect the opening of recordings, and test the support form itself, R20. |
+| [Recostar — id1470392395](https://apps.apple.com/us/app/call-recorder-recostar/id1470392395) | Athenamva, 29 August 2021: one successful test but explicitly too early to judge. asregh, 7 April 2023: values both voices and acceptable cost. MorNorm13, 5 October 2023: values transcription. The listing separately requires carrier call merging and manual initiation. The separate reviews URL could not be opened; these observations come from the main listing. | Keep positive evidence. Useful two-sided recall plus transcription is the value proposition; one happy first test is insufficient. R01/R04 need repeated calls before a paid pilot. |
+
+[TapeACall's support policy](https://support.tapeacall.com/hc/en-us/articles/38733299123860-Will-I-lose-my-recordings-if-I-cancel-my-subscription),
+dated 25 June 2025, separately says subscription expiry ends recording access
+and advises exporting beforehand. This is an official access policy, not a
+review or a claim of permanent loss on cancellation. Our proposed policy is
+continued playback/export of retained recordings after paid capture ends,
+with explicit storage/deletion limits. Dimts has exports but no subscription
+system; that entitlement policy is not implemented or verified.
+
+## Implementation priorities from the combined evidence
+
+The inference is that trustworthy capture and retrieval should precede more
+autonomous agent features. This ordering is based on the qualitative evidence,
+not a measured ranking of complaint frequency.
+
+| Priority | Dimts response | Current evidence / remaining work |
+| --- | --- | --- |
+| First | Detect incomplete audio; disclose failed capture. | Audio checks and guarded AI processing exist. Physical calls must prove both voices and beginning/middle/end audibility; RMS signal is not intelligibility. |
+| First | Preserve recordings independently of summary success. | Checkpoint/retry and authenticated audio/text exports exist. Verify real playback, downloaded files and recovery on both phones. |
+| First | Explain routing and prove a first call before payment. | First-call guide exists. Ordinary handset and WhatsApp calls are outside this capture path; two-person pilot remains unverified. |
+| Next | Make evidence fast to find and correct. | Timed transcript navigation and reviewed contact/calendar/email proposals exist. Physical seeking and live Google receipts remain unverified; bookmarks remain unimplemented. |
+| Before charging | Make price, usage, renewal, cancellation and retained-file access understandable. | Usage caps exist; subscriptions, restore-purchase and cancellation are unimplemented. No price is validated by this review sample. |
+| Before launch | Provide working help and deletion/restore operations. | Recovery controls, call IDs and deletion state exist. A staffed support contact, actual response expectations and backup restoration policy remain gaps. |
+
+Use the linked pilot checklist to turn each hypothesis into an observed result.
+Do not count a passing backend test as a customer call or export test. Collect
+new user feedback without sending private recordings to support by default.
 
 ## The native recording baseline
 
