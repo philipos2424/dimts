@@ -68,6 +68,13 @@ Implemented and checked:
 - Assigned business numbers are stored on each call and used as the bridge's
   caller ID, rather than showing every account's calls from the default line.
 - Expo web build, TypeScript and dependency compatibility checks.
+- Patched URI decoding and Xcode UUID dependencies while retaining Expo 57.
+  A local CommonJS adapter uses upstream decoder 0.5.0; Xcode uses UUID 11.1.1.
+  Clean `npm ci`, query parsing/malformed-input/Xcode-ID tests, TypeScript,
+  Expo version checks and web/Android/iOS bundle exports pass. Generated output
+  contains none of the configured secrets. Physical native builds remain
+  unverified. Root and server audits report zero known advisories
+  on 1 October 2026; this is not a guarantee of overall application security.
 - Local backend and Whisper worker health checks.
 - Synthetic stereo audio transcribed with alternating speaker turns; actual
   Ollama output checked for caller identity and email commitment ownership.
@@ -114,7 +121,6 @@ live calendar execution and Gmail draft execution checks remain required.
 - Confirmed external action receipts and uncertain-result reconciliation.
 - Verify real pool stocking/assignment, and implement retention/deletion controls.
 - Deployment with reachable AI services and hosted PostgreSQL.
-- Resolve applicable dependency advisories without downgrading Expo.
 
 Operational notes:
 

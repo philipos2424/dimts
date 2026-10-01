@@ -1,0 +1,12 @@
+{
+  "name": "decode-uri-component",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.cjs",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "dependencies": {
+    "decode-uri-component-patched": "npm:decode-uri-component@0.5.0"
+  }
+}
