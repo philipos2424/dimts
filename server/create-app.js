@@ -5,6 +5,7 @@ import { authRouter } from './routes/auth.js';
 import { contactsRouter } from './routes/contacts.js';
 import { followupsRouter } from './routes/followups.js';
 import { contextRouter } from './routes/context.js';
+import { googleRouter, googleBrowserRouter } from './routes/google.js';
 import { callsRouter, meRouter, usageRouter } from './routes/calls.js';
 import { inboundRouter } from './routes/inbound.js';
 import { twimlRouter, webhooksRouter } from './routes/webhooks.js';
@@ -25,6 +26,8 @@ export function createApp() {
     next();
   });
   app.use('/api/auth', authRouter);
+  app.use('/api/integrations/google', googleRouter);
+  app.use('/oauth/google', googleBrowserRouter);
   app.use('/api/contacts', contactsRouter);
   app.use('/api', contextRouter);
 

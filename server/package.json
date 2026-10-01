@@ -12,6 +12,7 @@
     "@electric-sql/pglite": "^0.5.8",
     "@vercel/functions": "^2.0.0",
     "express": "^5.1.0",
+    "google-auth-library": "^11.1.0",
     "openai": "^4.104.0",
     "pg": "^8.13.1",
     "twilio": "^5.4.0"

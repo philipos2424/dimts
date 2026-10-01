@@ -116,3 +116,22 @@ CREATE TABLE IF NOT EXISTS auth_rate_limits (
   attempts INT NOT NULL DEFAULT 0,
   PRIMARY KEY (key, window_start)
 );
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS google_connect_version INT NOT NULL DEFAULT 0;
+CREATE TABLE IF NOT EXISTS google_oauth_requests (
+  token_hash TEXT PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL CHECK (kind IN ('calendar', 'gmail')),
+  phase TEXT NOT NULL CHECK (phase IN ('begin', 'state', 'confirm')),
+  version INT NOT NULL,
+  nonce_hash TEXT,
+  encrypted_payload TEXT,
+  expires_at TIMESTAMPTZ NOT NULL DEFAULT now() + interval '10 minutes'
+);
+CREATE TABLE IF NOT EXISTS google_connections (
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL CHECK (kind IN ('calendar', 'gmail')),
+  encrypted_tokens TEXT NOT NULL,
+  connected_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY(user_id, kind)
+);

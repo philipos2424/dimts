@@ -107,6 +107,18 @@ export function claimBusinessNumber() {
 export function logout() {
   return request('/api/auth/logout', '', { method: 'POST' });
 }
+export type GoogleKind = 'calendar' | 'gmail';
+export type GoogleStatus = { configured: boolean; connections: { kind: GoogleKind; connected_at: string }[] };
+export function getGoogleStatus() { return request<GoogleStatus>('/api/integrations/google', ''); }
+export function startGoogleConnection(kind: GoogleKind) {
+  return request<{ url: string }>('/api/integrations/google/start', '', { method: 'POST', body: JSON.stringify({ kind }) });
+}
+export function confirmGoogleConnection(code: string) {
+  return request('/api/integrations/google/confirm', '', { method: 'POST', body: JSON.stringify({ code }) });
+}
+export function disconnectGoogle(kind: GoogleKind) {
+  return request(`/api/integrations/google/${kind}`, '', { method: 'DELETE' });
+}
 
 async function request<T>(
   path: string,

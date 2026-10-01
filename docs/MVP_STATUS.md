@@ -50,6 +50,12 @@ Implemented and checked:
 
 Still required:
 
+Google connection code and Settings controls are now implemented. Tokens are
+encrypted on the server; SQL/HTTP tests cover account isolation, browser nonce,
+one-time confirmation, replay, expiry and disconnect invalidation. Live Google
+consent still awaits OAuth client configuration (see `GOOGLE_SETUP.md`), and
+provider-confirmed calendar/Gmail execution remains required.
+
 - Real SMS signup and owner handset verification.
 - Public callback endpoint and real inbound/outbound two-person calls.
 - Confirm playback, transcript, summary and contact on a real call.
