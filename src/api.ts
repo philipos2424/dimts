@@ -4,6 +4,7 @@ import { Platform } from 'react-native';
 const BASE = Platform.OS === 'web' ? '' : (process.env.EXPO_PUBLIC_API_BASE_URL ?? '').replace(/\/+$/, '');
 let sessionToken: string | null = null;
 export function setApiSession(token: string | null) { sessionToken = token; }
+export function captureSessionGuard() { const current = sessionToken; return () => current !== null && current === sessionToken; }
 
 export type CallSummary = {
   id: string;
@@ -205,6 +206,16 @@ export function retryCallDeletion(id: string) {
 }
 export function listCallDeletions() {
   return request<{ deletions: DeletionRecord[] }>('/api/call-deletions', '').then(result => result.deletions);
+}
+export function registerNotificationDevice(token: string) {
+  return request<{ status: string }>('/api/notifications/device', '', { method: 'POST', body: JSON.stringify({ token }) });
+}
+export function removeNotificationDevice() {
+  return request<{ status: string }>('/api/notifications/device', '', { method: 'DELETE' });
+}
+export function getNotificationStatus() {
+  return request<{ devices: { id: string; disabled: boolean; updated_at: string }[];
+    notifications: { call_id: string; status: string; error_code: string | null; created_at: string }[] }>('/api/notifications', '');
 }
 
 export function newCallRequestKey() {

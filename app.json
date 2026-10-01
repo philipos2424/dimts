@@ -44,7 +44,8 @@
           ]
         }
       ],
-      "expo-sharing"
+      "expo-sharing",
+      "expo-notifications"
     ],
     "scheme": "dimts",
     "experiments": {

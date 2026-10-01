@@ -184,3 +184,24 @@ CREATE TABLE IF NOT EXISTS email_actions (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+CREATE TABLE IF NOT EXISTS notification_devices (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  session_hash TEXT NOT NULL REFERENCES sessions(token_hash) ON DELETE CASCADE,
+  push_token TEXT NOT NULL UNIQUE,
+  disabled BOOLEAN NOT NULL DEFAULT false,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS call_notifications (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  call_id UUID NOT NULL REFERENCES calls(id) ON DELETE CASCADE,
+  device_id UUID NOT NULL REFERENCES notification_devices(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  status TEXT NOT NULL DEFAULT 'pending',
+  ticket_id TEXT,
+  error_code TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(call_id, device_id)
+);

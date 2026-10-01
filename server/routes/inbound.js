@@ -6,6 +6,8 @@ import { findOrCreateContact } from '../db/contacts.js';
 import { reserveCall } from '../db/reserve-call.js';
 import { verifyTwilioSignature } from '../lib/twilio-signature.js';
 import { askRecordingConsent } from '../lib/recording-consent.js';
+import { sendIncomingNotification } from '../services/notifications.js';
+import { defer } from '../lib/defer.js';
 
 const { VoiceResponse } = twilio.twiml;
 
@@ -58,6 +60,7 @@ inboundRouter.post('/', async (req, res) => {
   }
 
   const base = config.publicBaseUrl;
+  if (['ringing','in-progress'].includes(call.status)) defer(sendIncomingNotification(call.id), `incoming-notification:${call.id}`);
   if (['initiating', 'ringing'].includes(call.status)) askRecordingConsent(twiml, `${base}/twiml/accept?callId=${call.id}`);
   else twiml.hangup();
 

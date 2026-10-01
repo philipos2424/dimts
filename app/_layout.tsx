@@ -6,6 +6,7 @@ import { View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AppProvider, useApp } from '../src/AppContext';
 import { IncomingBriefing } from '../src/components/IncomingBriefing';
+import { IncomingNotificationObserver } from '../src/components/IncomingNotificationObserver';
 import { color, font } from '../src/theme';
 
 function Gate() {
@@ -24,6 +25,7 @@ function Gate() {
   return (
     <View style={{ flex: 1 }}>
     <IncomingBriefing />
+    <IncomingNotificationObserver />
     <Stack
       screenOptions={{
         headerStyle: { backgroundColor: color.ink },

@@ -35,6 +35,7 @@ callDeletionRouter.delete('/:id', async (req, res) => {
       provider_deletion_status=$2,provider_deletion_error=NULL WHERE id=$1 RETURNING *`,
       [current.id, needsProvider ? 'pending' : 'not_required']);
     await tx.query('DELETE FROM followup_events WHERE call_id=$1', [current.id]);
+    await tx.query('DELETE FROM call_notifications WHERE call_id=$1', [current.id]);
     await tx.query("UPDATE calendar_actions SET meeting='{}'::jsonb WHERE call_id=$1", [current.id]);
     await tx.query("UPDATE email_actions SET email='{}'::jsonb WHERE call_id=$1", [current.id]);
     return deleted;

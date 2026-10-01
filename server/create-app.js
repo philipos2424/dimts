@@ -10,6 +10,7 @@ import { calendarActionsRouter } from './routes/calendar-actions.js';
 import { emailActionsRouter } from './routes/email-actions.js';
 import { recordingRecoveryRouter } from './routes/recording-recovery.js';
 import { callDeletionRouter, deletionsRouter } from './routes/call-deletion.js';
+import { notificationsRouter } from './routes/notifications.js';
 import { callsRouter, meRouter, usageRouter } from './routes/calls.js';
 import { inboundRouter } from './routes/inbound.js';
 import { twimlRouter, webhooksRouter } from './routes/webhooks.js';
@@ -30,6 +31,7 @@ export function createApp() {
     next();
   });
   app.use('/api/auth', authRouter);
+  app.use('/api/notifications', notificationsRouter);
   app.use('/api/integrations/google', googleRouter);
   app.use('/oauth/google', googleBrowserRouter);
   app.use('/api/contacts', contactsRouter);

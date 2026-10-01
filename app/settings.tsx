@@ -7,6 +7,7 @@ import { Txt } from '../src/components/Txt';
 import { BusinessNumber } from '../src/components/BusinessNumber';
 import { GoogleConnections } from '../src/components/GoogleConnections';
 import { CallDeletionHistory } from '../src/components/CallDeletion';
+import { NotificationSettings } from '../src/components/NotificationSettings';
 import type { Lang } from '../src/i18n';
 import { color, radius, space } from '../src/theme';
 
@@ -30,6 +31,7 @@ export default function Settings() {
       <BusinessNumber />
       <GoogleConnections />
       <CallDeletionHistory />
+      <NotificationSettings />
       <Section title={t('language')}>
         <View style={{ flexDirection: 'row', gap: space.sm }}>
           {LANGUAGES.map(({ code, label }) => {

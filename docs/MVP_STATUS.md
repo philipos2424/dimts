@@ -6,6 +6,12 @@ phone-call MVP.
 Implemented and checked:
 
 - OTP signup/sign-in, opaque sessions, logout and account isolation tests.
+- Opt-in incoming-call notifications with session-bound device registration,
+  private alerts, duplicate dispatch claims, ticket/receipt diagnostics, invalid
+  device handling and authenticated cold-start/tap navigation. Dispatched
+  independently of call routing. SDK 57 module/plugin and Settings controls
+  included; see `NOTIFICATION_SETUP.md`. SQL/HTTP tests and platform bundles
+  pass, but APNs/FCM configuration and physical delivery remain unverified.
 - OS keystore storage on native; tab session storage on web.
 - Self-service business-number claim from an operator-stocked, routed pool;
   repeated and concurrent claims, account isolation and authentication tested.

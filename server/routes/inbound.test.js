@@ -10,6 +10,11 @@ let contact;
 let failContactLookup = false;
 let failReservation = false;
 const inserted = [];
+const notified = [];
+mock.module('../services/notifications.js', { namedExports: {
+  sendIncomingNotification: async id => { notified.push(id); },
+  checkPushReceipts: async () => {}, validPushToken: () => true,
+} });
 mock.module('../db/reserve-call.js', { namedExports: {
   reserveCall: async (owner, caller, record, key, options) => {
     if (failReservation) throw new Error('budget exceeded');
@@ -73,6 +78,7 @@ test.beforeEach(() => {
   failContactLookup = false;
   failReservation = false;
   inserted.length = 0;
+  notified.length = 0;
   process.env.ANNOUNCE_RECORDING = 'true';
 });
 
@@ -82,6 +88,7 @@ test('asks for agreement before dialling or recording', async () => {
   assert.match(xml, /<Gather/);
   assert.match(xml, /accept\?callId=call-1/);
   assert.doesNotMatch(xml, /<Dial|record=/);
+  assert.deepEqual(notified, ['call-1']);
 });
 
 test('announces recording to the caller before connecting', async () => {
