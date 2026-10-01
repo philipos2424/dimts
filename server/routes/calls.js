@@ -102,7 +102,7 @@ callsRouter.get('/', async (req, res, next) => {
     const { rows } = await query(
       `SELECT ${LIST_COLUMNS} FROM calls c
          LEFT JOIN contacts k ON k.id = c.contact_id
-        WHERE c.user_id = $1
+        WHERE c.user_id = $1 AND c.deleted_at IS NULL
         ORDER BY c.created_at DESC
         LIMIT 100`,
       [user.id]
@@ -124,6 +124,7 @@ callsRouter.get('/:id', async (req, res, next) => {
               c.recording_url, c.transcript, c.summary, c.next_moves,
               c.action_items, c.key_points, c.followups, c.error, c.created_at,
               c.record_enabled, c.parent_consent_at, c.child_consent_at, c.recording_start_status,
+              c.deleted_at,c.provider_deletion_status,c.provider_deletion_error,c.provider_deleted_at,
               k.display_name AS contact_name, k.company
          FROM calls c
          LEFT JOIN contacts k ON k.id = c.contact_id
@@ -149,7 +150,7 @@ callsRouter.get('/:id/notes', async (req, res) => {
   const call = await queryOne(`SELECT c.id,c.destination,c.direction,c.status,c.duration_sec,
       c.created_at,c.transcript,c.summary,c.key_points,c.action_items,c.next_moves,
       k.display_name AS contact_name FROM calls c LEFT JOIN contacts k ON k.id=c.contact_id
-      WHERE c.id=$1 AND c.user_id=$2`, [req.params.id, user.id]);
+    WHERE c.id=$1 AND c.user_id=$2 AND c.deleted_at IS NULL`, [req.params.id, user.id]);
   if (!call) throw new HttpError(404, 'call_not_found');
   res.type('text/plain').set('Cache-Control', 'private, no-store')
     .set('Content-Disposition', `attachment; filename="dimts-call-${call.id}.txt"`).send(callNotes(call));

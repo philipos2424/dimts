@@ -12,6 +12,7 @@ import { Txt } from '../../src/components/Txt';
 import { type Key, statusKey } from '../../src/i18n';
 import { color, space } from '../../src/theme';
 import { exportCall } from '../../src/exportCall';
+import { DeleteCallControl, DeletionStatus } from '../../src/components/CallDeletion';
 
 export default function CallDetailScreen() {
   const { t } = useApp();
@@ -78,7 +79,7 @@ export default function CallDetailScreen() {
 
   // Keep polling while the pipeline is still running.
   useEffect(() => {
-    if (!call || ['ready', 'failed', 'completed', 'missed'].includes(call.status)) return;
+    if (!call || ['ready', 'failed', 'completed', 'missed', 'deleted'].includes(call.status)) return;
     const timer = setTimeout(load, 5000);
     return () => clearTimeout(timer);
   }, [call, load]);
@@ -92,6 +93,10 @@ export default function CallDetailScreen() {
   }
 
   const notReady = call.status !== 'ready';
+  if (call.deleted_at) return <ScrollView contentContainerStyle={{ padding: space.md }}>
+    {errorKey && <Banner message={t(errorKey)} onDismiss={() => setErrorKey(null)} />}
+    <DeletionStatus record={call} refresh={load} />
+  </ScrollView>;
 
   return (
     <ScrollView contentContainerStyle={{ padding: space.md, gap: space.lg }}>
@@ -198,6 +203,7 @@ export default function CallDetailScreen() {
           </Txt>
         </Section>
       )}
+      {!['initiating','ringing','in-progress'].includes(call.status) && <DeleteCallControl callId={call.id} onDeleted={load} />}
     </ScrollView>
   );
 }

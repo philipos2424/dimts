@@ -1,5 +1,7 @@
 import { queryOne } from './pool.js';
 import { startCallRecording } from '../services/start-recording.js';
+import { processDeletion } from '../services/process-deletion.js';
+import { defer } from '../lib/defer.js';
 
 export async function beginAgreedRecording(callId, childSid) {
   const call = await queryOne(`UPDATE calls SET recording_start_status='pending'
@@ -17,7 +19,14 @@ export async function beginAgreedRecording(callId, childSid) {
       WHERE id=$1 AND recording_start_status='pending' RETURNING *`, [callId, definite ? 'failed' : 'unknown', definite])
       .then(row => row ?? queryOne('SELECT * FROM calls WHERE id=$1', [callId]));
   }
-  return queryOne(`UPDATE calls SET recording_start_status='started',recording_sid=$2
+  const saved = await queryOne(`UPDATE calls SET recording_start_status='started',recording_sid=$2,
+      provider_deletion_status=CASE WHEN deleted_at IS NOT NULL THEN 'pending' ELSE provider_deletion_status END,
+      provider_deleted_at=CASE WHEN deleted_at IS NOT NULL THEN NULL ELSE provider_deleted_at END,
+      provider_deletion_token=CASE WHEN deleted_at IS NOT NULL THEN NULL ELSE provider_deletion_token END,
+      provider_deletion_until=CASE WHEN deleted_at IS NOT NULL THEN NULL ELSE provider_deletion_until END,
+      provider_deletion_attempted_at=CASE WHEN deleted_at IS NOT NULL THEN NULL ELSE provider_deletion_attempted_at END
     WHERE id=$1 AND recording_start_status='pending' RETURNING *`, [callId, sid])
     .then(row => row ?? queryOne('SELECT * FROM calls WHERE id=$1', [callId]));
+  if (saved?.deleted_at) defer(processDeletion(callId), `late-start-delete:${callId}`);
+  return saved;
 }

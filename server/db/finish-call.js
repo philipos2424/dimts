@@ -4,7 +4,8 @@ import { queryOne } from './pool.js';
 // unclaimed so Twilio can safely retry. Duplicate callbacks claim no rows.
 export const FINISH_CALL_SQL = `WITH changed AS (
   UPDATE calls SET duration_sec = $2, completed_at = now(),
-    status = CASE WHEN status = 'ready' THEN status
+    status = CASE WHEN deleted_at IS NOT NULL THEN 'deleted'
+                  WHEN status = 'ready' THEN status
                   WHEN $3 AND record_enabled THEN 'processing'
                   WHEN $3 THEN 'completed' ELSE $5 END,
     error = CASE WHEN $3 THEN error ELSE $4 END

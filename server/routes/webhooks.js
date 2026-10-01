@@ -9,6 +9,7 @@ import { finishCall } from '../db/finish-call.js';
 import { processRecording } from '../services/process-recording.js';
 import { askRecordingConsent, dialCall } from '../lib/recording-consent.js';
 import { beginAgreedRecording } from '../db/start-recording.js';
+import { processDeletion } from '../services/process-deletion.js';
 
 const { VoiceResponse } = twilio.twiml;
 
@@ -162,6 +163,19 @@ twimlRouter.post('/dial-done', async (req, res) => {
 webhooksRouter.post('/recording-ready', async (req, res) => {
   const { RecordingUrl, RecordingStatus, CallSid } = req.body ?? {};
   const call = await resolveCall({ callId: req.query.callId, callSid: CallSid });
+
+  if (call?.deleted_at && RecordingStatus === 'completed' && /^RE[a-f0-9]{32}$/i.test(req.body.RecordingSid ?? '')) {
+    const pending = await queryOne(`UPDATE calls SET recording_sid=COALESCE(recording_sid,$2),
+        provider_deletion_status='pending',provider_deleted_at=NULL,provider_deletion_error=NULL,
+        provider_deletion_token=CASE WHEN recording_sid IS NULL THEN NULL ELSE provider_deletion_token END,
+        provider_deletion_until=CASE WHEN recording_sid IS NULL THEN NULL ELSE provider_deletion_until END,
+        provider_deletion_attempted_at=CASE WHEN recording_sid IS NULL THEN NULL ELSE provider_deletion_attempted_at END
+      WHERE id=$1 AND deleted_at IS NOT NULL AND (recording_sid IS NULL OR recording_sid=$2)
+        AND (provider_deletion_status<>'confirmed' OR recording_sid IS NULL) RETURNING id`,
+      [call.id, req.body.RecordingSid]);
+    if (pending) defer(processDeletion(call.id), `late-delete:${call.id}`);
+    return res.status(204).end();
+  }
 
   if (call && call.record_enabled !== false && call.parent_consent_at && call.child_consent_at && RecordingStatus === 'completed' && RecordingUrl) {
     if (call.recording_start_status && (!/^RE[a-f0-9]{32}$/i.test(req.body.RecordingSid ?? '') ||

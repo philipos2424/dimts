@@ -85,6 +85,14 @@ confident external action.
    and metadata does not prove both people are audible. Remaining: partial audio,
    physical-device export checks, retention/deletion including provider copies,
    and restore checks. Never require reinstalling to troubleshoot access.
+   Owner-confirmed deletion is now implemented, including local content removal,
+   provider removal receipts, retry/cooldown and a Settings history. Tombstones
+   retain accounting/consent/provider references; contacts, external Google
+   actions and exported copies remain. Late callbacks and startup receipts
+   schedule removal rather than restoring notes. SQL/HTTP/provider-mock tests
+   cover races and interrupted receipts. Retention is until owner deletion;
+   automatic expiry, live removal, rendered UI and backup handling remain
+   unverified. See `RECORDING_PRIVACY.md` for the exact scope and provider limits.
    Processing now also checkpoints the transcript before asking for a summary.
    A failed summary can resume without paying for another transcription of the
    same recording. Leases renew between stages; expired jobs become visible

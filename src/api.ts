@@ -86,6 +86,10 @@ export function saveFollowups(id: string, draft: Followups) {
 }
 
 export type CallDetail = CallSummary & {
+  deleted_at: string | null;
+  provider_deletion_status: DeletionRecord['provider_deletion_status'];
+  provider_deletion_error: string | null;
+  provider_deleted_at: string | null;
   record_enabled: boolean;
   parent_consent_at: string | null;
   child_consent_at: string | null;
@@ -188,6 +192,19 @@ export function listCalls(userPhone: string) {
 
 export function getCall(id: string, userPhone: string) {
   return request<CallDetail>(`/api/calls/${id}`, userPhone);
+}
+
+export type DeletionRecord = { id: string; deleted_at: string | null;
+  provider_deletion_status: 'pending' | 'unknown' | 'confirmed' | 'not_required' | null;
+  provider_deletion_error: string | null; provider_deleted_at: string | null };
+export function deleteCall(id: string) {
+  return request<Pick<DeletionRecord, 'id' | 'deleted_at' | 'provider_deletion_status'>>(`/api/calls/${id}`, '', { method: 'DELETE', body: JSON.stringify({ confirm: 'delete-call' }) });
+}
+export function retryCallDeletion(id: string) {
+  return request<{ status: string }>(`/api/calls/${id}/deletion/retry`, '', { method: 'POST' });
+}
+export function listCallDeletions() {
+  return request<{ deletions: DeletionRecord[] }>('/api/call-deletions', '').then(result => result.deletions);
 }
 
 export function newCallRequestKey() {

@@ -96,6 +96,13 @@ Implemented and checked:
   native copies older than an hour are pruned on the next export (or by the OS);
   copies saved/shared outside Dimts remain under the user's control. Physical
   share-sheet and downloaded-file verification remain required.
+- Owner-confirmed call-content deletion, provider removal receipts/retries and
+  removal history in Settings. Tombstones preserve usage/consent/provider IDs
+  while scrubbing content and invalidating processing. Late callbacks/startup
+  receipts cannot restore notes. Unknown removal outcomes stay visible.
+  Contacts, external Google actions and exported copies remain. Current retention
+  is until owner deletion; no automatic age-based purge. See `RECORDING_PRIVACY.md`.
+  Live removal, rendered confirmation and deployment backup expiry are unverified.
 - Editable follow-up email and meeting drafts stored per call. Mail and Google
   Calendar handoff require reviewed recipients and explicit UTC meeting times.
   Cloud generation checked for both meeting and email examples; isolation and
@@ -129,7 +136,7 @@ live calendar execution and Gmail draft execution checks remain required.
 - Verify minute limits on a real bridge and configure provider spend controls.
 - Background/locked-screen briefing delivery and physical-device verification.
 - Confirmed external action receipts and uncertain-result reconciliation.
-- Verify real pool stocking/assignment, and implement retention/deletion controls.
+- Verify real pool stocking/assignment, live deletion and backup retention policy.
 - Deployment with reachable AI services and hosted PostgreSQL.
 
 Operational notes:
