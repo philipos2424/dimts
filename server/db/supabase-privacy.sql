@@ -1,0 +1,19 @@
+-- Dimts uses its own authenticated server API and a direct PostgreSQL role.
+-- Do not expose its private tables through Supabase's anonymous/authenticated
+-- Data API. No browser access policies are created. A dedicated backend role
+-- needs supabase-backend-access.sql. Apply to Dimts only, after schema.sql.
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE calls ENABLE ROW LEVEL SECURITY;
+ALTER TABLE usage_minutes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE contacts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE followup_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE call_budget_lock ENABLE ROW LEVEL SECURITY;
+ALTER TABLE sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE agent_number_pool ENABLE ROW LEVEL SECURITY;
+ALTER TABLE auth_rate_limits ENABLE ROW LEVEL SECURITY;
+ALTER TABLE google_oauth_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE google_connections ENABLE ROW LEVEL SECURITY;
+ALTER TABLE calendar_actions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE email_actions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE notification_devices ENABLE ROW LEVEL SECURITY;
+ALTER TABLE call_notifications ENABLE ROW LEVEL SECURITY;

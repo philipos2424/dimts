@@ -42,6 +42,17 @@ was restarted or public routing changed during this audit.
 
 Implemented and checked:
 
+- A production Vercel deployment now serves the web app and Express API at
+  https://dimts.vercel.app. The Dimts Supabase project is restored and the schema
+  plus RLS protection are applied. All 235 backend tests pass. Public HTML,
+  liveness and unsigned-callback rejection checks pass, but database-backed
+  authentication currently fails with a missing runtime `DATABASE_URL`.
+  Signed callbacks now pass, including query-string URLs; invalid signatures
+  are rejected. A dedicated scoped database login is prepared, awaiting the
+  exact pooler address from dashboard sign-in. Twilio routing remains on its demo.
+  No real recording or signup is claimed. See `VERCEL_DEPLOYMENT.md`; this
+  supersedes the earlier no-hosted-deployment observations above.
+
 - OTP signup/sign-in, opaque sessions, logout and account isolation tests.
 - A first-call guide is reachable from Recents and Settings. It explains the
   distinct handset/business numbers, supported routes, two-party prompts,

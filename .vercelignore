@@ -1,0 +1,17 @@
+.git
+.env*
+**/.env*
+.data
+.expo
+node_modules
+**/node_modules
+dist
+android
+ios
+**/__pycache__
+**/*.pyc
+**/*.pem
+**/*.key
+**/*.p8
+**/*.p12
+**/*.jks

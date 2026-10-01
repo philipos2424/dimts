@@ -9,8 +9,9 @@ the current workstation. No existing hosted database has been changed.
 Use a chosen, authorized Linux x86_64 host with Docker Compose and a public
 domain you control. Point its DNS to the host and make ports 80/443 reachable.
 Whisper CPU performance and model download time must be checked on that host.
-The existing Supabase project named `dimts` is inactive and Vercel is not
-connected; this stack uses its own PostgreSQL volume. It does not migrate the
+The separate Vercel deployment is described in `VERCEL_DEPLOYMENT.md`; that
+work restored the Supabase `dimts` project. This Linux stack instead uses its
+own PostgreSQL volume. It does not migrate the
 current embedded local database or reuse the separate MiniMe project.
 
 ## Prepare runtime settings
