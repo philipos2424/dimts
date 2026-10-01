@@ -33,9 +33,20 @@ export function getActiveIncoming() {
   return request<{ call: { id: string; destination: string; status: string; created_at: string } | null }>('/api/calls/incoming/active', '');
 }
 export type Followups = {
-  email: { subject: string; body: string; recipient: string } | null;
-  meeting: { title: string; notes: string; time_text: string; start: string; end: string } | null;
+  version?: number;
+  email: ({ subject: string; body: string; recipient: string } & ProposalMetadata) | null;
+  meeting: ({ title: string; notes: string; time_text: string; start: string; end: string } & ProposalMetadata) | null;
 };
+type ProposalMetadata = { status?: 'pending' | 'rejected'; evidence?: {
+  quotes: string[]; confidence: number; reason: string;
+} | null };
+export function rejectFollowup(id: string, kind: 'email' | 'meeting', version = 0) {
+  return request<Followups>(`/api/calls/${id}/followups/${kind}/reject`, '', { method: 'POST', body: JSON.stringify({ version }) });
+}
+export type FollowupEvent = { kind: string; version: number; created_at: string };
+export function getFollowupEvents(id: string) {
+  return request<{ events: FollowupEvent[] }>(`/api/calls/${id}/followups/events`, '').then(r => r.events);
+}
 export function generateFollowups(id: string) {
   return request<Followups>(`/api/calls/${id}/followups`, '', { method: 'POST' });
 }

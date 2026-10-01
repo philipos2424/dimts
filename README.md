@@ -127,6 +127,19 @@ until you fill these in. The handoff opens a review screen; it does not establis
 that the message was sent or the event booked. Drafts remain private to the
 call's owner and repeated generation preserves saved edits.
 
+New proposals cite numbered transcript lines; the server copies the exact
+speaker turns into their evidence and rejects invalid references. Meeting
+evidence must include both speakers. The review screen shows the source quotes,
+reason and the model's confidence estimate. Quotes establish the cited source,
+not that every interpretation is correct; owner review remains required.
+Rejecting a proposal retains it as rejected and hides its editing/handoff
+controls. Repeated rejection is safe, and ordinary edits cannot reopen a
+rejection or replace its original evidence. Version checks reject stale edits.
+**Refresh review history** shows preparation, edit and rejection events, written
+atomically with the draft changes. These events are not calendar/email execution
+receipts. Older saved drafts without evidence explicitly ask for transcript
+review.
+
 Call duration and minute accounting commit together in one database statement.
 Failed accounting leaves the callback retryable, and duplicate completion
 callbacks do not add usage again.

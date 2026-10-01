@@ -43,6 +43,10 @@ Implemented and checked:
   Calendar handoff require reviewed recipients and explicit UTC meeting times.
   Cloud generation checked for both meeting and email examples; isolation and
   date validation tests pass. Actual sending/booking is not yet verified.
+- Transcript-backed proposal evidence, rejection controls, version checks and
+  atomic review-history events. Real Ollama Cloud checks cover accepted and
+  explicitly declined meetings; invalid references/quotes and forged evidence
+  are rejected or ignored. Review events are not external execution receipts.
 
 Still required:
 
@@ -52,8 +56,7 @@ Still required:
 - End-to-end follow-up review and confirmed calendar/email execution.
 - Verify minute limits on a real bridge and configure provider spend controls.
 - Background/locked-screen briefing delivery and physical-device verification.
-- Proposal evidence, rejection and action receipts remain required by the
-  approved caller design.
+- Confirmed external action receipts and uncertain-result reconciliation.
 - Verify real pool stocking/assignment, and implement retention/deletion controls.
 - Deployment with reachable AI services and hosted PostgreSQL.
 - Resolve applicable dependency advisories without downgrading Expo.
