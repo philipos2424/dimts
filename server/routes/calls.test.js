@@ -6,6 +6,7 @@ import { readFile } from 'node:fs/promises';
 
 process.env.PUBLIC_BASE_URL = 'https://calls.example.com';
 process.env.TWILIO_NUMBER = '+15555550999';
+process.env.TWILIO_ACCOUNT_SID = 'AC' + 'a'.repeat(32);
 const db = new PGlite();
 await db.exec(await readFile(new URL('../db/schema.sql', import.meta.url), 'utf8'));
 const user = (await db.query("INSERT INTO users(phone) VALUES('+15555550101') RETURNING *")).rows[0];
@@ -42,6 +43,7 @@ test('a retried HTTP request cannot originate twice; invalid requests never call
   const retry = await post('request-0001');
   assert.equal(first.status, 201); assert.equal(retry.status, 200);
   assert.equal(first.data.callId, retry.data.callId);
+  assert.equal((await db.query('SELECT twilio_account_sid FROM calls WHERE id=$1', [first.data.callId])).rows[0].twilio_account_sid, process.env.TWILIO_ACCOUNT_SID);
   assert.equal(providerCalls, 1);
   assert.equal((await post('request-0002')).status, 409);
   assert.equal(providerCalls, 1);

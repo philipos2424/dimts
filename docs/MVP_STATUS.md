@@ -3,6 +3,17 @@
 This build is in progress. Passing unit tests does not establish a working
 phone-call MVP.
 
+Provider deletion now retains the original Twilio account on new reservations
+and legacy calls with canonical recording URLs. Unknown ownership or changed
+configuration blocks provider requests and never confirms removal from another
+account's absence response. Previously scrubbed legacy rows without account
+evidence require operator investigation. All 216 backend tests, targeted
+SQL/provider checks and TypeScript pass on 1 October 2026; live deletion across
+account configuration changes is unverified. The current local backend and
+Whisper worker return healthy responses, but Twilio still uses its demo Voice
+webhook and public callbacks, a hosted database and Google OAuth are unconfigured.
+The account-association changes have not been rolled out to those live processes.
+
 Implemented and checked:
 
 - OTP signup/sign-in, opaque sessions, logout and account isolation tests.
@@ -68,9 +79,13 @@ Implemented and checked:
   during concurrent requests/callbacks. Missing/ambiguous/unsupported results
   remain explicit; no new call or recording is created. Mock-provider SQL/HTTP
   tests pass; live Twilio lookup and recovered audio quality remain unverified.
-- Review research across seven recorders and one adjacent transcription app,
+- Review research across nine recorders and one adjacent transcription app,
   with dated evidence, implementation gaps and a paid-pilot validation plan:
-  `CALL_RECORDING_REVIEW_RESEARCH.md`. Onboarding explains supported call routes.
+  `CALL_RECORDING_REVIEW_RESEARCH.md`. Refreshed visible reviews distinguish
+  historical reports and developer responses, and include Apple's native
+  recording baseline. `CALLER_REVIEW_VALIDATION.md` supplies 20 concrete pilot
+  scenarios and a results schema; none are marked passed without live evidence.
+  Onboarding explains supported call routes.
 - Local Whisper measures decoded channel signal before inference. Silent
   channels skip inference; silent/mono/one-sided signal and incomplete channel
   transcripts prevent new AI notes and contact identification. Partial text,

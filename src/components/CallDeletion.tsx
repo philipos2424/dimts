@@ -26,6 +26,7 @@ export function DeletionStatus({ record, refresh }: { record: DeletionRecord; re
       record.provider_deletion_status === 'not_required' ? 'No provider recording was created for this call.' :
       record.provider_deletion_status === 'unknown' ? 'Provider recording removal is not yet confirmed. Retry to check it.' : 'Checking removal of the provider recording…'}</Txt>
     {record.provider_deletion_error === 'multiple_recordings' && <Txt tone="muted">More than one recording was found. Contact the operator with this call ID to resolve removal.</Txt>}
+    {['account_unverified','account_changed'].includes(record.provider_deletion_error ?? '') && <Txt tone="muted">The original recording account cannot be checked with the current configuration. Contact the operator with this call ID to resolve removal.</Txt>}
     <Txt size="caption" tone="muted" selectable>Call ID: {record.id}</Txt>
     <Txt size="caption" tone="muted">Twilio may retain recording metadata for 40 days and take up to 30 days to remove media from all systems after deletion. Saved copies outside Dimts are unaffected.</Txt>
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.lg }}>

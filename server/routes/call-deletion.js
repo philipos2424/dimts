@@ -3,6 +3,7 @@ import * as db from '../db/pool.js';
 import { HttpError, resolveUser } from '../lib/users.js';
 import { defer } from '../lib/defer.js';
 import { processDeletion } from '../services/process-deletion.js';
+import { recordingAccount } from '../lib/recording-account.js';
 
 export const callDeletionRouter = express.Router();
 export const deletionsRouter = express.Router();
@@ -32,8 +33,8 @@ callDeletionRouter.delete('/:id', async (req, res) => {
       transcript_recording_url=NULL,summary=NULL,action_items=NULL,key_points=NULL,next_moves=NULL,followups=NULL,error=NULL,
       language=NULL,language_probability=NULL,processing_token=NULL,processing_until=NULL,
       recording_lookup_token=NULL,recording_lookup_until=NULL,
-      provider_deletion_status=$2,provider_deletion_error=NULL WHERE id=$1 RETURNING *`,
-      [current.id, needsProvider ? 'pending' : 'not_required']);
+      twilio_account_sid=$3,provider_deletion_status=$2,provider_deletion_error=NULL WHERE id=$1 RETURNING *`,
+      [current.id, needsProvider ? 'pending' : 'not_required', recordingAccount(current)]);
     await tx.query('DELETE FROM followup_events WHERE call_id=$1', [current.id]);
     await tx.query('DELETE FROM call_notifications WHERE call_id=$1', [current.id]);
     await tx.query("UPDATE calendar_actions SET meeting='{}'::jsonb WHERE call_id=$1", [current.id]);

@@ -1,6 +1,6 @@
 import twilio from 'twilio';
 import { config } from '../config.js';
-let client;
+import { isTwilioAccount } from '../lib/recording-account.js';
 
 // Only delete a verified recording belonging to this account and parent call.
 // A timeout is uncertain; callers retain the job so a later retry can check
@@ -9,7 +9,11 @@ export async function deleteProviderRecording(call) {
   const account = config.twilioAccountSid;
   if (!/^AC[a-f0-9]{32}$/i.test(account) || !/^CA[a-f0-9]{32}$/i.test(call.twilio_call_sid ?? '') ||
       (call.recording_sid && !/^RE[a-f0-9]{32}$/i.test(call.recording_sid))) return { status: 'unknown', error: 'invalid_reference' };
-  client ??= twilio(account, config.twilioAuthToken, { timeout: 10_000, autoRetry: false });
+  if (!isTwilioAccount(call.twilio_account_sid)) return { status: 'unknown', error: 'account_unverified' };
+  if (call.twilio_account_sid !== account) return { status: 'unknown', error: 'account_changed' };
+  // Capture both current credentials for this operation; a cached client could
+  // silently retain the old account or token after configuration changes.
+  const client = twilio(account, config.twilioAuthToken, { timeout: 10_000, autoRetry: false });
   let recording;
   try {
     if (call.recording_sid) {

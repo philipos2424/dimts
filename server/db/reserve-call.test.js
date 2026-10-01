@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
 import { reserveCallInTransaction } from './reserve-call.js';
+const account = 'AC' + 'a'.repeat(32);
+process.env.TWILIO_ACCOUNT_SID = account;
 
 test('call reservations enforce idempotency, concurrency and minute budgets using real SQL', async () => {
   const db = new PGlite();
@@ -10,10 +12,17 @@ test('call reservations enforce idempotency, concurrency and minute budgets usin
     await db.exec(await readFile(new URL('./schema.sql', import.meta.url), 'utf8'));
     const owner = (await db.query("INSERT INTO users(phone) VALUES('+15555550101') RETURNING *")).rows[0];
     const reserve = (key, dest = '+15555550102', record = true) => db.transaction(tx => reserveCallInTransaction(tx, owner, dest, record, key));
+    process.env.TWILIO_ACCOUNT_SID = 'invalid';
+    await assert.rejects(reserve('invalid-account'), /Invalid TWILIO_ACCOUNT_SID/);
+    assert.equal((await db.query('SELECT count(*)::int AS n FROM calls')).rows[0].n, 0);
+    process.env.TWILIO_ACCOUNT_SID = account;
     const pair = await Promise.all([reserve('request-one'), reserve('request-one')]);
     assert.equal(pair[0].call.id, pair[1].call.id);
     assert.equal(pair.filter(r => r.created).length, 1);
     assert.equal(pair[0].call.max_duration_sec, 1800);
+    assert.equal(pair[0].call.twilio_account_sid, account);
+    process.env.TWILIO_ACCOUNT_SID = 'AC' + 'd'.repeat(32);
+    assert.equal((await reserve('request-one')).call.twilio_account_sid, account, 'retry retains original account');
     await assert.rejects(reserve('request-one', '+15555550103'), { code: 'request_key_reused' });
     await assert.rejects(reserve('request-one', '+15555550102', false), { code: 'request_key_reused' });
     await assert.rejects(reserve('request-two'), { code: 'call_in_progress' });
@@ -41,6 +50,7 @@ test('call reservations enforce idempotency, concurrency and minute budgets usin
     assert.equal(incoming.call.direction, 'inbound');
     assert.equal(incoming.call.twilio_call_sid, 'CA_TEST');
     assert.equal(incoming.call.agent_number, other.agent_number);
+    assert.equal(incoming.call.twilio_account_sid, process.env.TWILIO_ACCOUNT_SID);
     assert.equal(incoming.call.max_duration_sec, 60);
     assert.equal((await inbound()).created, false);
     await assert.rejects(reserve('request-three'), { code: 'call_minutes_limit' });

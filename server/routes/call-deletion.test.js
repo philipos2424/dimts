@@ -12,10 +12,10 @@ mock.module('../db/pool.js',{namedExports:{
     return(await db.query(sql,p)).rows[0];
   },withTransaction:work=>db.transaction(work),
 }});
-let providerCalls=0,providerResult={status:'confirmed'},providerHook,summaryHook,startHook;
+let providerCalls=0,providerResult={status:'confirmed'},providerHook,summaryHook,startHook,providerCall;
 mock.module('../services/start-recording.js',{namedExports:{startCallRecording:async()=>{if(startHook)await startHook();return 'RE'+'c'.repeat(32);}}});
-mock.module('../services/delete-recording.js',{namedExports:{deleteProviderRecording:async()=>{
-  providerCalls++;if(providerHook)await providerHook();return providerResult;
+mock.module('../services/delete-recording.js',{namedExports:{deleteProviderRecording:async call=>{
+  providerCall=call;providerCalls++;if(providerHook)await providerHook();return providerResult;
 }}});
 mock.module('../services/originate.js',{namedExports:{isE164:()=>true,originateCall:async()=>{throw new Error('No test calls');},
   fetchRecording:async()=>({ok:true,blob:async()=>new Blob(['audio'])})}});
@@ -53,12 +53,16 @@ test.afterEach(()=>{providerResult={status:'confirmed'};providerHook=undefined;s
 
 test('deletion requires owner and explicit confirmation, scrubs content immediately, preserves usage and exposes provider confirmation',async()=>{
   const id=await seed(),before=providerCalls;
+  const account='AC'+'a'.repeat(32);
+  await db.query('UPDATE calls SET recording_url=$2 WHERE id=$1',[id,`https://api.twilio.com/2010-04-01/Accounts/${account}/Recordings/${sid}`]);
   assert.equal((await request(`/calls/${id}`,'DELETE',{confirm:'delete-call'},null)).status,401);
   assert.equal((await request(`/calls/${id}`,'DELETE',{confirm:'delete-call'},tokens[1])).status,404);
   assert.equal((await request(`/calls/${id}`,'DELETE',{})).status,400);
   assert.equal((await request(`/calls/${id}`,'DELETE',{confirm:'delete-call'})).status,202);
   await until(async()=>(await row(id)).provider_deletion_status==='confirmed');
   const saved=await row(id);assert.equal(saved.status,'deleted');assert.ok(saved.deleted_at);assert.equal(saved.duration_sec,60);
+  assert.equal(saved.twilio_account_sid,account,'legacy account survives URL scrubbing');
+  assert.equal(providerCall.twilio_account_sid,account,'removal worker receives original ownership');
   for(const key of ['recording_url','transcript','transcript_data','summary','followups','contact_id'])assert.equal(saved[key],null);
   assert.equal(saved.destination,'');assert.equal(saved.user_phone,'');assert.equal(providerCalls,before+1);
   assert.equal((await request(`/calls/${id}/audio`)).status,404);assert.equal((await request(`/calls/${id}/notes`)).status,404);

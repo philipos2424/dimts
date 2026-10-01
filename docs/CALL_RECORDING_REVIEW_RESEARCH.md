@@ -6,7 +6,7 @@ must be validated separately for routing, language, carrier and pricing.
 ## Scope and confidence
 
 This is a qualitative sample of publicly visible App Store and Google Play
-reviews across seven call-recording apps and one adjacent transcription app.
+reviews across nine call-recording apps and one adjacent transcription app.
 It is not every app, every review, a random sample, or a measured failure rate.
 Searches included failure-related terms, so this sample intentionally surfaces
 problems and cannot establish how often they happen. Positive reviews were also
@@ -32,6 +32,79 @@ fraud, surveillance or illegality are accepted as facts.
 | [Call Recorder – Auto Recording, m24apps — Google Play](https://play.google.com/store/apps/details?id=com.m24apps.acr) | BAS BASS, 30 April 2022: important calls were missing and uncertainty about migrating old recordings made switching difficult. | Recordings belong to the user: provide export and a clear retention policy. Historical evidence supports testing portability, not a current failure-rate claim. |
 | [Automatic Call Recorder – ACR, Vastor — Google Play](https://play.google.com/store/apps/details?id=com.call.recorder.automatic.recording) | Noel Ndebele, 19 March 2026: could not record incoming or outgoing calls. Lipi Raha, 21 February 2026: no sound. Abrar Hussain, 12 May 2026: ads worked while recording did not. | Prove the essential function with a guided test before asking someone to pay. Avoid interruptions during important calls. |
 | [Notta — App Store reviews](https://apps.apple.com/us/app/notta-transcribe-voice-to-text/id1480649572?see-all=reviews) — adjacent transcription product | aeli1980, 1 April, year not shown: interrupted multi-speaker recordings. pengufen, 27 December 2025: surprised by per-recording limits and an export paywall. Sidequestgremlin, 27 May 2025: speaker identification and troubleshooting problems. M3OW MFS, 7 August, year not shown: valued focusing on interviews and structured summaries. | Explain limits before capture, preserve audio independently of AI success, label speakers and offer useful summaries. Do not market this adjacent product as a direct phone-call recorder. |
+| [RecMyCalls / Call Recorder for iPhone, BPMobile — App Store](https://apps.apple.com/us/app/call-recorder-for-iphone-%E3%85%A4/id1200776424) | Ncknamealrdytkn, 16 April 2019: complicated merging, a lost conversation and surprise at the subscription interval. TheCrow!, 7 July 2017: initially reported missing recordings, then updated the review to say they were retrieved and asked how to export them. | Recovery and portability must be easy to find. Distinguish temporary access failure from permanent loss. These are historical reports; the retrieval update matters. |
+| [Call Recorder: Record Converse, VATARAS OU — App Store](https://apps.apple.com/us/app/call-recorder-record-converse/id6446789145) | Bill Seanson, 13 July 2023: valued negotiation recall and requested bookmarks. Maui_Evan, 13 September 2023: reported a failed capture, disliked subscription cost and reported being asked to rate before using the app. Other visible positive reviews describe revisiting client discussions. | Make important moments retrievable; never gate core use on a rating. Do not treat a high aggregate rating as proof of reliability or independently accept a review's rating-manipulation allegation. |
+
+## Additional evidence checked on 1 October 2026
+
+This refresh adds current visible reviews to the historical sample above.
+The selected text is paraphrased; reviewer prices are not verified current prices.
+
+- [Cube ACR](https://play.google.com/store/apps/details?id=com.catalinagroup.callrecorder):
+  David Beroff, 13 July 2026, reports successful test calls followed by a missing
+  important call. Stephanie Curley, 2 July 2026, values the guided permissions
+  setup but describes needing speakerphone. Lisa Renee Jordan, 4 August 2026,
+  dislikes moving transcription to another paid app. The developer separately
+  says subscription does not improve recording quality. Lesson: one successful
+  test is insufficient; disclose recording versus AI entitlements separately.
+- [ACR Phone](https://play.google.com/store/apps/details?id=com.nll.cb):
+  Lior Albaz, 22 August 2026, reports setup/background restrictions and silent
+  audio. Andrej Pirman, 2 November 2024, values an absence of intrusive ads but
+  criticizes inconsistent dialpad placement. Lesson: stable controls and routing
+  that does not depend on handset audio workarounds; verify after reboot and
+  while the app is closed. Rooting claims are reviewer reports, not our findings.
+- [Talker ACR](https://play.google.com/store/apps/details?id=com.talker.acr):
+  T., 10 September 2026, could not find how to bypass the trial offer; the
+  developer responds that a close control is available after a delay. Em 3,
+  28 July 2026, reports unusable audio and slow support. Lesson: make free/test
+  access visible immediately, prove capture before payment, and separate support
+  recovery from cancellation. This disagreement does not prove a paywall exists.
+- [TapeACall reviews](https://apps.apple.com/us/app/tapeacall-call-recorder/id573751328?platform=iphone&see-all=reviews):
+  HydraPhoenix, 5 August, year not shown, reports losing login access after
+  changing phones. Amashi, 26 March, year not shown, reports recording continuing
+  after hangup. Lesson: test device migration and provider hangup independently
+  of the app screen. Do not infer a year from the listing's crawl date.
+- [Notta reviews](https://apps.apple.com/us/app/notta-transcribe-voice-to-text/id1480649572?see-all=reviews):
+  Bocababe2010, 8 November 2023, values summaries and action items but reports
+  intermittent summary generation. Lesson: preserve the recording and transcript
+  when summarization fails, and retry just the failed stage.
+
+The m24apps page could not be reopened during this refresh. Its evidence above
+is retained as a historical observation from the earlier research, not newly
+verified availability. Store pages show a limited, changing selection of reviews;
+this refresh does not represent all reviews, rankings or worldwide availability.
+
+## The native recording baseline
+
+[Apple's own documentation](https://support.apple.com/en-tm/guide/iphone/iph57c6590e9/ios)
+already describes call recording, transcripts and summaries on supported
+devices, languages and regions. This is product documentation, not user-review
+evidence. My inference: recording plus a summary alone is a weak differentiation.
+Dimts should earn its place through reliable client-call recall, relevant prior
+context and reviewed contact/calendar/email follow-through. Test willingness to
+pay against the customer's existing phone features, not just other paid apps.
+
+## Turning complaints into release decisions
+
+The executable pilot checklist and blank results log are in
+[`CALLER_REVIEW_VALIDATION.md`](CALLER_REVIEW_VALIDATION.md). Each decision below
+is a product requirement, not a claim that a live test passed.
+
+| Priority | Decision | Evidence required before claiming success |
+| --- | --- | --- |
+| P0 | Never silently label missing or one-sided audio as a successful call recording. | Real callers inspect beginning, middle and end; deliberately failed capture becomes visible and recoverable where audio exists. |
+| P0 | Explain supported routing before signup and demonstrate it before payment. | A new user completes a two-person routed test and understands ordinary handset/WhatsApp calls are outside this capture path. |
+| P0 | End the provider call/recording correctly when either participant hangs up. | Inspect both call legs, final recording duration and billable duration with the app closed. |
+| P0 | Keep original audio and transcript usable when AI fails. | Force summary failure, play/export audio, retry once and verify no second transcription of the unchanged recording. |
+| P0 | Protect access across logout, device change and account switching. | The correct owner can retrieve/export; another account cannot retrieve content or act through an old notification. |
+| P1 | Show renewal interval, total renewal charge, included minutes, AI limits and cancellation before purchase. | A pilot user can accurately explain their next charge and find cancellation without support. Billing remains unimplemented. |
+| P1 | Help users find the exact evidence behind a suggestion. | Timestamp navigation/bookmarks and correction survive interruption; never auto-confirm an ambiguous date or speaker. Timestamp navigation/bookmarks remain unimplemented. |
+| P1 | Make help reachable without sharing private call content by default. | A support request includes a call ID and sanitized failure stage; actual support contact and response expectation are configured. A call ID alone is insufficient. |
+| P1 | Make deletion scope and recording portability explicit. | Inspect exported files and provider deletion receipts; explain remaining external copies and test backup restoration. |
+
+Avoid adding autonomous live-call actions until capture and retrieval are proven.
+Review complaints establish useful failure hypotheses; only our own tests can
+show whether this implementation solves them.
 
 ## What this means for the business
 
@@ -155,7 +228,9 @@ These are proposed gates, not achieved metrics:
 
 ## Release check for the current recording changes
 
-Automated: 167 server tests passed; TypeScript check and Expo web export passed.
+Historical check when the initial recording changes were implemented: 167 server
+tests passed; TypeScript check and Expo web export passed. This is not a fresh
+test run or the current full-suite count; consult `MVP_STATUS.md` for later work.
 Includes completion-based audio expiry, owner isolation and late callback recovery.
 
 Still unverified: live recording startup during the second-party whisper,

@@ -47,6 +47,15 @@ investigation; the service does not guess which resource to delete.
 ## Twilio receipt semantics
 
 The server validates account, parent call and recording SID before removal.
+New call reservations retain the original Twilio account. Deletion keeps this
+account after scrubbing content. For older calls without an account stamp, the
+server can recover it from a canonical, validated Twilio recording URL before
+removing that URL. It never assigns today's account to an unknown legacy call.
+An account conflict, missing evidence or changed configuration leaves provider
+removal unconfirmed and exposes an operator-directed message. Previously
+deleted legacy rows without either reference need operator investigation.
+No provider request is made when the original account cannot be verified against
+the configured account; absence in a different account is not deletion proof.
 Only completed recordings are deleted. A follow-up metadata read must show
 `deleted` or return not found before the job records confirmation. Already
 deleted metadata is a valid receipt and does not cause a second DELETE.
@@ -65,8 +74,10 @@ scrubbing and hidden history/exports, retained accounting, unrecorded calls,
 unresolved external actions, provider uncertainty, retry cooldown and concurrent
 claims, deleted metadata, interrupted deletion responses and receipt storage,
 late startup/callbacks, changed recording references and stale processing writes.
-The full backend suite passes 206 tests; TypeScript and web/Android/iOS bundle
-exports pass. Generated bundles contain none of the configured secrets.
+The initial deletion implementation passed 206 backend tests and TypeScript
+and web/Android/iOS bundle checks. The account-association update adds regression
+coverage for changed configuration, unverified legacy references and retaining
+the legacy account through local scrubbing. See `MVP_STATUS.md` for later checks.
 All tests use test data and mocked providers. No real customer recording was
 deleted during development. Live provider deletion, rendered UI confirmation,
 physical-device behavior and operator backup handling remain release checks.
