@@ -8,6 +8,7 @@ import { contextRouter } from './routes/context.js';
 import { googleRouter, googleBrowserRouter } from './routes/google.js';
 import { calendarActionsRouter } from './routes/calendar-actions.js';
 import { emailActionsRouter } from './routes/email-actions.js';
+import { recordingRecoveryRouter } from './routes/recording-recovery.js';
 import { callsRouter, meRouter, usageRouter } from './routes/calls.js';
 import { inboundRouter } from './routes/inbound.js';
 import { twimlRouter, webhooksRouter } from './routes/webhooks.js';
@@ -34,6 +35,7 @@ export function createApp() {
   app.use('/api', contextRouter);
 
   app.use('/api/calls', callsRouter);
+  app.use('/api/calls', recordingRecoveryRouter);
   app.use('/api/calls', calendarActionsRouter);
   app.use('/api/calls', emailActionsRouter);
   app.use('/api/calls', followupsRouter);

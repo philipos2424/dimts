@@ -65,10 +65,16 @@ confident external action.
    and confirm their voices; test each supported carrier/device/audio route.
    Add missing/silent-channel detection that flags uncertainty instead of
    manufacturing a transcript. Start with routed telephone calls only.
-2. **Recover and preserve.** Read-only provider reconciliation for a missing
-   recording, partial-recording handling, tested audio/text export, retention,
-   deletion including provider copies, and restore checks. Never require
-   reinstalling an app to troubleshoot access to recordings.
+2. **Recover and preserve.** Read-only provider recovery is now implemented for
+   finished calls with both agreements. It fetches a known SID directly or
+   searches the parent call, verifies account/call ownership and accepts one
+   completed, nonempty dual-channel receipt. Atomic cooldown/storage guards
+   prevent concurrent duplicate recovery; tests cover a callback winning the
+   race, database failure, provider error and missing/ambiguous results. No new
+   recording or phone call is created. Live provider recovery is still unverified,
+   and metadata does not prove both people are audible. Remaining: partial audio,
+   physical-device export checks, retention/deletion including provider copies,
+   and restore checks. Never require reinstalling to troubleshoot access.
 3. **Accessible playback.** The player now has 15-second skip controls, explicit
    replay, loading/failure feedback and reload. Browser audio is fetched with
    bearer authentication into a private blob; the blob URL is revoked on unmount.

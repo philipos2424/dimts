@@ -43,7 +43,15 @@ Implemented and checked:
   receipt. Live carrier timing and full audio capture remain unverified.
 - Completion-based ten-minute missing-audio deadline on authenticated list/detail
   reads, clear error/call ID, refresh and recovery on a late recording callback.
-  No provider lookup recovery yet; legacy calls without completion time excluded.
+  Legacy calls without completion time are excluded from deadline expiry.
+- Read-only provider recovery for missing audio on finished, mutually agreed
+  calls. Known recording SID is fetched directly; uncertain startup lists at
+  most two recordings on the parent call and accepts only one completed,
+  nonempty dual-channel receipt belonging to the same account/call. Atomic
+  one-minute cooldown and conditional receipt storage avoid duplicate work
+  during concurrent requests/callbacks. Missing/ambiguous/unsupported results
+  remain explicit; no new call or recording is created. Mock-provider SQL/HTTP
+  tests pass; live Twilio lookup and recovered audio quality remain unverified.
 - Review research across seven recorders and one adjacent transcription app,
   with dated evidence, implementation gaps and a paid-pilot validation plan:
   `CALL_RECORDING_REVIEW_RESEARCH.md`. Onboarding explains supported call routes.

@@ -2,7 +2,7 @@ import { useLocalSearchParams, useNavigation } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useApp } from '../../src/AppContext';
-import { ApiError, type CallDetail, getCall, reprocessCall } from '../../src/api';
+import { ApiError, type CallDetail, getCall, reprocessCall, recoverCallRecording } from '../../src/api';
 import { ActionList } from '../../src/components/ActionList';
 import { Banner } from '../../src/components/Banner';
 import { CallPlayer } from '../../src/components/CallPlayer';
@@ -23,6 +23,23 @@ export default function CallDetailScreen() {
   const [errorKey, setErrorKey] = useState<Key | null>(null);
   const [exporting, setExporting] = useState<'notes' | 'audio' | null>(null);
   const [exportError, setExportError] = useState('');
+  const [checkingRecording, setCheckingRecording] = useState(false);
+  const [recoveryMessage, setRecoveryMessage] = useState('');
+  async function checkRecording() {
+    if (!id || checkingRecording) return;
+    setCheckingRecording(true); setRecoveryMessage('');
+    try {
+      const result = await recoverCallRecording(id);
+      setRecoveryMessage(result.status === 'unavailable' ? 'No completed recording was found yet. Try again later.' :
+        result.status === 'ambiguous' ? 'More than one recording was found. Contact the operator with this call ID to investigate.' :
+        result.status === 'unsupported' ? 'The recording could not be confirmed as usable audio from both people. Contact the operator with this call ID.' :
+        'Recording found. Refreshing your call.');
+      await load();
+    } catch (err) { setRecoveryMessage(err instanceof ApiError && err.status === 429
+      ? 'Please wait a minute before checking the provider again.'
+      : 'Unable to check the recording provider. Please try again in a minute.'); }
+    finally { setCheckingRecording(false); }
+  }
   async function saveCopy(kind: 'notes' | 'audio') {
     if (!id || exporting) return;
     setExporting(kind); setExportError('');
@@ -102,6 +119,11 @@ export default function CallDetailScreen() {
               <Pressable accessibilityRole="button" onPress={load} style={{ paddingVertical: space.sm }}>
                 <Txt tone="accent" weight="bold">Check for delayed recording</Txt>
               </Pressable>
+              {call.record_enabled && call.parent_consent_at && call.child_consent_at && <Pressable
+                accessibilityRole="button" disabled={checkingRecording} onPress={checkRecording} style={{ minHeight: 44, justifyContent: 'center' }}>
+                <Txt tone="accent">{checkingRecording ? 'Checking recording provider…' : 'Recover recording from provider'}</Txt>
+              </Pressable>}
+              {recoveryMessage ? <Txt tone="muted" accessibilityRole="alert">{recoveryMessage}</Txt> : null}
             </View>
           )}
           {call.status === 'failed' && call.recording_url && (

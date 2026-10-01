@@ -214,6 +214,11 @@ export function reprocessCall(id: string, userPhone: string) {
   });
 }
 
+export function recoverCallRecording(id: string) {
+  return request<{ status: 'available' | 'processing' | 'unavailable' | 'ambiguous' | 'unsupported' }>(
+    `/api/calls/${id}/recording/reconcile`, '', { method: 'POST' });
+}
+
 export async function fetchCallExport(id: string, kind: 'notes' | 'audio', signal: AbortSignal) {
   const response = await fetch(`${BASE}/api/calls/${encodeURIComponent(id)}/${kind}`, {
     headers: authHeaders(''), cache: 'no-store', signal,
