@@ -68,6 +68,12 @@ valid with a real recording. Pilot caps are configured as three call attempts
 per day, ten owner minutes per month and twenty global minutes per month; their
 values were verified in the Production environment before the latest deploy.
 
+A live Ollama Cloud request using the backend's summarization code and a
+synthetic speaker-labelled transcript succeeded. It returned a valid summary,
+kept the meeting's unspecified AM/PM ambiguous, and assigned the promised
+proposal email to Caller. This verifies the local cloud credential and summary
+request, not recording/transcription or deployed end-to-end processing.
+
 The handset +251953405253 is verified in Twilio, and Ethiopia's low-risk Voice
 permission is enabled. Twilio's business number still points to the demo Voice
 webhook. Change it only after the public backend and signed callback checks
