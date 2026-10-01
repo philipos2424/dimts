@@ -98,6 +98,7 @@ export type CallDetail = CallSummary & {
   recording_url: string | null;
   audio_url: string | null;
   transcript: string | null;
+  transcript_turns?: { start: number; end: number | null; speaker: string; text: string }[];
   next_moves: string[] | null;
   action_items: ActionItem[] | null;
   key_points: string[] | null;

@@ -98,7 +98,7 @@ is a product requirement, not a claim that a live test passed.
 | P0 | Keep original audio and transcript usable when AI fails. | Force summary failure, play/export audio, retry once and verify no second transcription of the unchanged recording. |
 | P0 | Protect access across logout, device change and account switching. | The correct owner can retrieve/export; another account cannot retrieve content or act through an old notification. |
 | P1 | Show renewal interval, total renewal charge, included minutes, AI limits and cancellation before purchase. | A pilot user can accurately explain their next charge and find cancellation without support. Billing remains unimplemented. |
-| P1 | Help users find the exact evidence behind a suggestion. | Timestamp navigation/bookmarks and correction survive interruption; never auto-confirm an ambiguous date or speaker. Timestamp navigation/bookmarks remain unimplemented. |
+| P1 | Help users find the exact evidence behind a suggestion. | Timestamp navigation and correction survive interruption; never auto-confirm an ambiguous date or speaker. Timestamp navigation is implemented for matched, timed stereo transcripts; physical playback remains unverified. Bookmarks remain unimplemented. |
 | P1 | Make help reachable without sharing private call content by default. | A support request includes a call ID and sanitized failure stage; actual support contact and response expectation are configured. A call ID alone is insufficient. |
 | P1 | Make deletion scope and recording portability explicit. | Inspect exported files and provider deletion receipts; explain remaining external copies and test backup restoration. |
 
@@ -185,8 +185,16 @@ confident external action.
    omit provider metadata. Export isolation/expiry/incomplete-call HTTP tests
    pass. Native temporary files are pruned on the next export after one hour;
    external saved/shared copies remain under the user's control.
-   Still verify actual rendered playback, downloaded files and native share
-   sheets on iPhone/Android, and add transcript timestamps.
+   Matched stereo word timings now produce speaker-labelled transcript turns
+   with approximate timestamps relative to recording start. A timestamp positions
+   and pauses the player; users press Play to listen. The API returns sanitized
+   timing/text without raw provider responses. Timing is withheld for changed
+   recordings, mismatched/edited text, unsupported legacy input or invalid time
+   values. Notes exports preserve the plain transcript plus timed turns when
+   available. Pending loads are scoped to the current owner/call, and seek
+   requests are serialized. SQL/API and timing-validation tests pass.
+   Still verify actual rendered timestamp seeking, playback, downloaded files
+   and native share sheets on iPhone/Android. Bookmarks are not implemented.
 4. **Clear cost and account ownership.** Show the actual included minutes,
    per-call limits, overage behavior, trial end and renewal cost before charging.
    Bind purchases to the signed-in account; expose cancellation and restore.

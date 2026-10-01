@@ -1,25 +1,26 @@
 import { useAudioPlayer, useAudioPlayerStatus, type AudioSource } from 'expo-audio';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, View } from 'react-native';
 import { useApp } from '../AppContext';
 import { audioUrlFor, authHeaders } from '../api';
 import { color, radius, space } from '../theme';
 import { Txt } from './Txt';
 
-function clock(seconds: number): string {
+export function audioClock(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
   return `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`;
 }
 
-export function CallPlayer({ callId }: { callId: string }) {
+export type SeekRequest = { callId: string; sequence: number; seconds: number };
+export function CallPlayer({ callId, seekRequest }: { callId: string; seekRequest?: SeekRequest | null }) {
   const { userPhone } = useApp();
   const [attempt, setAttempt] = useState(0);
   return <View style={{ padding: space.md, gap: space.sm, backgroundColor: color.surface, borderRadius: radius.md }}>
-    <PlayerAttempt key={`${callId}:${userPhone}:${attempt}`} callId={callId} retry={() => setAttempt(n => n + 1)} />
+    <PlayerAttempt key={`${callId}:${userPhone}:${attempt}`} callId={callId} seekRequest={seekRequest?.callId === callId ? seekRequest : null} retry={() => setAttempt(n => n + 1)} />
   </View>;
 }
 
-function PlayerAttempt({ callId, retry }: { callId: string; retry: () => void }) {
+function PlayerAttempt({ callId, retry, seekRequest }: { callId: string; retry: () => void; seekRequest?: SeekRequest | null }) {
   const { userPhone } = useApp();
   const [webSource, setWebSource] = useState<string | null>(null);
   const [error, setError] = useState('');
@@ -58,11 +59,11 @@ function PlayerAttempt({ callId, retry }: { callId: string; retry: () => void })
     {error ? <>
       <Txt tone="muted" accessibilityRole="alert">{error}</Txt>
       <Control label="Retry loading recording" onPress={retry} />
-    </> : source ? <Playback source={source} retry={retry} /> : <Txt tone="muted">Loading recording…</Txt>}
+    </> : source ? <Playback source={source} retry={retry} seekRequest={seekRequest} /> : <Txt tone="muted">Loading recording…</Txt>}
   </>;
 }
 
-function Playback({ source, retry }: { source: AudioSource; retry: () => void }) {
+function Playback({ source, retry, seekRequest }: { source: AudioSource; retry: () => void; seekRequest?: SeekRequest | null }) {
   const { t } = useApp();
   // Native streams with bearer headers and byte-range support. Web uses a
   // private blob URL released on unmount, never a shared authenticated cache.
@@ -70,7 +71,30 @@ function Playback({ source, retry }: { source: AudioSource; retry: () => void })
   const status = useAudioPlayerStatus(player);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const lastSeek = useRef<number | null>(null);
+  const mounted = useRef(true);
+  const seekQueue = useRef<Promise<void>>(Promise.resolve());
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  const [positionMessage, setPositionMessage] = useState('');
   const loaded = status.isLoaded && Number.isFinite(status.duration) && status.duration > 0;
+  useEffect(() => {
+    if (!loaded || status.error || !seekRequest || lastSeek.current === seekRequest.sequence) return;
+    lastSeek.current = seekRequest.sequence;
+    const active = () => mounted.current && lastSeek.current === seekRequest.sequence;
+    if (!Number.isFinite(seekRequest.seconds) || seekRequest.seconds < 0 || seekRequest.seconds >= status.duration) {
+      setBusy(false); setPositionMessage(''); setError('This transcript timestamp is outside the available recording.'); return;
+    }
+    setBusy(true); setError(''); setPositionMessage('');
+    seekQueue.current = seekQueue.current.then(async () => {
+      if (!active()) return;
+      try {
+        player.pause();
+        await player.seekTo(seekRequest.seconds);
+        if (active()) setPositionMessage(`Positioned at ${audioClock(seekRequest.seconds)}. Press Play to listen.`);
+      } catch { if (active()) setError('Unable to jump to this timestamp. Try loading the recording again.'); }
+      finally { if (active()) setBusy(false); }
+    });
+  }, [loaded, status.error, seekRequest, player]);
   useEffect(() => {
     if (loaded || status.error) return;
     const timer = setTimeout(() => setError('This recording is taking too long to load. Try again.'), 60_000);
@@ -104,7 +128,8 @@ function Playback({ source, retry }: { source: AudioSource; retry: () => void })
       <View style={{ width: `${progress * 100}%`, height: '100%', backgroundColor: color.saffron }} />
     </View>
     <Txt size="caption" tone="muted">{!loaded ? 'Loading recording…' :
-      status.isBuffering ? 'Buffering…' : `${clock(status.currentTime)} / ${clock(status.duration)}`}</Txt>
+      status.isBuffering ? 'Buffering…' : `${audioClock(status.currentTime)} / ${audioClock(status.duration)}`}</Txt>
+    {positionMessage ? <Txt size="caption" tone="muted" accessibilityLiveRegion="polite">{positionMessage}</Txt> : null}
     {(error || status.error) && <>
       <Txt tone="muted" accessibilityRole="alert">{error || 'Unable to play this recording. Try loading it again.'}</Txt>
       <Control label="Retry loading recording" onPress={retry} />

@@ -13,6 +13,10 @@ account configuration changes is unverified. The current local backend and
 Whisper worker return healthy responses, but Twilio still uses its demo Voice
 webhook and public callbacks, a hosted database and Google OAuth are unconfigured.
 The account-association changes have not been rolled out to those live processes.
+The later transcript-timestamp change passes all 220 backend tests, TypeScript
+and web/Android/iOS bundle exports. The generated files contain none of the
+configured secrets. No real-call timestamp accuracy or physical playback test
+has been completed, and these changes are not deployed.
 
 Implemented and checked:
 
@@ -30,6 +34,16 @@ Implemented and checked:
   a working public incoming webhook; Twilio still has its demo Voice URL.
 - Local PostgreSQL option and schema execution test.
 - Chronological transcript merge and correct incoming speaker labels.
+- Speaker-labelled transcript timestamps derived from saved stereo word timing
+  only when the recording source and reconstructed text match the saved call.
+  Missing/invalid timing, replaced audio, edited text and unsupported legacy
+  layouts fall back to the plain transcript. The owner API omits raw provider
+  responses; notes export adds approximate timestamps relative to recording
+  start. A timestamp pauses/positions the authenticated player and brings its
+  controls into view; users press Play. Seek requests are serialized, scoped to
+  the call, and checked against the loaded recording duration. Call loads ignore
+  stale session/route responses and hide another owner's cached detail. SQL/API
+  and timing tests pass; rendered and physical-device playback remain unverified.
 - Ollama summaries and contact extraction with actual local model testing.
 - Ollama Cloud summaries and contact extraction verified with a synthetic
   conversation using gemma4:31b; API key stored only in ignored server config.

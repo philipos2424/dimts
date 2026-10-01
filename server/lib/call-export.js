@@ -11,6 +11,8 @@ export function callNotes(call) {
     ? call.action_items.map(a => `- ${a.task}${a.owner ? ` (owner: ${a.owner})` : ''}`).join('\n') : '');
   section('Suggested next steps', Array.isArray(call.next_moves) ? call.next_moves.map(p => `- ${p}`).join('\n') : '');
   section('Transcript', call.transcript || 'No transcript is available for this call.');
+  if (call.transcript_turns?.length) section('Recording timestamps (approximate, relative to recording start)',
+    call.transcript_turns.map(turn => `[${Math.floor(turn.start/60)}:${String(Math.floor(turn.start%60)).padStart(2,'0')}] ${turn.speaker}: ${turn.text}`).join('\n'));
   if (call.status !== 'ready') lines.push('', 'These notes are incomplete: the call has not reached the ready state.');
   return lines.join('\n') + '\n';
 }

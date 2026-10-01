@@ -1,11 +1,11 @@
 import { useLocalSearchParams, useNavigation } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useApp } from '../../src/AppContext';
-import { ApiError, type CallDetail, getCall, reprocessCall, recoverCallRecording } from '../../src/api';
+import { ApiError, captureSessionGuard, type CallDetail, getCall, reprocessCall, recoverCallRecording } from '../../src/api';
 import { ActionList } from '../../src/components/ActionList';
 import { Banner } from '../../src/components/Banner';
-import { CallPlayer } from '../../src/components/CallPlayer';
+import { audioClock, CallPlayer, type SeekRequest } from '../../src/components/CallPlayer';
 import { FollowupReview } from '../../src/components/FollowupReview';
 import { Section } from '../../src/components/Section';
 import { Txt } from '../../src/components/Txt';
@@ -21,6 +21,10 @@ export default function CallDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const [call, setCall] = useState<CallDetail | null>(null);
+  const [callOwner, setCallOwner] = useState<string | null>(null);
+  const scroll = useRef<ScrollView>(null);
+  const loadSequence = useRef(0);
+  const [seekRequest, setSeekRequest] = useState<SeekRequest | null>(null);
   const [errorKey, setErrorKey] = useState<Key | null>(null);
   const [exporting, setExporting] = useState<'notes' | 'audio' | null>(null);
   const [exportError, setExportError] = useState('');
@@ -60,16 +64,23 @@ export default function CallDetailScreen() {
 
   const load = useCallback(async () => {
     if (!id || !userPhone) return;
+    const sequence = ++loadSequence.current, stillSignedIn = captureSessionGuard();
     try {
-      setCall(await getCall(id, userPhone));
+      const result = await getCall(id, userPhone);
+      if (sequence !== loadSequence.current || !stillSignedIn()) return;
+      setCall(result);
+      setCallOwner(userPhone);
       setErrorKey(null);
     } catch (err) {
+      if (sequence !== loadSequence.current || !stillSignedIn()) return;
       setErrorKey(err instanceof ApiError ? err.messageKey : 'errorGeneric');
     }
   }, [id, userPhone]);
 
   useEffect(() => {
+    setCall(null); setSeekRequest(null); setErrorKey(null);
     load();
+    return () => { loadSequence.current++; };
   }, [load]);
 
   useEffect(() => {
@@ -84,7 +95,7 @@ export default function CallDetailScreen() {
     return () => clearTimeout(timer);
   }, [call, load]);
 
-  if (!call) {
+  if (!call || call.id !== id || callOwner !== userPhone) {
     return (
       <View style={{ flex: 1 }}>
         {errorKey && <Banner message={t(errorKey)} onDismiss={() => setErrorKey(null)} />}
@@ -99,10 +110,10 @@ export default function CallDetailScreen() {
   </ScrollView>;
 
   return (
-    <ScrollView contentContainerStyle={{ padding: space.md, gap: space.lg }}>
+    <ScrollView ref={scroll} contentContainerStyle={{ padding: space.md, gap: space.lg }}>
       {errorKey && <Banner message={t(errorKey)} onDismiss={() => setErrorKey(null)} />}
 
-      {call.audio_url && <CallPlayer callId={call.id} />}
+      {call.audio_url && <CallPlayer callId={call.id} seekRequest={seekRequest} />}
       <View style={{ gap: space.sm }}>
         <Txt tone="muted" size="caption">Keep your own copy of this call.</Txt>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.lg }}>
@@ -198,9 +209,22 @@ export default function CallDetailScreen() {
 
       {call.transcript && (
         <Section title={t('transcript')}>
-          <Txt tone="muted" style={{ lineHeight: 26, color: color.parchment }}>
+          {call.transcript_turns?.length ? <View style={{ gap: space.sm }}>
+            <Txt tone="muted" size="caption">Times are approximate and start at the beginning of the recording. Choose a time, then press Play to check what was said.</Txt>
+            {call.transcript_turns.map((turn, index) => <View key={index} style={{ gap: space.xs }}>
+              <Pressable accessibilityRole="button" accessibilityLabel={`Go to ${audioClock(turn.start)}, ${turn.speaker}`}
+                disabled={!call.audio_url} style={{ minHeight: 44, justifyContent: 'center' }}
+                onPress={() => {
+                  setSeekRequest(previous => ({ callId: call.id, sequence: (previous?.sequence ?? 0) + 1, seconds: turn.start }));
+                  scroll.current?.scrollTo({ y: 0, animated: true });
+                }}>
+                <Txt tone="accent">{audioClock(turn.start)} · {turn.speaker}</Txt>
+              </Pressable>
+              <Txt selectable style={{ lineHeight: 26 }}>{turn.text}</Txt>
+            </View>)}
+          </View> : <Txt tone="muted" style={{ lineHeight: 26, color: color.parchment }}>
             {call.transcript}
-          </Txt>
+          </Txt>}
         </Section>
       )}
       {!['initiating','ringing','in-progress'].includes(call.status) && <DeleteCallControl callId={call.id} onDeleted={load} />}

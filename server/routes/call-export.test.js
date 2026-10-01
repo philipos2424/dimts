@@ -56,3 +56,23 @@ test('unrecorded or failed calls can export metadata without inventing a transcr
   assert.equal(response.status, 200); assert.match(text, /No transcript is available/);
   assert.match(text, /notes are incomplete/); assert.doesNotMatch(text, /Pricing discussed/);
 });
+
+test('owned call detail and exports expose matched timestamps without leaking raw provider data; changed audio removes them',async()=>{
+  const raw={secret:'private-provider-payload',transcripts:[
+    {words:[{text:'ሰላም',start:1.2,end:2}]},{words:[{text:'Hello',start:4,end:5}]},
+  ]};
+  await db.query(`UPDATE calls SET status='ready',transcript=$2,transcript_data=$3,
+    transcript_recording_url=recording_url WHERE id=$1`,[call.id,'Caller: ሰላም\nUser: Hello',JSON.stringify(raw)]);
+  const detail=await fetch(`${base}/calls/${call.id}`,{headers:{Authorization:`Bearer ${tokens[0]}`}});
+  assert.equal(detail.status,200);assert.equal(detail.headers.get('cache-control'),'private, no-store');
+  const body=await detail.json();assert.equal(body.transcript_turns.length,2);assert.equal(body.transcript_turns[1].start,4);
+  assert.equal(body.transcript_turns[0].speaker,'Caller');
+  assert.equal(body.transcript_data,undefined);assert.equal(body.transcript_recording_url,undefined);
+  assert.doesNotMatch(JSON.stringify(body),/private-provider-payload/);
+  assert.equal((await fetch(`${base}/calls/${call.id}`,{headers:{Authorization:`Bearer ${tokens[1]}`}})).status,404);
+  assert.match(await(await request()).text(),/\[0:01\] Caller: ሰላም/);
+  await db.query('UPDATE calls SET recording_url=$2 WHERE id=$1',[call.id,'replacement-recording']);
+  const changed=await fetch(`${base}/calls/${call.id}`,{headers:{Authorization:`Bearer ${tokens[0]}`}});
+  assert.deepEqual((await changed.json()).transcript_turns,[]);
+  assert.doesNotMatch(await(await request()).text(),/Recording timestamps/);
+});
