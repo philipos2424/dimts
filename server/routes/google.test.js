@@ -16,6 +16,7 @@ mock.module('../db/pool.js', { namedExports: {
 } });
 let exchanges = 0;
 let duringRefresh;
+let identityVerified = true;
 mock.module('google-auth-library', { namedExports: { OAuth2Client: class {
   generateAuthUrl(opts) {
     return `https://accounts.google.com/o/oauth2/v2/auth?${new URLSearchParams({ ...opts, scope: opts.scope.join(' ') })}`;
@@ -25,7 +26,12 @@ mock.module('google-auth-library', { namedExports: { OAuth2Client: class {
     assert.match(codeVerifier, /^[a-zA-Z0-9_-]{43}$/);
     if (code === 'failure') throw new Error('provider leaked access_token=do-not-print');
     return { tokens: { access_token: 'private-access', refresh_token: 'private-refresh',
+      id_token: 'test-id-token',
       scope: code === 'missing-scope' ? '' : `https://www.googleapis.com/auth/${code === 'gmail' ? 'gmail.compose' : 'calendar.events.owned'}` } };
+  }
+  async verifyIdToken({ idToken, audience }) {
+    assert.equal(idToken, 'test-id-token'); assert.equal(audience, 'test-client');
+    return { getPayload: () => ({ sub: 'test-google-owner', email: 'owner@example.com', email_verified: identityVerified }) };
   }
   setCredentials(credentials) { this.credentials = credentials; }
   async getAccessToken() {
@@ -35,7 +41,7 @@ mock.module('google-auth-library', { namedExports: { OAuth2Client: class {
   }
 } } });
 const { createApp } = await import('../create-app.js');
-const { encryptIntegration, decryptIntegration, googleConfig, googleAccessToken } = await import('../services/google-oauth.js');
+const { encryptIntegration, decryptIntegration, googleConfig, googleAccessToken, googleSender } = await import('../services/google-oauth.js');
 const server = createApp().listen(0);
 const origin = `http://127.0.0.1:${server.address().port}`;
 const tokens = ['a'.repeat(64), 'b'.repeat(64)], users = [];
@@ -144,4 +150,16 @@ test('refreshed tokens remain encrypted and a disconnected grant cannot be resur
   await assert.rejects(googleAccessToken(users[0].id, 'calendar', connection.connection_id), { code: 'google_connection_changed' });
   duringRefresh = undefined;
   assert.equal((await api('/')).data.connections.length, 0);
+});
+test('Gmail authorization requires a verified identity and stores its sender only in encrypted credentials', async () => {
+  const unverified = await begin('gmail'); identityVerified = false;
+  assert.equal((await callback(unverified, 'gmail')).status, 400);
+  identityVerified = true;
+  const flow = await begin('gmail'), result = await callback(flow, 'gmail');
+  const code = result.body.match(/\b[a-f0-9]{64}\b/)[0];
+  assert.equal((await api('/confirm', 'POST', { code })).status, 200);
+  const row = (await db.query("SELECT * FROM google_connections WHERE user_id=$1 AND kind='gmail'", [users[0].id])).rows[0];
+  assert.ok(!row.encrypted_tokens.includes('owner@example.com'));
+  assert.equal(await googleSender(users[0].id, row.connection_id), 'owner@example.com');
+  await assert.rejects(googleSender(users[1].id, row.connection_id), { code: 'gmail_reconnect_required' });
 });

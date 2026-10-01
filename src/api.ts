@@ -52,6 +52,19 @@ export function bookReviewedMeeting(id: string, version: number) {
 export function reconcileMeeting(id: string) {
   return request<{ action: CalendarAction }>(`/api/calls/${id}/followups/meeting/action/reconcile`, '', { method: 'POST' });
 }
+export type EmailAction = {
+  id: string; status: 'pending' | 'confirmed' | 'unknown' | 'failed'; draft_id: string | null;
+  error_code: string | null; proposal_version: number; updated_at: string; email: NonNullable<Followups['email']>;
+};
+export function getEmailAction(id: string) {
+  return request<{ action: EmailAction | null }>(`/api/calls/${id}/followups/email/action`, '');
+}
+export function createReviewedEmailDraft(id: string, version: number) {
+  return request<{ action: EmailAction }>(`/api/calls/${id}/followups/email/action`, '', { method: 'POST', body: JSON.stringify({ version }) });
+}
+export function reconcileEmail(id: string) {
+  return request<{ action: EmailAction }>(`/api/calls/${id}/followups/email/action/reconcile`, '', { method: 'POST' });
+}
 type ProposalMetadata = { status?: 'pending' | 'rejected'; evidence?: {
   quotes: string[]; confidence: number; reason: string;
 } | null };

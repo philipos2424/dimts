@@ -48,15 +48,31 @@ function client() {
     transporterOptions: { timeout: 15000, retry: false } });
 }
 export function googleAuthorization(kind, state, challenge) {
-  return client().generateAuthUrl({ scope: [GOOGLE_SCOPES[kind]], state,
+  return client().generateAuthUrl({ scope: kind === 'gmail' ? [GOOGLE_SCOPES[kind], 'openid', 'email'] : [GOOGLE_SCOPES[kind]], state,
     access_type: 'offline', prompt: 'consent', code_challenge: challenge, code_challenge_method: 'S256' });
 }
 export async function exchangeGoogleCode(code, verifier, kind) {
   try {
-    const { tokens } = await client().getToken({ code, codeVerifier: verifier });
+    const auth = client();
+    const { tokens } = await auth.getToken({ code, codeVerifier: verifier });
     if (!tokens.access_token || !tokens.refresh_token || !tokens.scope?.split(' ').includes(GOOGLE_SCOPES[kind])) throw new Error();
+    if (kind === 'gmail') {
+      if (typeof tokens.id_token !== 'string') throw new Error();
+      const ticket = await auth.verifyIdToken({ idToken: tokens.id_token, audience: googleConfig().id });
+      const identity = ticket.getPayload();
+      if (!identity?.sub || identity.email_verified !== true || typeof identity.email !== 'string' ||
+        !/^[^\s@<>;,]+@[^\s@<>;,]+\.[^\s@<>;,]+$/.test(identity.email)) throw new Error();
+      tokens.dimts_email = identity.email;
+      tokens.dimts_google_subject = identity.sub;
+    }
     return tokens;
   } catch { throw new HttpError(400, 'google_authorization_failed', 'Google authorization failed. Start a new connection from Settings.'); }
+}
+export async function googleSender(userId, connectionId) {
+  const row = await database.queryOne("SELECT encrypted_tokens FROM google_connections WHERE user_id=$1 AND kind='gmail' AND connection_id=$2", [userId, connectionId]);
+  const identity = row && decryptIntegration(row.encrypted_tokens, userId);
+  if (!identity?.dimts_google_subject || !identity.dimts_email || /[\r\n<>]/.test(identity.dimts_email)) throw new HttpError(409, 'gmail_reconnect_required');
+  return identity.dimts_email;
 }
 
 export async function googleAccessToken(userId, kind, connectionId) {

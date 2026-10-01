@@ -52,6 +52,10 @@ Implemented and checked:
   cover duplicate requests, stale transcripts/reviews, failed attempts, expired
   leases and a database failure after provider commit. The UI shows confirmed,
   failed and uncertain results separately. Live Google creation remains unverified.
+- Reviewed Gmail draft execution with verified sender identity, immutable email
+  snapshots, draft IDs and Message-ID lookup recovery. Tests cover Unicode MIME,
+  injection, failed post-creation lookup, stale/unauthorized actions and receipt
+  storage failure. No sending endpoint exists; live draft creation is unverified.
 
 Still required:
 
@@ -59,7 +63,7 @@ Google connection code and Settings controls are now implemented. Tokens are
 encrypted on the server; SQL/HTTP tests cover account isolation, browser nonce,
 one-time confirmation, replay, expiry and disconnect invalidation. Live Google
 consent still awaits OAuth client configuration (see `GOOGLE_SETUP.md`), and
-live calendar execution and Gmail draft execution remain required.
+live calendar execution and Gmail draft execution checks remain required.
 
 - Real SMS signup and owner handset verification.
 - Public callback endpoint and real inbound/outbound two-person calls.

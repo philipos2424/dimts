@@ -30,7 +30,7 @@ export function GoogleConnections() {
   }
   return <View style={{ gap: space.sm, padding: space.md }}>
     <Txt weight="bold">Google connections</Txt>
-    <Txt tone="muted">Connect your primary calendar for reviewed meeting bookings. Connect Gmail to create drafts.</Txt>
+    <Txt tone="muted">Connect your primary calendar for reviewed meeting bookings. Connect Gmail to create drafts using your verified Google email address as the sender.</Txt>
     <Txt tone="muted">Google’s Gmail permission includes managing drafts and sending email. Dimts will only create drafts for you to review. Calendar permission allows managing events in calendars you own.</Txt>
     {status && !status.configured && <Txt tone="muted">Google authorization is awaiting server setup.</Txt>}
     {(['calendar', 'gmail'] as GoogleKind[]).map(kind => {

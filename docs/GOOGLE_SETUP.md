@@ -2,7 +2,8 @@
 
 The connection flow and reviewed primary-calendar booking are implemented; live
 Google authorization and event creation still require an operator-owned OAuth
-client and account consent. Gmail draft creation remains separate unfinished work.
+client and account consent. Reviewed Gmail draft creation and recovery are also
+implemented; actual Google consent, events and drafts remain unverified.
 
 1. In Google Cloud, select the project, enable Calendar API and Gmail API, and
    configure the OAuth consent screen. For a private pilot, add the specific
@@ -31,6 +32,11 @@ endpoint. The screen states the scope honestly. Public Gmail use with this
 restricted scope may require Google's verification and, when server-stored
 restricted data applies, its security assessment. Check the current requirements
 before expanding beyond the pilot.
+
+Gmail authorization also requests OpenID and email identity. The server verifies
+Google's signed ID token and requires a verified email address; this address
+becomes the MIME sender. Older Gmail connections without that verified identity
+must reconnect. This identity stays within encrypted server credentials.
 
 Access and refresh tokens are AES-256-GCM encrypted and bound to the Dimts user.
 Authorization uses PKCE, hashed one-time requests, a browser-only nonce cookie,
@@ -68,6 +74,30 @@ reviews, account isolation, uncertain results, expired leases and a database
 failure after provider commit. These tests use a simulated provider, so a live
 Google event check is still an acceptance requirement.
 
+For email, review the proposal, recipient, subject and message, then choose
+**Confirm and create draft in my Gmail**. Only a matching saved Gmail draft
+produces a confirmed draft ID. There is no sending endpoint: the user must open
+Gmail, choose the connected account, review the draft and send it themselves.
+
+Gmail does not assign a client-selected draft ID. Dimts saves a unique Message-ID
+with the action, creates the draft once, then reads it back and verifies the
+sender, recipient, subject and body. Uncertain results and server crashes are
+reconciled by searching drafts for that Message-ID and reading the matching
+draft. Missing, duplicate, edited or deleted drafts remain uncertain; no blind
+resubmission occurs. Provider refusals before creation allow an explicit retry.
+A failed lookup after creation never releases the reservation. Reconnecting
+Google changes the local grant ID, so unresolved actions under an earlier grant
+require operator investigation. Draft receipts attest to creation at the saved
+time, not that a message was sent or that later Gmail edits were synchronized.
+
+Tests simulate Gmail and check Unicode MIME, header injection, post-creation
+lookup failures, Message-ID recovery, stale/unauthorized requests and a database
+failure after provider commit. They do not prove Gmail's live MIME preservation
+or search indexing behavior; those require the real OAuth account test.
+
 References: [Google web-server OAuth](https://developers.google.com/identity/protocols/oauth2/web-server),
 [Calendar scopes](https://developers.google.com/workspace/calendar/api/auth),
 [Gmail scopes](https://developers.google.com/workspace/gmail/api/auth/scopes).
+API references: [create draft](https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.drafts/create),
+[list drafts](https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.drafts/list),
+[get draft](https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.drafts/get).

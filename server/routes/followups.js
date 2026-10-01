@@ -14,6 +14,8 @@ async function persist(callId, userId, draft, version, kind, generating = false,
     if (generating && current.transcript !== sourceTranscript) throw new HttpError(409, 'transcript_changed');
     const { rows: [action] } = await tx.query("SELECT id FROM calendar_actions WHERE call_id=$1 AND status<>'failed'", [callId]);
     if (action && (generating || !isDeepStrictEqual(draft.meeting, current.followups?.meeting))) throw new HttpError(409, 'meeting_action_locked', 'This meeting already has a booking action. Check its receipt before changing it.');
+    const { rows: [emailAction] } = await tx.query("SELECT id FROM email_actions WHERE call_id=$1 AND status<>'failed'", [callId]);
+    if (emailAction && (generating || !isDeepStrictEqual(draft.email, current.followups?.email))) throw new HttpError(409, 'email_action_locked', 'This email already has a Gmail draft action. Check its receipt before changing it.');
     const { rows } = await tx.query(`WITH changed AS (
     UPDATE calls SET followups=$3::jsonb, followups_version=followups_version+1
     WHERE id=$1 AND user_id=$2 AND followups_version=$4
@@ -49,6 +51,7 @@ followupsRouter.post('/:id/followups/refresh', async (req, res) => {
   if (req.body?.version !== call.followups_version) throw new HttpError(409, 'draft_changed');
   const action = await queryOne("SELECT id FROM calendar_actions WHERE call_id=$1 AND status<>'failed'", [call.id]);
   if (action) throw new HttpError(409, 'meeting_action_locked');
+  if (await queryOne("SELECT id FROM email_actions WHERE call_id=$1 AND status<>'failed'", [call.id])) throw new HttpError(409, 'email_action_locked');
   const draft = await generateFollowups(call.transcript);
   draft.source_hash = createHash('sha256').update(call.transcript).digest('hex');
   const saved = await persist(call.id, user.id, draft, call.followups_version, 'regenerated', true, call.transcript, true);
