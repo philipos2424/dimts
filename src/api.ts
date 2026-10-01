@@ -89,6 +89,7 @@ export type CallDetail = CallSummary & {
   record_enabled: boolean;
   parent_consent_at: string | null;
   child_consent_at: string | null;
+  recording_start_status: 'pending' | 'started' | 'unknown' | 'failed' | null;
   recording_url: string | null;
   audio_url: string | null;
   transcript: string | null;

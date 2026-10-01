@@ -7,6 +7,7 @@ import { fetchRecording, isE164, originateCall } from '../services/originate.js'
 import { processRecording } from '../services/process-recording.js';
 import { reserveCall } from '../db/reserve-call.js';
 import { claimNumber } from '../db/claim-number.js';
+import { expireRecordingWait } from '../db/expire-recording-wait.js';
 
 export const callsRouter = express.Router();
 
@@ -24,6 +25,7 @@ const LIST_COLUMNS = `
  * that needs it.
  */
 async function reapStaleCalls(userId) {
+  await expireRecordingWait(userId);
   await query(
     `UPDATE calls
         SET status = 'failed',
@@ -111,11 +113,12 @@ callsRouter.get('/', async (req, res, next) => {
 callsRouter.get('/:id', async (req, res, next) => {
   try {
     const user = await resolveUser(req);
+    await expireRecordingWait(user.id);
     const call = await queryOne(
       `SELECT c.id, c.destination, c.status, c.duration_sec, c.direction,
               c.recording_url, c.transcript, c.summary, c.next_moves,
               c.action_items, c.key_points, c.followups, c.error, c.created_at,
-              c.record_enabled, c.parent_consent_at, c.child_consent_at,
+              c.record_enabled, c.parent_consent_at, c.child_consent_at, c.recording_start_status,
               k.display_name AS contact_name, k.company
          FROM calls c
          LEFT JOIN contacts k ON k.id = c.contact_id

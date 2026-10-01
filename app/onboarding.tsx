@@ -37,6 +37,9 @@ export default function Onboarding() {
           <Txt tone="muted" style={{ maxWidth: 320 }}>
             {t('onboardingBody')}
           </Txt>
+          <Txt size="caption" tone="muted" style={{ maxWidth: 360 }}>
+            Dimts records calls routed through your Dimts number or started here. It does not capture every call on your phone or WhatsApp. Both people choose whether to record; the call can continue without recording.
+          </Txt>
         </View>
 
         <TextInput

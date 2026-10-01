@@ -71,8 +71,17 @@ export default function CallDetailScreen() {
           <Txt tone="muted">
             {call.status === 'failed' ? call.error ?? t('errorGeneric') :
               call.status === 'completed' ? 'Recording was off for this call.' :
-              call.status === 'missed' ? 'This call was not answered.' : t('processingBody')}
+              call.status === 'missed' ? 'This call was not answered.' :
+              call.status === 'processing' && !call.audio_url ? 'The call finished. Waiting for its recording before transcription and summary can start.' : t('processingBody')}
           </Txt>
+          {call.status === 'failed' && !call.audio_url && call.duration_sec != null && (
+            <View style={{ gap: space.sm }}>
+              <Txt size="caption" tone="muted" selectable>Call ID: {call.id}</Txt>
+              <Pressable accessibilityRole="button" onPress={load} style={{ paddingVertical: space.sm }}>
+                <Txt tone="accent" weight="bold">Check for delayed recording</Txt>
+              </Pressable>
+            </View>
+          )}
           {call.status === 'failed' && call.recording_url && (
             <Pressable
               accessibilityRole="button"

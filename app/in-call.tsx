@@ -19,6 +19,7 @@ export default function InCall() {
   const [status, setStatus] = useState('initiating');
   const [seconds, setSeconds] = useState(0);
   const [recordingAgreed, setRecordingAgreed] = useState(false);
+  const [recordingMessage, setRecordingMessage] = useState('Awaiting recording choices.');
   const pulse = useRef(new Animated.Value(0.35)).current;
 
   // The one piece of ambient motion in the app: it stands in for the fact
@@ -58,7 +59,10 @@ export default function InCall() {
         const call = await getCall(id, userPhone);
         if (!active) return;
         setStatus(call.status);
-        setRecordingAgreed(call.record_enabled && !!call.parent_consent_at && !!call.child_consent_at);
+        setRecordingAgreed(call.record_enabled && !!call.parent_consent_at && !!call.child_consent_at && call.recording_start_status === 'started');
+        setRecordingMessage(!call.record_enabled ? 'Continuing without recording.' :
+          call.recording_start_status === 'unknown' ? 'Recording requested; startup is unconfirmed.' :
+          call.recording_start_status === 'pending' ? 'Starting the agreed recording…' : 'Awaiting recording choices.');
         if (SETTLED.has(call.status)) {
           clearInterval(poll);
           router.replace('/');
@@ -118,10 +122,11 @@ export default function InCall() {
             }}
           />
           <Txt size="caption" tone="muted">
-            Recording agreed
+            Recording active
           </Txt>
         </View>
       )}
+      {onCall && !recordingAgreed && <Txt tone="muted">{recordingMessage}</Txt>}
 
       <Pressable
         accessibilityRole="button"

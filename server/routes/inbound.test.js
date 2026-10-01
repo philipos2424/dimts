@@ -90,7 +90,7 @@ test('announces recording to the caller before connecting', async () => {
   const sayAt = xml.indexOf('<Say');
   assert.ok(sayAt > -1, 'expected a consent announcement');
   assert.doesNotMatch(xml, /<Dial/);
-  assert.match(xml, /will be recorded/i);
+  assert.match(xml, /only if both people agree/i);
 });
 
 test('cannot disable consent with the legacy announcement flag', async () => {

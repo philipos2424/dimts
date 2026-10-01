@@ -29,9 +29,18 @@ Implemented and checked:
   deduplication, daily attempt limits, shared monthly minute ceilings and a
   bridge duration cap that respects the remaining allowance. SQL and HTTP
   tests cover retries, changed parameters, active calls and exhausted budgets.
-- Two-party recording agreement flow and outgoing recording toggle.
-- In-call recording agreement label requires both consent timestamps and an
-  enabled recording; answering the first leg alone no longer displays it.
+- Two-party recording agreement flow and outgoing recording toggle. Dial begins
+  unrecorded; REST recording starts once only after both saved acceptances.
+  Decline/no response continues without recording. Known startup refusal and
+  uncertain startup are distinguished; neither triggers an automatic retry.
+- In-call recording label requires both agreements and a provider startup
+  receipt. Live carrier timing and full audio capture remain unverified.
+- Completion-based ten-minute missing-audio deadline on authenticated list/detail
+  reads, clear error/call ID, refresh and recovery on a late recording callback.
+  No provider lookup recovery yet; legacy calls without completion time excluded.
+- Review research across seven recorders and one adjacent transcription app,
+  with dated evidence, implementation gaps and a paid-pilot validation plan:
+  `CALL_RECORDING_REVIEW_RESEARCH.md`. Onboarding explains supported call routes.
 - Assigned business numbers are stored on each call and used as the bridge's
   caller ID, rather than showing every account's calls from the default line.
 - Expo web build, TypeScript and dependency compatibility checks.

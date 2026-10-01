@@ -40,6 +40,14 @@ function run(text, params = []) {
   }
   if (sql.includes('UPDATE calls')) {
     const call = db.calls.find((c) => c.id === params[0]);
+    if (call && sql.includes('parent_consent_choice=$2')) {
+      if (!call.parent_consent_choice) {
+        call.parent_consent_choice = params[1];
+        call.parent_consent_at = params[1] === 'accepted' ? new Date().toISOString() : null;
+        call.record_enabled = call.record_enabled !== false && params[1] === 'accepted';
+      }
+      return { rows: [call] };
+    }
     if (call && sql.includes('recording_url = $2')) {
       if (call.recording_url || call.status === 'ready') return { rows: [] };
       call.recording_url = params[1];
@@ -194,7 +202,7 @@ test('recording-ready ignores a non-completed status', async () => {
   assert.equal(call.recording_url, null);
 });
 
-test('bridge TwiML dials the destination with dual-channel recording', async () => {
+test('bridge TwiML defers recording until the second party agrees', async () => {
   const call = seedCall({ agent_number: '+15555550888', max_duration_sec: 60 });
   const initial = await post(`/twiml/bridge?dest=%2B15559999999&callId=${call.id}`, { CallSid: 'CA_PARENT' });
   const prompt = await initial.text();
@@ -203,12 +211,12 @@ test('bridge TwiML dials the destination with dual-channel recording', async () 
   const res = await post(`/twiml/accept?callId=${call.id}`, { CallSid: 'CA_PARENT', Digits: '1' });
   const xml = await res.text();
 
-  assert.match(xml, /record="record-from-answer-dual"/);
+  assert.match(xml, /record="do-not-record"/);
   assert.match(xml, /callerId="\+15555550888"/);
   assert.match(xml, /timeLimit="60"/);
   assert.match(xml, /<Number[^>]*>\+251911234567<\/Number>/);
   assert.match(xml, /party-consent/);
-  assert.match(xml, /recording-ready\?callId=11111111/);
+  assert.doesNotMatch(xml, /recordingStatusCallback/);
   assert.match(xml, /dial-done\?callId=11111111/);
   assert.doesNotMatch(xml, /15559999999/);
 });
@@ -295,12 +303,13 @@ test('late ringing callbacks cannot regress a completed call', async () => {
   assert.equal(call.status, 'ready');
 });
 
-test('declining recording never connects the call', async () => {
+test('declining recording connects the call without recording', async () => {
   const call = seedCall();
   const response = await post(`/twiml/accept?callId=${call.id}`, { CallSid: 'CA_PARENT', Digits: '2' });
   const xml = await response.text();
-  assert.doesNotMatch(xml, /<Dial/);
-  assert.match(xml, /<Hangup/);
+  assert.match(xml, /<Dial/);
+  assert.match(xml, /record="do-not-record"/);
+  assert.doesNotMatch(xml, /<Hangup/);
 });
 
 test('recording callbacks without both consent timestamps are ignored', async () => {
@@ -316,5 +325,6 @@ test('recording-off calls connect without requesting recording', async () => {
   const response = await post(`/twiml/bridge?callId=${call.id}`, { CallSid: 'CA_PARENT' });
   const xml = await response.text();
   assert.match(xml, /<Dial/);
-  assert.doesNotMatch(xml, /record=|recordingStatusCallback|party-consent|<Gather/);
+  assert.match(xml, /record="do-not-record"/);
+  assert.doesNotMatch(xml, /recordingStatusCallback|<Gather/);
 });

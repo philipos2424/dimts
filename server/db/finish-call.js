@@ -3,7 +3,7 @@ import { queryOne } from './pool.js';
 // Both writes form one SQL statement. If usage accounting fails, duration stays
 // unclaimed so Twilio can safely retry. Duplicate callbacks claim no rows.
 export const FINISH_CALL_SQL = `WITH changed AS (
-  UPDATE calls SET duration_sec = $2,
+  UPDATE calls SET duration_sec = $2, completed_at = now(),
     status = CASE WHEN status = 'ready' THEN status
                   WHEN $3 AND record_enabled THEN 'processing'
                   WHEN $3 THEN 'completed' ELSE $5 END,
