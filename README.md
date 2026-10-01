@@ -8,8 +8,13 @@ commitments and identifies the contact from their introduction.
 
 The default local AI stack uses Whisper for transcription and Ollama for
 summaries and contact extraction. ElevenLabs and OpenAI remain optional
-providers. Calendar booking and email execution are not implemented yet.
+providers. Reviewed Google Calendar booking and Gmail draft creation are
+implemented in code; live execution remains unverified. No email-sending
+endpoint exists.
 See [MVP status](docs/MVP_STATUS.md).
+
+For the prepared Linux container deployment and its remaining verification
+requirements, see [deployment setup](docs/DEPLOYMENT.md).
 
 ## Local setup
 
@@ -72,8 +77,9 @@ countries used in the test.
 
 Outgoing calls ring your handset first. Press 1 to agree to recording; Dimts
 then rings the destination, asks that person to press 1 and connects you.
-Unanswered agreement prompts hang up. Turning recording off in Settings omits
-the recording flow for outgoing calls. Calls have a 30-minute cap.
+Declining or not answering the recording agreement lets the call continue
+without recording. Turning recording off in Settings keeps the outgoing call
+unrecorded. Calls have a maximum 30-minute cap, shortened by remaining allowance.
 
 Do not use the Twilio number as your own handset or dial it as an outgoing
 destination: that would route the call back into itself.

@@ -15,7 +15,7 @@ import { callsRouter, meRouter, usageRouter } from './routes/calls.js';
 import { inboundRouter } from './routes/inbound.js';
 import { twimlRouter, webhooksRouter } from './routes/webhooks.js';
 
-export function createApp() {
+export function createApp({ webRoot = fileURLToPath(new URL('../dist/', import.meta.url)) } = {}) {
   const app = express();
 
   // Twilio signature validation anchors on PUBLIC_BASE_URL rather than the
@@ -50,8 +50,16 @@ export function createApp() {
   app.use('/twiml', twimlRouter);
   app.use('/webhooks', webhooksRouter);
 
-  const webRoot = fileURLToPath(new URL('../dist/', import.meta.url));
-  if (existsSync(webRoot)) app.use(express.static(webRoot, { extensions: ['html'] }));
+  if (existsSync(webRoot)) {
+    app.use(express.static(webRoot, { extensions: ['html'] }));
+    // Expo's single-page export needs the app shell on browser refresh/deep
+    // links. Whitelist app routes so missing APIs/webhooks/assets stay errors.
+    app.get(['/', '/onboarding', '/settings', '/first-call', '/dialer', '/contacts', '/notes', '/in-call', '/call/:id'],
+      (req,res,next) => {
+        if (!req.accepts('html') || (req.params.id && !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(req.params.id))) return next();
+        res.set('Cache-Control','no-cache').sendFile('index.html',{root:webRoot});
+      });
+  }
 
   app.use((_req, res) => {
     res.status(404).json({ error: 'not_found' });

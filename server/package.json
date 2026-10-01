@@ -5,6 +5,7 @@
   "type": "module",
   "main": "app.js",
   "scripts": {
+    "start": "node production.js",
     "dev": "node --env-file=../.env dev.js",
     "test": "node --experimental-test-module-mocks --test"
   },

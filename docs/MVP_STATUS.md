@@ -18,6 +18,13 @@ and web/Android/iOS bundle exports. The generated files contain none of the
 configured secrets. No real-call timestamp accuracy or physical playback test
 has been completed, and these changes are not deployed.
 
+The deployment and browser deep-link changes pass all 227 backend tests on
+1 October 2026. The Whisper entry module imports using workstation dependencies;
+this is not a Linux image test. Docker is unavailable here, and no container,
+public endpoint or hosted database deployment has been verified. Review research
+now covers thirteen recording store listings plus Notta, with platform-specific
+evidence and priorities tied to the twenty pilot scenarios.
+
 Implemented and checked:
 
 - OTP signup/sign-in, opaque sessions, logout and account isolation tests.
@@ -201,3 +208,12 @@ Operational notes:
 - The full working MVP goal remains active.
 - Automatic approval review rejected the backend restart after configuring
   Ollama Cloud with `blocked by policy`; restart remains required.
+- Linux pilot deployment source: web/backend and CPU Whisper Dockerfiles,
+  PostgreSQL/model/certificate volumes, Caddy HTTPS proxy and private-service
+  ports. Production startup validates configuration and applies the schema
+  transactionally before listening; repeated migration preserves existing data
+  in SQL tests. Advisory-lock request/failure tests, settings validation and
+  Compose YAML/private-port checks pass. Browser deep links now serve the Expo
+  shell on known routes while missing APIs/assets remain errors. Docker is not
+  installed here, so images, Linux dependencies, TLS and public calls are not
+  verified. See `DEPLOYMENT.md`. No hosted resource was created or changed.
