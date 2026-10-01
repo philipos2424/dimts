@@ -1,4 +1,5 @@
 import express from 'express';
+import { pipeline } from 'node:stream/promises';
 import { config } from '../config.js';
 import { query, queryOne } from '../db/pool.js';
 import { HttpError, currentMonth, resolveUser } from '../lib/users.js';
@@ -160,7 +161,7 @@ callsRouter.post('/:id/process', async (req, res, next) => {
 
 /**
  * Proxies recording media so the app never holds Twilio credentials.
- * expo-audio sends `x-user-phone` via AudioSource headers.
+ * Native audio and authenticated browser fetches send the session bearer.
  */
 callsRouter.get('/:id/audio', async (req, res, next) => {
   try {
@@ -172,20 +173,37 @@ callsRouter.get('/:id/audio', async (req, res, next) => {
 
     if (!call?.recording_url) throw new HttpError(404, 'recording_not_found');
 
-    const upstream = await fetchRecording(call.recording_url);
+    const range = req.get('range');
+    if (range && (range.length > 64 || !/^bytes=(?:\d+-\d*|-\d+)$/.test(range))) {
+      return res.status(416).end();
+    }
+    const upstream = await fetchRecording(call.recording_url, { range });
+    if (upstream.status === 416) {
+      const contentRange = upstream.headers.get('content-range');
+      if (/^bytes \*\/\d+$/.test(contentRange ?? '')) res.set('Content-Range', contentRange);
+      res.set('Cache-Control', 'private, no-store');
+      return res.status(416).end();
+    }
     if (!upstream.ok || !upstream.body) {
       throw new HttpError(502, 'recording_fetch_failed');
     }
 
     res.set('Content-Type', 'audio/mpeg');
-    res.set('Cache-Control', 'private, max-age=3600');
+    res.set('Cache-Control', 'private, no-store');
+    if (upstream.status === 206) {
+      const contentRange = upstream.headers.get('content-range');
+      if (!/^bytes \d+-\d+\/\d+$/.test(contentRange ?? '')) throw new HttpError(502, 'invalid_audio_range');
+      res.status(206).set('Content-Range', contentRange);
+    }
+    if (upstream.headers.get('accept-ranges') === 'bytes') res.set('Accept-Ranges', 'bytes');
     const length = upstream.headers.get('content-length');
     if (length) res.set('Content-Length', length);
 
     const { Readable } = await import('node:stream');
-    Readable.fromWeb(upstream.body).pipe(res);
+    await pipeline(Readable.fromWeb(upstream.body), res);
   } catch (err) {
-    next(err);
+    if (res.headersSent) res.destroy();
+    else next(err);
   }
 });
 

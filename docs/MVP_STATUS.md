@@ -22,6 +22,12 @@ Implemented and checked:
   isolation, prior-call cutoff and omission of failed/future/current records.
   Background delivery and physical-device presentation remain unverified.
 - Processing leases, provider timeouts and recording URL validation.
+- Browser playback fetches audio with bearer authentication into a private blob,
+  revokes that URL on unmount, and shows loading/errors with retry. Native streams
+  retain bearer headers; the proxy preserves validated byte-range responses for
+  seeking. Playback adds 15-second skips and replay from the start. HTTP tests
+  cover isolation, unavailable media and interrupted-stream recovery. Rendered
+  browser playback and physical-device behavior remain unverified.
 - Callback SID checks and duplicate/late callback protection.
 - Atomic call completion and minute accounting; database failure and retry
   behavior verified using actual PostgreSQL-compatible queries.

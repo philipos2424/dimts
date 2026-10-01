@@ -23,3 +23,13 @@ test('requests dual-channel audio with a timeout and rejects credential redirect
   assert.ok(requested.options.signal instanceof AbortSignal);
   assert.match(requested.options.headers.Authorization, /^Basic /);
 });
+
+test('forwards only a single valid byte range to the authenticated provider', async (t) => {
+  let requested;
+  t.mock.method(globalThis, 'fetch', async (_url, options) => { requested = options; return { ok: true }; });
+  const url = 'https://api.twilio.com/2010-04-01/Accounts/ACtest/Recordings/RE1';
+  await fetchRecording(url, { range: 'bytes=100-200' });
+  assert.equal(requested.headers.Range, 'bytes=100-200');
+  await assert.rejects(fetchRecording(url, { range: 'bytes=0-1,2-3' }), /Invalid audio range/);
+  await assert.rejects(fetchRecording(url, { range: 'bytes=0-\r\nAuthorization: leak' }), /Invalid audio range/);
+});

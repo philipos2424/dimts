@@ -69,9 +69,14 @@ confident external action.
    recording, partial-recording handling, tested audio/text export, retention,
    deletion including provider copies, and restore checks. Never require
    reinstalling an app to troubleshoot access to recordings.
-3. **Accessible playback.** Seek, pause/resume, buffering/failure messages and
-   transcript timestamps. Verify long recordings and interrupted playback on
-   iPhone and Android; the current player is basic.
+3. **Accessible playback.** The player now has 15-second skip controls, explicit
+   replay, loading/failure feedback and reload. Browser audio is fetched with
+   bearer authentication into a private blob; the blob URL is revoked on unmount.
+   Native streaming keeps bearer headers; the server preserves validated partial
+   responses for seeking and handles stream interruptions. HTTP tests cover
+   unauthorized access, provider absence and interrupted-stream recovery.
+   Still verify actual rendered playback, long recordings and interruptions on
+   iPhone/Android, and add transcript timestamps. Audio export is not complete.
 4. **Clear cost and account ownership.** Show the actual included minutes,
    per-call limits, overage behavior, trial end and renewal cost before charging.
    Bind purchases to the signed-in account; expose cancellation and restore.

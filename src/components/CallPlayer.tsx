@@ -1,5 +1,6 @@
-import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
-import { Pressable, View } from 'react-native';
+import { useAudioPlayer, useAudioPlayerStatus, type AudioSource } from 'expo-audio';
+import { useEffect, useState } from 'react';
+import { Platform, Pressable, View } from 'react-native';
 import { useApp } from '../AppContext';
 import { audioUrlFor, authHeaders } from '../api';
 import { color, radius, space } from '../theme';
@@ -7,86 +8,114 @@ import { Txt } from './Txt';
 
 function clock(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  return `${m}:${String(s).padStart(2, '0')}`;
+  return `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`;
 }
 
-/**
- * Streams the recording through our own proxy. AudioSource carries the
- * identifying header, so the app never needs Twilio credentials and the
- * endpoint stays closed to anyone else.
- */
 export function CallPlayer({ callId }: { callId: string }) {
-  const { t, userPhone } = useApp();
+  const { userPhone } = useApp();
+  const [attempt, setAttempt] = useState(0);
+  return <View style={{ padding: space.md, gap: space.sm, backgroundColor: color.surface, borderRadius: radius.md }}>
+    <PlayerAttempt key={`${callId}:${userPhone}:${attempt}`} callId={callId} retry={() => setAttempt(n => n + 1)} />
+  </View>;
+}
 
-  const player = useAudioPlayer(
-    userPhone
-      ? { uri: audioUrlFor(callId), headers: authHeaders(userPhone) }
-      : null
-  );
+function PlayerAttempt({ callId, retry }: { callId: string; retry: () => void }) {
+  const { userPhone } = useApp();
+  const [webSource, setWebSource] = useState<string | null>(null);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !userPhone) return;
+    // HTMLAudioElement cannot attach bearer headers. Fetch privately first;
+    // never put the session in a URL or retain audio in the shared preload cache.
+    const controller = new AbortController();
+    let active = true, blobUrl: string | undefined;
+    const timer = setTimeout(() => controller.abort(), 60_000);
+    (async () => {
+      try {
+        const response = await fetch(audioUrlFor(callId), {
+          headers: authHeaders(userPhone), signal: controller.signal, cache: 'no-store',
+        });
+        if (!response.ok) throw new Error('Audio unavailable');
+        const blob = await response.blob();
+        if (!blob.size) throw new Error('Empty audio');
+        if (!active) return;
+        blobUrl = URL.createObjectURL(blob);
+        setWebSource(blobUrl);
+      } catch {
+        if (active) setError('Unable to load this recording. Check your connection and try again.');
+      } finally { clearTimeout(timer); }
+    })();
+    return () => {
+      active = false; controller.abort(); clearTimeout(timer);
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
+    };
+  }, [callId, userPhone]);
+
+  const source: AudioSource = Platform.OS === 'web' ? webSource : userPhone
+    ? { uri: audioUrlFor(callId), headers: authHeaders(userPhone) } : null;
+  return <>
+    {error ? <>
+      <Txt tone="muted" accessibilityRole="alert">{error}</Txt>
+      <Control label="Retry loading recording" onPress={retry} />
+    </> : source ? <Playback source={source} retry={retry} /> : <Txt tone="muted">Loading recording…</Txt>}
+  </>;
+}
+
+function Playback({ source, retry }: { source: AudioSource; retry: () => void }) {
+  const { t } = useApp();
+  // Native streams with bearer headers and byte-range support. Web uses a
+  // private blob URL released on unmount, never a shared authenticated cache.
+  const player = useAudioPlayer(source);
   const status = useAudioPlayerStatus(player);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const loaded = status.isLoaded && Number.isFinite(status.duration) && status.duration > 0;
+  useEffect(() => {
+    if (loaded || status.error) return;
+    const timer = setTimeout(() => setError('This recording is taking too long to load. Try again.'), 60_000);
+    return () => clearTimeout(timer);
+  }, [loaded, status.error]);
 
-  const progress =
-    status.duration > 0 ? Math.min(status.currentTime / status.duration, 1) : 0;
-
-  return (
-    <View
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: space.md,
-        padding: space.md,
-        backgroundColor: color.surface,
-        borderRadius: radius.md,
-      }}
-    >
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={status.playing ? t('pause') : t('play')}
-        disabled={!status.isLoaded}
-        onPress={() => (status.playing ? player.pause() : player.play())}
-        style={{
-          width: 44,
-          height: 44,
-          borderRadius: radius.pill,
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: status.isLoaded ? color.saffron : color.line,
-        }}
-      >
-        <Txt
-          size="subhead"
-          weight="bold"
-          style={{ color: color.ink, lineHeight: 20 }}
-        >
-          {status.playing ? '❚❚' : '▶'}
-        </Txt>
-      </Pressable>
-
-      <View style={{ flex: 1, gap: space.xs }}>
-        <View
-          style={{
-            height: 3,
-            borderRadius: radius.pill,
-            backgroundColor: color.line,
-            overflow: 'hidden',
-          }}
-        >
-          <View
-            style={{
-              width: `${progress * 100}%`,
-              height: '100%',
-              backgroundColor: color.saffron,
-            }}
-          />
-        </View>
-        <Txt size="caption" tone="muted">
-          {status.isBuffering && !status.playing
-            ? '…'
-            : `${clock(status.currentTime)} / ${clock(status.duration)}`}
-        </Txt>
-      </View>
+  async function act(work: () => void | Promise<void>) {
+    setBusy(true); setError('');
+    try { await work(); }
+    catch { setError('Playback failed. Try loading the recording again.'); }
+    finally { setBusy(false); }
+  }
+  const disabled = !loaded || busy || !!status.error;
+  const progress = loaded ? Math.min(Math.max(status.currentTime / status.duration, 0), 1) : 0;
+  return <>
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
+      <Control label="Back 15 seconds" disabled={disabled} onPress={() => act(() => player.seekTo(Math.max(0, status.currentTime - 15)))} />
+      <Control label={status.playing ? t('pause') : t('play')} disabled={disabled} onPress={() => act(async () => {
+        if (status.playing) player.pause();
+        else {
+          if (status.didJustFinish || status.currentTime >= status.duration) await player.seekTo(0);
+          player.play();
+        }
+      })} />
+      <Control label="Forward 15 seconds" disabled={disabled} onPress={() => act(() => player.seekTo(Math.min(status.duration, status.currentTime + 15)))} />
+      <Control label="Replay from start" disabled={disabled} onPress={() => act(async () => { await player.seekTo(0); player.play(); })} />
     </View>
-  );
+    <View accessibilityRole="progressbar" accessibilityLabel="Playback position"
+      accessibilityValue={{ min: 0, max: 100, now: Math.round(progress * 100) }}
+      style={{ height: 4, backgroundColor: color.line, borderRadius: radius.pill, overflow: 'hidden' }}>
+      <View style={{ width: `${progress * 100}%`, height: '100%', backgroundColor: color.saffron }} />
+    </View>
+    <Txt size="caption" tone="muted">{!loaded ? 'Loading recording…' :
+      status.isBuffering ? 'Buffering…' : `${clock(status.currentTime)} / ${clock(status.duration)}`}</Txt>
+    {(error || status.error) && <>
+      <Txt tone="muted" accessibilityRole="alert">{error || 'Unable to play this recording. Try loading it again.'}</Txt>
+      <Control label="Retry loading recording" onPress={retry} />
+    </>}
+  </>;
+}
+
+function Control({ label, disabled = false, onPress }: { label: string; disabled?: boolean; onPress: () => void }) {
+  return <Pressable accessibilityRole="button" accessibilityLabel={label}
+    accessibilityState={{ disabled }} disabled={disabled} onPress={onPress}
+    style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: space.sm, opacity: disabled ? 0.5 : 1 }}>
+    <Txt tone="accent" weight="bold">{label}</Txt>
+  </Pressable>;
 }
