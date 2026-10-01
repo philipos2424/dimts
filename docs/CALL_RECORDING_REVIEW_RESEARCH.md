@@ -75,8 +75,14 @@ confident external action.
    Native streaming keeps bearer headers; the server preserves validated partial
    responses for seeking and handles stream interruptions. HTTP tests cover
    unauthorized access, provider absence and interrupted-stream recovery.
-   Still verify actual rendered playback, long recordings and interruptions on
-   iPhone/Android, and add transcript timestamps. Audio export is not complete.
+   Call detail now also exposes text-note and MP3 export. Web downloads the
+   authenticated bytes; native writes temporary cache files and opens the OS
+   file-sharing sheet. Notes preserve speaker text, mark AI suggestions and
+   omit provider metadata. Export isolation/expiry/incomplete-call HTTP tests
+   pass. Native temporary files are pruned on the next export after one hour;
+   external saved/shared copies remain under the user's control.
+   Still verify actual rendered playback, downloaded files and native share
+   sheets on iPhone/Android, and add transcript timestamps.
 4. **Clear cost and account ownership.** Show the actual included minutes,
    per-call limits, overage behavior, trial end and renewal cost before charging.
    Bind purchases to the signed-in account; expose cancellation and restore.

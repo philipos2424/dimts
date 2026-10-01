@@ -43,7 +43,8 @@
             "./assets/fonts/NotoSansEthiopic-Bold.ttf"
           ]
         }
-      ]
+      ],
+      "expo-sharing"
     ],
     "scheme": "dimts",
     "experiments": {

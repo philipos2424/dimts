@@ -9,6 +9,7 @@ import { processRecording } from '../services/process-recording.js';
 import { reserveCall } from '../db/reserve-call.js';
 import { claimNumber } from '../db/claim-number.js';
 import { expireRecordingWait } from '../db/expire-recording-wait.js';
+import { callNotes } from '../lib/call-export.js';
 
 export const callsRouter = express.Router();
 
@@ -138,6 +139,17 @@ callsRouter.get('/:id', async (req, res, next) => {
   } catch (err) {
     next(err);
   }
+});
+
+callsRouter.get('/:id/notes', async (req, res) => {
+  const user = await resolveUser(req);
+  const call = await queryOne(`SELECT c.id,c.destination,c.direction,c.status,c.duration_sec,
+      c.created_at,c.transcript,c.summary,c.key_points,c.action_items,c.next_moves,
+      k.display_name AS contact_name FROM calls c LEFT JOIN contacts k ON k.id=c.contact_id
+      WHERE c.id=$1 AND c.user_id=$2`, [req.params.id, user.id]);
+  if (!call) throw new HttpError(404, 'call_not_found');
+  res.type('text/plain').set('Cache-Control', 'private, no-store')
+    .set('Content-Disposition', `attachment; filename="dimts-call-${call.id}.txt"`).send(callNotes(call));
 });
 
 /** Retry hook for a row stuck in 'processing' — safe to call repeatedly. */

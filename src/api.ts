@@ -214,6 +214,16 @@ export function reprocessCall(id: string, userPhone: string) {
   });
 }
 
+export async function fetchCallExport(id: string, kind: 'notes' | 'audio', signal: AbortSignal) {
+  const response = await fetch(`${BASE}/api/calls/${encodeURIComponent(id)}/${kind}`, {
+    headers: authHeaders(''), cache: 'no-store', signal,
+  });
+  if (!response.ok) throw new Error(`Unable to export ${kind === 'audio' ? 'the recording' : 'call notes'}. Try again.`);
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  if (!bytes.length) throw new Error('The export was empty. Try again.');
+  return bytes;
+}
+
 export function getUsage(userPhone: string) {
   return request<Usage>('/api/usage', userPhone);
 }

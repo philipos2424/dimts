@@ -54,6 +54,13 @@ Implemented and checked:
 - Synthetic stereo audio transcribed with alternating speaker turns; actual
   Ollama output checked for caller identity and email commitment ownership.
 - Contacts editing and vCard export, including cross-owner access tests.
+- Call text-note and MP3 export controls. Authenticated notes omit provider
+  metadata, preserve UTF-8/speaker text and label AI suggestions. Browser saves
+  downloaded copies; native uses cache files and the OS file-sharing sheet.
+  Tests cover owner isolation, expired sessions and incomplete calls. Temporary
+  native copies older than an hour are pruned on the next export (or by the OS);
+  copies saved/shared outside Dimts remain under the user's control. Physical
+  share-sheet and downloaded-file verification remain required.
 - Editable follow-up email and meeting drafts stored per call. Mail and Google
   Calendar handoff require reviewed recipients and explicit UTC meeting times.
   Cloud generation checked for both meeting and email examples; isolation and

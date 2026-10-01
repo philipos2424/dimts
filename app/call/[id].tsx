@@ -11,6 +11,7 @@ import { Section } from '../../src/components/Section';
 import { Txt } from '../../src/components/Txt';
 import { type Key, statusKey } from '../../src/i18n';
 import { color, space } from '../../src/theme';
+import { exportCall } from '../../src/exportCall';
 
 export default function CallDetailScreen() {
   const { t } = useApp();
@@ -20,6 +21,15 @@ export default function CallDetailScreen() {
 
   const [call, setCall] = useState<CallDetail | null>(null);
   const [errorKey, setErrorKey] = useState<Key | null>(null);
+  const [exporting, setExporting] = useState<'notes' | 'audio' | null>(null);
+  const [exportError, setExportError] = useState('');
+  async function saveCopy(kind: 'notes' | 'audio') {
+    if (!id || exporting) return;
+    setExporting(kind); setExportError('');
+    try { await exportCall(id, kind); }
+    catch (err) { setExportError(err instanceof Error && err.name !== 'AbortError' ? err.message : 'Export took too long. Please try again.'); }
+    finally { setExporting(null); }
+  }
 
   const load = useCallback(async () => {
     if (!id || !userPhone) return;
@@ -62,6 +72,18 @@ export default function CallDetailScreen() {
       {errorKey && <Banner message={t(errorKey)} onDismiss={() => setErrorKey(null)} />}
 
       {call.audio_url && <CallPlayer callId={call.id} />}
+      <View style={{ gap: space.sm }}>
+        <Txt tone="muted" size="caption">Keep your own copy of this call.</Txt>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.lg }}>
+          <Pressable accessibilityRole="button" disabled={!!exporting} onPress={() => saveCopy('notes')} style={{ minHeight: 44, justifyContent: 'center' }}>
+            <Txt tone="accent">{exporting === 'notes' ? 'Preparing notes…' : 'Export call notes'}</Txt>
+          </Pressable>
+          {call.audio_url && <Pressable accessibilityRole="button" disabled={!!exporting} onPress={() => saveCopy('audio')} style={{ minHeight: 44, justifyContent: 'center' }}>
+            <Txt tone="accent">{exporting === 'audio' ? 'Preparing recording…' : 'Export recording'}</Txt>
+          </Pressable>}
+        </View>
+        {exportError ? <Txt tone="muted" accessibilityRole="alert">{exportError}</Txt> : null}
+      </View>
 
       {notReady && (
         <View style={{ gap: space.sm }}>
