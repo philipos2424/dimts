@@ -47,6 +47,11 @@ Implemented and checked:
   atomic review-history events. Real Ollama Cloud checks cover accepted and
   explicitly declined meetings; invalid references/quotes and forged evidence
   are rejected or ignored. Review events are not external execution receipts.
+- Reviewed Google Calendar execution with immutable meeting snapshots, provider
+  event IDs, encrypted token refresh and lookup reconciliation. SQL/HTTP tests
+  cover duplicate requests, stale transcripts/reviews, failed attempts, expired
+  leases and a database failure after provider commit. The UI shows confirmed,
+  failed and uncertain results separately. Live Google creation remains unverified.
 
 Still required:
 
@@ -54,7 +59,7 @@ Google connection code and Settings controls are now implemented. Tokens are
 encrypted on the server; SQL/HTTP tests cover account isolation, browser nonce,
 one-time confirmation, replay, expiry and disconnect invalidation. Live Google
 consent still awaits OAuth client configuration (see `GOOGLE_SETUP.md`), and
-provider-confirmed calendar/Gmail execution remains required.
+live calendar execution and Gmail draft execution remain required.
 
 - Real SMS signup and owner handset verification.
 - Public callback endpoint and real inbound/outbound two-person calls.

@@ -15,6 +15,7 @@ mock.module('../db/pool.js', { namedExports: {
   withTransaction: work => db.transaction(work),
 } });
 let exchanges = 0;
+let duringRefresh;
 mock.module('google-auth-library', { namedExports: { OAuth2Client: class {
   generateAuthUrl(opts) {
     return `https://accounts.google.com/o/oauth2/v2/auth?${new URLSearchParams({ ...opts, scope: opts.scope.join(' ') })}`;
@@ -26,9 +27,15 @@ mock.module('google-auth-library', { namedExports: { OAuth2Client: class {
     return { tokens: { access_token: 'private-access', refresh_token: 'private-refresh',
       scope: code === 'missing-scope' ? '' : `https://www.googleapis.com/auth/${code === 'gmail' ? 'gmail.compose' : 'calendar.events.owned'}` } };
   }
+  setCredentials(credentials) { this.credentials = credentials; }
+  async getAccessToken() {
+    this.credentials = { ...this.credentials, access_token: 'refreshed-private-token', expiry_date: Date.now() + 3600000 };
+    if (duringRefresh) await duringRefresh();
+    return { token: this.credentials.access_token };
+  }
 } } });
 const { createApp } = await import('../create-app.js');
-const { encryptIntegration, decryptIntegration, googleConfig } = await import('../services/google-oauth.js');
+const { encryptIntegration, decryptIntegration, googleConfig, googleAccessToken } = await import('../services/google-oauth.js');
 const server = createApp().listen(0);
 const origin = `http://127.0.0.1:${server.address().port}`;
 const tokens = ['a'.repeat(64), 'b'.repeat(64)], users = [];
@@ -126,4 +133,15 @@ test('OAuth configuration rejects nonlocal HTTP, credentials and wrong callback 
     process.env.GOOGLE_OAUTH_REDIRECT_URI = url; assert.throws(googleConfig);
   }
   process.env.GOOGLE_OAUTH_REDIRECT_URI = previous;
+});
+test('refreshed tokens remain encrypted and a disconnected grant cannot be resurrected', async () => {
+  const connection = (await db.query("SELECT * FROM google_connections WHERE user_id=$1 AND kind='calendar'", [users[0].id])).rows[0];
+  assert.equal(await googleAccessToken(users[0].id, 'calendar', connection.connection_id), 'refreshed-private-token');
+  const updated = (await db.query("SELECT * FROM google_connections WHERE user_id=$1 AND kind='calendar'", [users[0].id])).rows[0];
+  assert.ok(!updated.encrypted_tokens.includes('refreshed-private-token'));
+  assert.equal(decryptIntegration(updated.encrypted_tokens, users[0].id).access_token, 'refreshed-private-token');
+  duringRefresh = async () => { await db.query("DELETE FROM google_connections WHERE user_id=$1 AND kind='calendar'", [users[0].id]); };
+  await assert.rejects(googleAccessToken(users[0].id, 'calendar', connection.connection_id), { code: 'google_connection_changed' });
+  duringRefresh = undefined;
+  assert.equal((await api('/')).data.connections.length, 0);
 });

@@ -87,7 +87,7 @@ googleRouter.post('/confirm', async (req, res) => {
     const { rows: [row] } = await tx.query("DELETE FROM google_oauth_requests WHERE token_hash=$1 AND user_id=$2 AND phase='confirm' AND expires_at>now() AND version=$3 RETURNING *", [hashToken(code), user.id, owner.google_connect_version]);
     if (!row) throw new HttpError(400, 'expired_connection_code');
     await tx.query(`INSERT INTO google_connections(user_id,kind,encrypted_tokens) VALUES($1,$2,$3)
-      ON CONFLICT(user_id,kind) DO UPDATE SET encrypted_tokens=excluded.encrypted_tokens,connected_at=now()`, [user.id, row.kind, row.encrypted_payload]);
+      ON CONFLICT(user_id,kind) DO UPDATE SET encrypted_tokens=excluded.encrypted_tokens,connected_at=now(),connection_id=gen_random_uuid()`, [user.id, row.kind, row.encrypted_payload]);
     return row.kind;
   });
   res.json({ connected: true, kind });

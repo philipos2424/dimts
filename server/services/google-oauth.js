@@ -1,6 +1,7 @@
 import { OAuth2Client } from 'google-auth-library';
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 import { HttpError } from '../lib/users.js';
+import * as database from '../db/pool.js';
 
 export const GOOGLE_SCOPES = {
   calendar: 'https://www.googleapis.com/auth/calendar.events.owned',
@@ -56,4 +57,23 @@ export async function exchangeGoogleCode(code, verifier, kind) {
     if (!tokens.access_token || !tokens.refresh_token || !tokens.scope?.split(' ').includes(GOOGLE_SCOPES[kind])) throw new Error();
     return tokens;
   } catch { throw new HttpError(400, 'google_authorization_failed', 'Google authorization failed. Start a new connection from Settings.'); }
+}
+
+export async function googleAccessToken(userId, kind, connectionId) {
+  const connection = await database.queryOne('SELECT * FROM google_connections WHERE user_id=$1 AND kind=$2 AND connection_id=$3', [userId, kind, connectionId]);
+  if (!connection) throw new HttpError(409, 'google_connection_changed', 'Connect the original Google account before checking this action.');
+  const credentials = decryptIntegration(connection.encrypted_tokens, userId);
+  if (!credentials.scope?.split(' ').includes(GOOGLE_SCOPES[kind])) throw new HttpError(409, 'google_scope_missing');
+  const auth = client();
+  auth.setCredentials(credentials);
+  let token;
+  try { ({ token } = await auth.getAccessToken()); }
+  catch { throw new HttpError(409, 'google_reconnect_required', 'Reconnect Google in Settings.'); }
+  if (typeof token !== 'string' || !token) throw new HttpError(409, 'google_reconnect_required');
+  const refreshed = encryptIntegration({ ...credentials, ...auth.credentials }, userId);
+  const saved = await database.queryOne(`UPDATE google_connections SET encrypted_tokens=$4
+    WHERE user_id=$1 AND kind=$2 AND connection_id=$3 AND encrypted_tokens=$5 RETURNING connection_id`,
+    [userId, kind, connectionId, refreshed, connection.encrypted_tokens]);
+  if (!saved) throw new HttpError(409, 'google_connection_changed');
+  return token;
 }

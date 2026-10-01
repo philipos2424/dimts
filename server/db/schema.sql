@@ -135,3 +135,20 @@ CREATE TABLE IF NOT EXISTS google_connections (
   connected_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY(user_id, kind)
 );
+ALTER TABLE google_connections ADD COLUMN IF NOT EXISTS connection_id UUID NOT NULL DEFAULT gen_random_uuid();
+CREATE TABLE IF NOT EXISTS calendar_actions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  call_id UUID NOT NULL UNIQUE REFERENCES calls(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id),
+  connection_id UUID NOT NULL,
+  proposal_version INT NOT NULL,
+  meeting JSONB NOT NULL,
+  status TEXT NOT NULL CHECK(status IN ('pending','confirmed','unknown','failed')),
+  event_id TEXT NOT NULL UNIQUE,
+  event_url TEXT,
+  error_code TEXT,
+  lease_token UUID,
+  lease_until TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);

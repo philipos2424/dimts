@@ -12,9 +12,11 @@ const bob = (await db.query("INSERT INTO users(phone) VALUES('+15555550102') RET
 const transcript = 'Caller: Can we meet tomorrow at two?\nUser: Yes tomorrow at two.';
 const call = (await db.query("INSERT INTO calls(user_id,user_phone,destination,transcript) VALUES($1,'+15555550101','+15555550103',$2) RETURNING id", [alice.id, transcript])).rows[0];
 let generations = 0;
+let duringGeneration;
 mock.module('../db/pool.js', { namedExports: {
   query: (sql, params) => db.query(sql, params),
   queryOne: async (sql, params) => (await db.query(sql, params)).rows[0],
+  withTransaction: work => db.transaction(work),
 } });
 mock.module('../lib/users.js', { namedExports: {
   resolveUser: async req => req.get('x-test-owner') === 'bob' ? bob : alice,
@@ -22,7 +24,7 @@ mock.module('../lib/users.js', { namedExports: {
 } });
 mock.module('../services/followups.js', { namedExports: {
   validateReviewedFollowups,
-  generateFollowups: async () => { generations++; return parseGeneratedFollowups(JSON.stringify({
+  generateFollowups: async () => { generations++; if (duringGeneration) await duringGeneration(); return parseGeneratedFollowups(JSON.stringify({
     email: { subject: 'Follow-up', body: 'Thank you.', evidence: { source_lines: [2], confidence: 0.8, reason: 'Follow up after agreement.' } },
     meeting: { title: 'Meeting', notes: 'Confirm AM/PM', time_text: 'tomorrow at two', evidence: { source_lines: [1,2], confidence: 0.9, reason: 'Meeting agreed.' } },
   }), transcript); },
@@ -97,4 +99,23 @@ test('rejection is repeatable, private and cannot be undone by forged edit metad
   const events = (await request('GET', 'alice', null, '/events')).data.events;
   assert.deepEqual(events.map(e => e.kind), ['generated', 'edited', 'email_rejected', 'edited']);
   assert.equal((await request('GET', 'bob', null, '/events')).status, 404);
+});
+test('explicit regeneration replaces legacy drafts with a current transcript hash and records the replacement', async () => {
+  await db.query("UPDATE calls SET status='ready', followups=followups-'source_hash' WHERE id=$1", [call.id]);
+  const existing = (await request('POST')).data;
+  assert.equal((await request('POST', 'bob', { version: existing.version }, '/refresh')).status, 404);
+  assert.equal((await request('POST', 'alice', { version: 0 }, '/refresh')).status, 409);
+  const result = await request('POST', 'alice', { version: existing.version }, '/refresh');
+  assert.equal(result.status, 200); assert.match(result.data.source_hash, /^[a-f0-9]{64}$/);
+  assert.equal(result.data.email.status, 'pending'); assert.equal(result.data.version, existing.version + 1);
+  assert.equal((await request('GET', 'alice', null, '/events')).data.events.at(-1).kind, 'regenerated');
+});
+test('a transcript change during generation cannot attach evidence to a different source', async () => {
+  const existing = (await request('POST')).data;
+  duringGeneration = () => db.query("UPDATE calls SET transcript='Different conversation' WHERE id=$1", [call.id]);
+  const result = await request('POST', 'alice', { version: existing.version }, '/refresh');
+  assert.equal(result.status, 409);
+  assert.deepEqual((await request('POST')).data, existing);
+  duringGeneration = undefined;
+  await db.query('UPDATE calls SET transcript=$2 WHERE id=$1', [call.id, transcript]);
 });

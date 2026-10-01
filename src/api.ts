@@ -33,10 +33,25 @@ export function getActiveIncoming() {
   return request<{ call: { id: string; destination: string; status: string; created_at: string } | null }>('/api/calls/incoming/active', '');
 }
 export type Followups = {
+  source_hash?: string;
   version?: number;
   email: ({ subject: string; body: string; recipient: string } & ProposalMetadata) | null;
   meeting: ({ title: string; notes: string; time_text: string; start: string; end: string } & ProposalMetadata) | null;
 };
+export type CalendarAction = {
+  id: string; status: 'pending' | 'confirmed' | 'unknown' | 'failed'; event_id: string | null;
+  event_url: string | null; error_code: string | null; proposal_version: number; updated_at: string;
+  meeting: NonNullable<Followups['meeting']>;
+};
+export function getCalendarAction(id: string) {
+  return request<{ action: CalendarAction | null }>(`/api/calls/${id}/followups/meeting/action`, '');
+}
+export function bookReviewedMeeting(id: string, version: number) {
+  return request<{ action: CalendarAction }>(`/api/calls/${id}/followups/meeting/action`, '', { method: 'POST', body: JSON.stringify({ version }) });
+}
+export function reconcileMeeting(id: string) {
+  return request<{ action: CalendarAction }>(`/api/calls/${id}/followups/meeting/action/reconcile`, '', { method: 'POST' });
+}
 type ProposalMetadata = { status?: 'pending' | 'rejected'; evidence?: {
   quotes: string[]; confidence: number; reason: string;
 } | null };
@@ -49,6 +64,9 @@ export function getFollowupEvents(id: string) {
 }
 export function generateFollowups(id: string) {
   return request<Followups>(`/api/calls/${id}/followups`, '', { method: 'POST' });
+}
+export function refreshFollowups(id: string, version: number) {
+  return request<Followups>(`/api/calls/${id}/followups/refresh`, '', { method: 'POST', body: JSON.stringify({ version }) });
 }
 export function saveFollowups(id: string, draft: Followups) {
   return request<Followups>(`/api/calls/${id}/followups`, '', { method: 'PATCH', body: JSON.stringify(draft) });

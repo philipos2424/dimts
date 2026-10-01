@@ -1,8 +1,8 @@
 # Google connection setup
 
-The connection flow is implemented; live Google authorization still requires an
-operator-owned OAuth client. Provider-confirmed calendar booking and Gmail draft
-creation are separate work and are not yet enabled by this connection screen.
+The connection flow and reviewed primary-calendar booking are implemented; live
+Google authorization and event creation still require an operator-owned OAuth
+client and account consent. Gmail draft creation remains separate unfinished work.
 
 1. In Google Cloud, select the project, enable Calendar API and Gmail API, and
    configure the OAuth consent screen. For a private pilot, add the specific
@@ -45,6 +45,28 @@ the reverse proxy to omit query strings for `/oauth/google/*`.
 The HTTP tests use a mocked Google token exchange and real PostgreSQL-compatible
 SQL. They establish ownership, replay protection, expiry, encryption and safe
 errors; they do not establish live consent or real provider execution.
+
+After connecting Calendar, open a processed call and review its meeting proposal,
+source quotes, title and both UTC times. **Confirm and book in my Google Calendar**
+saves that review and starts the event creation. Only a matching provider response
+produces a confirmed receipt with an event ID. This creates a personal event in
+the connected account's primary calendar; it does not invite the caller.
+
+The action stores its own immutable meeting snapshot and Google connection ID.
+An uncertain request freezes the proposal and subsequent booking requests return
+the existing action. **Check booking result** reads the saved event ID; it never
+blindly creates another event. A missing event, changed event, changed Google
+connection or another uncertain provider result remains unconfirmed. Such cases
+need operator investigation rather than automatic resubmission. A definite
+provider refusal permits corrected review and an explicit new attempt. A server
+crash after dispatch is handled by the same lookup after its two-minute lease
+expires. Changes to the call transcript block execution of older proposals;
+explicit regeneration replaces saved drafts and requires another review.
+
+Calendar tests cover creation, response validation, duplicate requests, stale
+reviews, account isolation, uncertain results, expired leases and a database
+failure after provider commit. These tests use a simulated provider, so a live
+Google event check is still an acceptance requirement.
 
 References: [Google web-server OAuth](https://developers.google.com/identity/protocols/oauth2/web-server),
 [Calendar scopes](https://developers.google.com/workspace/calendar/api/auth),
