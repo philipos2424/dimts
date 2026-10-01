@@ -9,13 +9,14 @@ await db.exec(await readFile(new URL('../db/schema.sql', import.meta.url), 'utf8
 mock.module('../db/pool.js', { namedExports: {
   query: (sql, p) => db.query(sql, p), queryOne: async (sql, p) => (await db.query(sql, p)).rows[0],
 } });
-let downloads = 0, transcriptions = 0, summaries = 0, identities = 0, failSummary = false, summarizeHook, transcribeHook;
+let downloads = 0, transcriptions = 0, summaries = 0, identities = 0, failSummary = false, summarizeHook, transcribeHook, transcriptOverride;
 mock.module('./originate.js', { namedExports: {
   fetchRecording: async () => { downloads++; return { ok: true, blob: async () => new Blob(['audio']) }; },
   isE164: () => true, originateCall: async () => { throw new Error('No phone calls in this test'); },
 } });
 mock.module('./transcribe.js', { namedExports: { transcribe: async () => {
   transcriptions++; if (transcribeHook) await transcribeHook();
+  if (transcriptOverride) return transcriptOverride;
   return { text: 'Caller: Send a quote.\nUser: I will.', raw: { marker: 'saved transcription' }, language: 'eng', languageProbability: 0.99 };
 } } });
 mock.module('./summarize.js', { namedExports: { summarize: async () => {
@@ -50,7 +51,34 @@ async function until(check) {
   while (!await check()) { if (Date.now() > deadline) throw new Error('Timed out waiting for worker'); await new Promise(resolve => setTimeout(resolve, 5)); }
 }
 test.after(async () => { await new Promise(resolve => server.close(resolve)); await db.close(); });
-test.afterEach(() => { failSummary = false; summarizeHook = undefined; transcribeHook = undefined; });
+test.afterEach(() => { failSummary = false; summarizeHook = undefined; transcribeHook = undefined; transcriptOverride = undefined; });
+
+test('one-sided audio preserves the partial checkpoint and blocks summaries and identity on initial processing and cached retry', async () => {
+  const id = await seed(), beforeSummaries = summaries, beforeIdentities = identities, beforeTranscriptions = transcriptions;
+  transcriptOverride = { text: 'Caller: Send a quote.', raw: { audio_quality: { status: 'missing_channel_signal' },
+    transcripts: [{ text: 'Send a quote.' }, { text: '' }] }, language: 'eng', languageProbability: 0.99 };
+  await assert.rejects(processRecording(id), /participant may have been quiet/);
+  let saved = await row(id);
+  assert.equal(saved.status, 'failed'); assert.equal(saved.recording_url, 'saved-audio');
+  assert.equal(saved.transcript, transcriptOverride.text); assert.equal(saved.summary, null);
+  assert.equal(saved.transcript_data.audio_quality.status, 'missing_channel_signal');
+  await assert.rejects(processRecording(id), /participant may have been quiet/);
+  assert.equal(transcriptions, beforeTranscriptions + 1); assert.equal(summaries, beforeSummaries); assert.equal(identities, beforeIdentities);
+  // Replacement audio can pass the checks and produce notes normally.
+  transcriptOverride = undefined;
+  await db.query("UPDATE calls SET recording_url='replacement-audio' WHERE id=$1", [id]);
+  await processRecording(id); saved = await row(id); assert.equal(saved.status, 'ready');
+});
+
+test('silent audio is retained with its diagnostics but never sent to the summary or identity model', async () => {
+  const id = await seed(), beforeSummaries = summaries, beforeIdentities = identities;
+  transcriptOverride = { text: '', raw: { audio_quality: { status: 'silent' }, transcripts: [{ text: '' }, { text: '' }] },
+    language: null, languageProbability: null };
+  await assert.rejects(processRecording(id), /no detectable audio signal/);
+  const saved = await row(id); assert.equal(saved.recording_url, 'saved-audio'); assert.equal(saved.status, 'failed');
+  assert.equal(saved.transcript_data.audio_quality.status, 'silent'); assert.equal(saved.summary, null);
+  assert.equal(summaries, beforeSummaries); assert.equal(identities, beforeIdentities);
+});
 
 test('summary failure keeps transcription and audio; retry resumes without another download or transcription', async () => {
   const id = await seed(), beforeDownloads = downloads, beforeTranscripts = transcriptions;

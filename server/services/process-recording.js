@@ -6,6 +6,7 @@ import { fetchRecording } from './originate.js';
 import { transcribe } from './transcribe.js';
 import { summarize } from './summarize.js';
 import { randomUUID } from 'node:crypto';
+import { recordingQualityError } from '../lib/recording-quality.js';
 
 const DOWNLOAD_ATTEMPTS = 3;
 const DOWNLOAD_BACKOFF_MS = 2000;
@@ -106,7 +107,6 @@ export async function processRecording(callId, { force = false } = {}) {
       const audio = await downloadRecording(call.recording_url);
       await renew();
       result = await transcribe(audio, { direction: call.direction });
-      if (!result.text.trim()) throw new Error('Transcription returned no speech');
       const saved = await queryOne(`UPDATE calls SET transcript=$3,transcript_data=$4,
         language=$5,language_probability=$6,transcript_recording_url=$7,
         processing_until=now()+interval '10 minutes'
@@ -115,6 +115,8 @@ export async function processRecording(callId, { force = false } = {}) {
       if (!saved) throw new Error('Processing ownership changed');
     }
 
+    const qualityError = recordingQualityError(result.raw);
+    if (qualityError) throw new Error(qualityError);
     if (!result.text.trim()) {
       throw new Error('Transcription returned no speech');
     }

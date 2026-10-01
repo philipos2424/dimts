@@ -11,6 +11,7 @@ async function persist(callId, userId, draft, version, kind, generating = false,
   return database.withTransaction(async tx => {
     const { rows: [current] } = await tx.query('SELECT * FROM calls WHERE id=$1 AND user_id=$2 FOR UPDATE', [callId, userId]);
     if (!current || current.followups_version !== version) return undefined;
+    if (generating && current.status !== 'ready') throw new HttpError(409, 'transcript_not_ready');
     if (generating && current.transcript !== sourceTranscript) throw new HttpError(409, 'transcript_changed');
     const { rows: [action] } = await tx.query("SELECT id FROM calendar_actions WHERE call_id=$1 AND status<>'failed'", [callId]);
     if (action && (generating || !isDeepStrictEqual(draft.meeting, current.followups?.meeting))) throw new HttpError(409, 'meeting_action_locked', 'This meeting already has a booking action. Check its receipt before changing it.');
@@ -32,10 +33,10 @@ async function persist(callId, userId, draft, version, kind, generating = false,
 followupsRouter.post('/:id/followups', async (req, res, next) => {
   try {
     const user = await resolveUser(req);
-    const call = await queryOne('SELECT id, transcript, followups FROM calls WHERE id=$1 AND user_id=$2', [req.params.id, user.id]);
+    const call = await queryOne('SELECT id, transcript, followups,status FROM calls WHERE id=$1 AND user_id=$2', [req.params.id, user.id]);
     if (!call) throw new HttpError(404, 'call_not_found');
     if (call.followups) return res.json(call.followups);
-    if (!call.transcript) throw new HttpError(409, 'transcript_not_ready');
+    if (!call.transcript || call.status !== 'ready') throw new HttpError(409, 'transcript_not_ready');
     const draft = await generateFollowups(call.transcript);
     draft.source_hash = createHash('sha256').update(call.transcript).digest('hex');
     const saved = await persist(call.id, user.id, draft, 0, 'generated', true, call.transcript);

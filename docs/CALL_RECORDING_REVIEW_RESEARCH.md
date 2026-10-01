@@ -65,6 +65,16 @@ confident external action.
    and confirm their voices; test each supported carrier/device/audio route.
    Add missing/silent-channel detection that flags uncertainty instead of
    manufacturing a transcript. Start with routed telephone calls only.
+   The local Whisper worker now checks decoded channel signal using 200 ms
+   windows and a conservative near-silence floor. Silent channels skip model
+   inference. The pipeline preserves partial text/audio but withholds new AI
+   notes and identification for silent, mono or one-sided signal and incomplete
+   channel transcripts. Follow-up generation requires ready status both before
+   spending and when saving. Decoded waveform, worker HTTP and SQL tests cover
+   these outcomes. Signal presence does not prove speech, clarity or complete
+   capture; a quiet participant may trigger the warning. Legacy single-channel
+   provider transcripts have no waveform assessment. Physical call validation
+   and rollout to the running worker remain required.
 2. **Recover and preserve.** Read-only provider recovery is now implemented for
    finished calls with both agreements. It fetches a known SID directly or
    searches the parent call, verifies account/call ownership and accepts one

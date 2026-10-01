@@ -8,7 +8,8 @@ from threading import Lock
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / '.data' / 'python'))
-for line in (ROOT / '.env').read_text(encoding='utf-8').splitlines():
+env_file = ROOT / '.env'
+for line in env_file.read_text(encoding='utf-8').splitlines() if env_file.exists() else []:
     if '=' in line and not line.lstrip().startswith('#'):
         key, value = line.split('=', 1)
         os.environ.setdefault(key.strip(), value.strip())
@@ -18,6 +19,7 @@ from fastapi import FastAPI, File, Header, HTTPException, UploadFile
 from faster_whisper import WhisperModel
 from faster_whisper.audio import decode_audio
 import uvicorn
+from audio_quality import inspect_channels
 
 app = FastAPI()
 model = None
@@ -41,15 +43,26 @@ def transcribe(file: UploadFile = File(...), authorization: str = Header(default
     if not lock.acquire(blocking=False):
         raise HTTPException(503, 'Transcription worker is busy; retry later')
     try:
-        if model is None:
+        try:
+            with av.open(io.BytesIO(audio)) as container:
+                count = container.streams.audio[0].layout.nb_channels
+                if count not in (1, 2):
+                    raise HTTPException(422, 'Unsupported audio layout')
+                stereo = count == 2
+            decoded = decode_audio(io.BytesIO(audio), split_stereo=stereo)
+            channels = list(decoded) if stereo else [decoded]
+            quality = inspect_channels(channels)
+        except (ValueError, IndexError, av.error.FFmpegError):
+            raise HTTPException(422, 'Empty or unreadable audio') from None
+        if quality['status'] != 'silent' and model is None:
             model = WhisperModel(os.environ.get('WHISPER_MODEL', 'base'), device='cpu',
                 compute_type='int8', cpu_threads=4, download_root=str(ROOT / '.data' / 'whisper-models'))
-        with av.open(io.BytesIO(audio)) as container:
-            stereo = container.streams.audio[0].layout.nb_channels == 2
-        decoded = decode_audio(io.BytesIO(audio), split_stereo=stereo)
-        channels = list(decoded) if stereo else [decoded]
         transcripts = []
-        for channel in channels:
+        for index, channel in enumerate(channels):
+            if not quality['channels'][index]['signal_present']:
+                transcripts.append({'text': '', 'words': [], 'language_code': None,
+                                    'language_probability': None})
+                continue
             segments, info = model.transcribe(channel, beam_size=5, word_timestamps=True, vad_filter=True)
             text, words = [], []
             for segment in segments:
@@ -59,7 +72,8 @@ def transcribe(file: UploadFile = File(...), authorization: str = Header(default
             transcripts.append({'text': ' '.join(text), 'words': words,
                 'language_code': info.language, 'language_probability': info.language_probability})
         # Mono audio cannot establish which speaker owns each turn.
-        return {'transcripts': transcripts} if stereo else transcripts[0]
+        return {'transcripts': transcripts, 'audio_quality': quality} if stereo else {
+            **transcripts[0], 'audio_quality': quality}
     finally:
         lock.release()
 

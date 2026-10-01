@@ -107,6 +107,7 @@ export async function transcribe(audioBlob, options = {}) {
       headers: { Authorization: `Bearer ${config.whisperApiToken}` },
       signal: AbortSignal.timeout(300_000),
     });
+    if (response.status === 422) throw new Error('The saved recording could not be decoded in a supported audio layout. Play or export it to check the file; AI notes were not generated.');
     if (!response.ok) throw new Error(`Local Whisper failed (HTTP ${response.status})`);
     return normalizeScribeResponse(await response.json(), options);
   }

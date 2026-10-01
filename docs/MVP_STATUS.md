@@ -65,6 +65,16 @@ Implemented and checked:
 - Review research across seven recorders and one adjacent transcription app,
   with dated evidence, implementation gaps and a paid-pilot validation plan:
   `CALL_RECORDING_REVIEW_RESEARCH.md`. Onboarding explains supported call routes.
+- Local Whisper measures decoded channel signal before inference. Silent
+  channels skip inference; silent/mono/one-sided signal and incomplete channel
+  transcripts prevent new AI notes and contact identification. Partial text,
+  diagnostics and original audio remain saved. Initial follow-up generation
+  now requires a ready call, including a transactional recheck after generation.
+  Signal presence is not proof of intelligible speech or complete recording;
+  a legitimately quiet participant can trigger the warning. Decoder, worker
+  HTTP and SQL tests cover silence, one-sided audio, cached retries and races.
+  Existing legacy single-channel provider transcripts have no signal measurement
+  and are not retroactively classified. Live worker rollout remains required.
 - Assigned business numbers are stored on each call and used as the bridge's
   caller ID, rather than showing every account's calls from the default line.
 - Expo web build, TypeScript and dependency compatibility checks.

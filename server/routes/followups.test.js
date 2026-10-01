@@ -10,7 +10,7 @@ await db.exec(await readFile(new URL('../db/schema.sql', import.meta.url), 'utf8
 const alice = (await db.query("INSERT INTO users(phone) VALUES('+15555550101') RETURNING id")).rows[0];
 const bob = (await db.query("INSERT INTO users(phone) VALUES('+15555550102') RETURNING id")).rows[0];
 const transcript = 'Caller: Can we meet tomorrow at two?\nUser: Yes tomorrow at two.';
-const call = (await db.query("INSERT INTO calls(user_id,user_phone,destination,transcript) VALUES($1,'+15555550101','+15555550103',$2) RETURNING id", [alice.id, transcript])).rows[0];
+const call = (await db.query("INSERT INTO calls(user_id,user_phone,destination,transcript,status) VALUES($1,'+15555550101','+15555550103',$2,'ready') RETURNING id", [alice.id, transcript])).rows[0];
 let generations = 0;
 let duringGeneration;
 mock.module('../db/pool.js', { namedExports: {
@@ -42,6 +42,16 @@ async function request(method, owner = 'alice', body, suffix = '') {
     return { status: response.status, data: await response.json() };
   } finally { server.close(); }
 }
+test('partial transcripts on failed or still-processing calls cannot generate followups', async () => {
+  const before = generations;
+  for (const status of ['failed', 'processing']) {
+    await db.query('UPDATE calls SET status=$2 WHERE id=$1', [call.id, status]);
+    assert.equal((await request('POST')).status, 409);
+  }
+  assert.equal(generations, before);
+  await db.query("UPDATE calls SET status='ready' WHERE id=$1", [call.id]);
+});
+
 test('drafts preserve ambiguous times; repeated generation retains reviewed edits', async () => {
   const result = await request('POST');
   assert.equal(result.status, 200);
@@ -118,4 +128,14 @@ test('a transcript change during generation cannot attach evidence to a differen
   assert.deepEqual((await request('POST')).data, existing);
   duringGeneration = undefined;
   await db.query('UPDATE calls SET transcript=$2 WHERE id=$1', [call.id, transcript]);
+});
+
+test('a call becoming incomplete during generation cannot save new proposals', async () => {
+  const existing = (await request('POST')).data;
+  duringGeneration = () => db.query("UPDATE calls SET status='failed' WHERE id=$1", [call.id]);
+  const result = await request('POST', 'alice', { version: existing.version }, '/refresh');
+  assert.equal(result.status, 409);
+  assert.deepEqual((await db.query('SELECT followups FROM calls WHERE id=$1', [call.id])).rows[0].followups, existing);
+  duringGeneration = undefined;
+  await db.query("UPDATE calls SET status='ready' WHERE id=$1", [call.id]);
 });
