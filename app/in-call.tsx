@@ -1,6 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Pressable, View } from 'react-native';
+import { Animated, Easing, Pressable, ScrollView, View } from 'react-native';
+import { CallBriefing } from '../src/components/CallBriefing';
 import { useApp } from '../src/AppContext';
 import { getCall } from '../src/api';
 import { Txt } from '../src/components/Txt';
@@ -77,9 +78,10 @@ export default function InCall() {
   const onCall = status === 'in-progress';
 
   return (
-    <View
-      style={{
-        flex: 1,
+    <ScrollView
+      style={{ flex: 1, backgroundColor: color.ink }}
+      contentContainerStyle={{
+        flexGrow: 1,
         backgroundColor: color.ink,
         alignItems: 'center',
         justifyContent: 'center',
@@ -90,6 +92,8 @@ export default function InCall() {
       <Txt size="screen" weight="bold">
         {dest ?? ''}
       </Txt>
+
+      <View style={{ width: '100%' }}><CallBriefing callId={id} /></View>
 
       <Txt size="subhead" tone="muted">
         {onCall ? clock : t(statusKey(status))}
@@ -127,6 +131,6 @@ export default function InCall() {
       >
         <Txt tone="accent">{t('backToRecents')}</Txt>
       </Pressable>
-    </View>
+    </ScrollView>
   );
 }

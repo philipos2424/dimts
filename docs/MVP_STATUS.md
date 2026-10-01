@@ -17,6 +17,10 @@ Implemented and checked:
 - Ollama Cloud summaries and contact extraction verified with a synthetic
   conversation using gemma4:31b; API key stored only in ignored server config.
 - Outgoing and incoming contact linking.
+- Pre-call contact notes and previous-call context in the dialer and call screen;
+  foreground incoming-call panel. Authenticated HTTP/SQL tests verify account
+  isolation, prior-call cutoff and omission of failed/future/current records.
+  Background delivery and physical-device presentation remain unverified.
 - Processing leases, provider timeouts and recording URL validation.
 - Callback SID checks and duplicate/late callback protection.
 - Atomic call completion and minute accounting; database failure and retry
@@ -47,8 +51,9 @@ Still required:
 - Confirm playback, transcript, summary and contact on a real call.
 - End-to-end follow-up review and confirmed calendar/email execution.
 - Verify minute limits on a real bridge and configure provider spend controls.
-- Pre-call contact memory/briefings, proposal evidence, rejection and action
-  receipts remain required by the approved caller design.
+- Background/locked-screen briefing delivery and physical-device verification.
+- Proposal evidence, rejection and action receipts remain required by the
+  approved caller design.
 - Verify real pool stocking/assignment, and implement retention/deletion controls.
 - Deployment with reachable AI services and hosted PostgreSQL.
 - Resolve applicable dependency advisories without downgrading Expo.

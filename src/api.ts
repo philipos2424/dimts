@@ -18,6 +18,20 @@ export type CallSummary = {
 };
 
 export type ActionItem = { task: string; owner: string | null };
+export type ContactContext = {
+  contact: { id: string; phone: string; display_name: string | null; company: string | null; notes: string | null } | null;
+  previous_calls: { id: string; created_at: string; direction: string; summary: string;
+    key_points: string[] | null; action_items: ActionItem[] | null; next_moves: string[] | null }[];
+};
+export function getCallContext(id: string) {
+  return request<ContactContext>(`/api/calls/${id}/context`, '');
+}
+export function getContactContext(phone: string) {
+  return request<ContactContext>(`/api/contacts/context?phone=${encodeURIComponent(phone)}`, '');
+}
+export function getActiveIncoming() {
+  return request<{ call: { id: string; destination: string; status: string; created_at: string } | null }>('/api/calls/incoming/active', '');
+}
 export type Followups = {
   email: { subject: string; body: string; recipient: string } | null;
   meeting: { title: string; notes: string; time_text: string; start: string; end: string } | null;

@@ -5,6 +5,7 @@ import { useEffect } from 'react';
 import { View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AppProvider, useApp } from '../src/AppContext';
+import { IncomingBriefing } from '../src/components/IncomingBriefing';
 import { color, font } from '../src/theme';
 
 function Gate() {
@@ -21,6 +22,8 @@ function Gate() {
   }, [ready, userPhone, segments, router]);
 
   return (
+    <View style={{ flex: 1 }}>
+    <IncomingBriefing />
     <Stack
       screenOptions={{
         headerStyle: { backgroundColor: color.ink },
@@ -39,6 +42,7 @@ function Gate() {
       <Stack.Screen name="settings" />
       <Stack.Screen name="call/[id]" />
     </Stack>
+    </View>
   );
 }
 

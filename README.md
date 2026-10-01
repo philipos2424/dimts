@@ -107,6 +107,16 @@ Call history and audio are filtered by the authenticated owner. Recordings are
 proxied by the backend. Duplicate processing workers are prevented with atomic
 database leases. Expired leases can be reclaimed with the retry endpoint.
 
+Before dialing a known number, the dialer shows contact notes, the previous
+call summary, earlier commitments and saved suggestions. The in-call screen
+uses the call's timestamp to include only conversations that preceded it.
+Briefings link to their source call and do not claim old tasks are still open
+or completed. Incoming calls show this memory in a private panel while the app
+is open and visible; answer using the handset's phone controls. This version
+polls active incoming calls every three seconds and does not deliver background,
+killed-app or locked-screen briefings yet. Those require native push integration
+and physical-device checks. Memory failure does not alter phone routing.
+
 ## Checks
 
 On a ready call, choose **Prepare follow-ups** to generate an email draft and

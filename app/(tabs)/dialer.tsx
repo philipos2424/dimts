@@ -1,10 +1,11 @@
 import { useRouter } from 'expo-router';
 import { useRef, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { useApp } from '../../src/AppContext';
 import { ApiError, startCall, newCallRequestKey } from '../../src/api';
 import { Banner } from '../../src/components/Banner';
 import { Txt } from '../../src/components/Txt';
+import { CallBriefing } from '../../src/components/CallBriefing';
 import { geezDigits, type Key } from '../../src/i18n';
 import { color, radius, space, type } from '../../src/theme';
 
@@ -43,7 +44,7 @@ export default function Dialer() {
   }
 
   return (
-    <View style={{ flex: 1, justifyContent: 'space-between' }}>
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1, justifyContent: 'space-between' }}>
       {errorKey && (
         <Banner message={t(errorKey)} onDismiss={() => setErrorKey(null)} />
       )}
@@ -65,6 +66,8 @@ export default function Dialer() {
           </Txt>
         )}
       </View>
+
+      {dialable && <View style={{ padding: space.md }}><CallBriefing phone={number} /></View>}
 
       <View
         style={{
@@ -147,6 +150,6 @@ export default function Dialer() {
           </Txt>
         </Pressable>
       </View>
-    </View>
+    </ScrollView>
   );
 }

@@ -4,6 +4,7 @@ import { existsSync } from 'node:fs';
 import { authRouter } from './routes/auth.js';
 import { contactsRouter } from './routes/contacts.js';
 import { followupsRouter } from './routes/followups.js';
+import { contextRouter } from './routes/context.js';
 import { callsRouter, meRouter, usageRouter } from './routes/calls.js';
 import { inboundRouter } from './routes/inbound.js';
 import { twimlRouter, webhooksRouter } from './routes/webhooks.js';
@@ -25,6 +26,7 @@ export function createApp() {
   });
   app.use('/api/auth', authRouter);
   app.use('/api/contacts', contactsRouter);
+  app.use('/api', contextRouter);
 
   app.use('/api/calls', callsRouter);
   app.use('/api/calls', followupsRouter);
