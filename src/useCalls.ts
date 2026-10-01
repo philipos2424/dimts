@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { useApp } from './AppContext';
-import { ApiError, type CallSummary, listCalls } from './api';
+import { ApiError, captureSessionGuard, type CallSummary, listCalls } from './api';
 import type { Key } from './i18n';
 
 const POLL_MS = 5000;
@@ -14,20 +14,27 @@ const SETTLED = new Set(['ready', 'failed', 'missed', 'completed']);
  */
 export function useCalls() {
   const { userPhone } = useApp();
-  const [calls, setCalls] = useState<CallSummary[]>([]);
+  const [snapshot, setSnapshot] = useState<{ phone: string | null; calls: CallSummary[] }>({ phone: null, calls: [] });
+  const calls = snapshot.phone === userPhone ? snapshot.calls : [];
   const [errorKey, setErrorKey] = useState<Key | null>(null);
   const [loading, setLoading] = useState(true);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const requestSequence = useRef(0);
 
   const refresh = useCallback(async () => {
     if (!userPhone) return;
+    const sequence = ++requestSequence.current, stillSignedIn = captureSessionGuard();
+    setLoading(true);
     try {
-      setCalls(await listCalls(userPhone));
+      const result = await listCalls(userPhone);
+      if (sequence !== requestSequence.current || !stillSignedIn()) return;
+      setSnapshot({ phone: userPhone, calls: result });
       setErrorKey(null);
     } catch (err) {
+      if (sequence !== requestSequence.current || !stillSignedIn()) return;
       setErrorKey(err instanceof ApiError ? err.messageKey : 'errorGeneric');
     } finally {
-      setLoading(false);
+      if (sequence === requestSequence.current && stillSignedIn()) setLoading(false);
     }
   }, [userPhone]);
 
@@ -35,8 +42,10 @@ export function useCalls() {
 
   useFocusEffect(
     useCallback(() => {
+      setErrorKey(null);
       refresh();
       return () => {
+        requestSequence.current++;
         if (timer.current) clearTimeout(timer.current);
       };
     }, [refresh])

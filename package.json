@@ -29,6 +29,7 @@
     "typescript": "~6.0.3"
   },
   "scripts": {
+    "client:test": "node --test tests/api-timeout.test.cjs",
     "dependencies:test": "node --test tests/dependency-compat.test.cjs",
     "start": "expo start",
     "android": "expo start --android",

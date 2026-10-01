@@ -6,6 +6,11 @@ and [MVP status](MVP_STATUS.md) for implementation status.
 
 ## First milestone
 
+In the app, choose **Open the first-call guide** from Recents or Settings.
+The guide links to actual call results and recovery, and does not automatically
+label a test as passed or initiate a call. The checks below still require real
+participants and inspected audio on installed apps.
+
 A new user routes a two-person call through Dimts, both participants agree to
 recording, both voices can be played back, and a useful summary plus editable
 next step is produced. The user can export their recording. Test this on both

@@ -163,27 +163,36 @@ async function request<T>(
   userPhone: string,
   init: RequestInit = {}
 ): Promise<T> {
-  let response: Response;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 30_000);
+  const cancel = () => controller.abort();
+  init.signal?.addEventListener('abort', cancel, { once: true });
+  if (init.signal?.aborted) controller.abort();
 
   try {
-    response = await fetch(`${BASE}${path}`, {
+    const response = await fetch(`${BASE}${path}`, {
       ...init,
+      signal: controller.signal,
       headers: {
         'Content-Type': 'application/json',
         ...authHeaders(userPhone),
         ...init.headers,
       },
     });
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '');
+      throw new ApiError('errorGeneric', `HTTP ${response.status}: ${detail}`, response.status);
+    }
+    return await response.json() as T;
   } catch (err) {
-    throw new ApiError('errorNetwork', String(err));
+    if (err instanceof ApiError) throw err;
+    throw new ApiError('errorNetwork', controller.signal.aborted
+      ? 'The request timed out. Refresh to check its result before trying again.'
+      : 'Unable to reach Dimts. Check your connection and try again.');
+  } finally {
+    clearTimeout(timer);
+    init.signal?.removeEventListener('abort', cancel);
   }
-
-  if (!response.ok) {
-    const detail = await response.text().catch(() => '');
-    throw new ApiError('errorGeneric', `HTTP ${response.status}: ${detail}`, response.status);
-  }
-
-  return response.json() as Promise<T>;
 }
 
 export function listCalls(userPhone: string) {

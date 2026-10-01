@@ -42,6 +42,7 @@ function Gate() {
         options={{ presentation: 'fullScreenModal', headerShown: false }}
       />
       <Stack.Screen name="settings" />
+      <Stack.Screen name="first-call" options={{ title: 'Test your first call' }} />
       <Stack.Screen name="call/[id]" />
     </Stack>
     </View>

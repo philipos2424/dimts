@@ -136,6 +136,12 @@ confident external action.
 
 1. **Capture confidence before payment.** Guided two-person test: both play back
    and confirm their voices; test each supported carrier/device/audio route.
+   Recents and Settings now link to a first-call guide with explicit steps for
+   separate handset/business numbers, routed outgoing/incoming calls, recording
+   agreement, playback, exports and reviewed follow-through. Owner call results
+   link to detail/recovery, but a ready summary never marks capture verified.
+   The guide does not place a call or save a passed test; real participants
+   still need to perform and inspect those calls.
    Add missing/silent-channel detection that flags uncertainty instead of
    manufacturing a transcript. Start with routed telephone calls only.
    The local Whisper worker now checks decoded channel signal using 200 ms
@@ -203,6 +209,12 @@ confident external action.
    and clear recovery steps. Never include recordings, transcripts or credentials
    in diagnostic exports by default. The current call ID aids operator support;
    it is not a staffed support service.
+   Client requests now time out after 30 seconds rather than waiting indefinitely
+   on network/body reads. Ambiguous call-start responses retain the dialer's
+   idempotency key, preventing a fresh retry from intentionally creating another
+   call. Client-module tests cover the timeout and HTTP-error distinction.
+   Timeout does not prove a server/provider action stopped; its result still
+   needs reconciliation.
 6. **Trusted follow-through.** Correct transcript/name/date errors, retain user
    edits through interruptions, and let users inspect the sentence behind a
    suggested action. Real OAuth and carrier tests remain release requirements.

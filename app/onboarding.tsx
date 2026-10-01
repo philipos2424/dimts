@@ -38,6 +38,9 @@ export default function Onboarding() {
             {t('onboardingBody')}
           </Txt>
           <Txt size="caption" tone="muted" style={{ maxWidth: 360 }}>
+            Use the mobile number of the phone you will answer, not a Twilio or Dimts business number.
+          </Txt>
+          <Txt size="caption" tone="muted" style={{ maxWidth: 360 }}>
             Dimts records calls routed through your Dimts number or started here. It does not capture every call on your phone or WhatsApp. Both people choose whether to record; the call can continue without recording.
           </Txt>
         </View>

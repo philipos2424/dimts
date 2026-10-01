@@ -1,26 +1,34 @@
 import { useEffect, useState } from 'react';
 import { Pressable, Share, View } from 'react-native';
-import { claimBusinessNumber, getMe } from '../api';
+import { captureSessionGuard, claimBusinessNumber, getMe } from '../api';
+import { useApp } from '../AppContext';
 import { space } from '../theme';
 import { Txt } from './Txt';
 
 export function BusinessNumber() {
+  const { userPhone } = useApp();
+  return userPhone ? <BusinessNumberForAccount key={userPhone} /> : null;
+}
+
+function BusinessNumberForAccount() {
   const [number, setNumber] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   useEffect(() => {
     let mounted = true;
-    getMe().then(me => { if (mounted) setNumber(me.agent_number); })
-      .catch(() => { if (mounted) setMessage('Could not load your business number. Try again.'); })
-      .finally(() => { if (mounted) setLoaded(true); });
+    const stillSignedIn = captureSessionGuard();
+    getMe().then(me => { if (mounted && stillSignedIn()) setNumber(me.agent_number); })
+      .catch(() => { if (mounted && stillSignedIn()) setMessage('Could not load your business number. Try again.'); })
+      .finally(() => { if (mounted && stillSignedIn()) setLoaded(true); });
     return () => { mounted = false; };
   }, []);
   async function claim() {
     setBusy(true); setMessage('');
-    try { setNumber((await claimBusinessNumber()).agent_number); }
-    catch (err) { setMessage(err instanceof Error ? err.message : 'No number is available yet.'); }
-    finally { setBusy(false); }
+    const stillSignedIn = captureSessionGuard();
+    try { const result = await claimBusinessNumber(); if (stillSignedIn()) setNumber(result.agent_number); }
+    catch (err) { if (stillSignedIn()) setMessage(err instanceof Error ? err.message : 'No number is available yet.'); }
+    finally { if (stillSignedIn()) setBusy(false); }
   }
   return <View style={{ padding: space.md, gap: space.sm }}>
     <Txt weight="bold">Your business line</Txt>

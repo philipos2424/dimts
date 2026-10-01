@@ -21,6 +21,23 @@ has been completed, and these changes are not deployed.
 Implemented and checked:
 
 - OTP signup/sign-in, opaque sessions, logout and account isolation tests.
+- A first-call guide is reachable from Recents and Settings. It explains the
+  distinct handset/business numbers, supported routes, two-party prompts,
+  short outgoing/incoming tests, beginning/middle/end playback, export checks
+  and reviewed Google follow-through. Actual owner call results link to detail
+  and recovery; ready AI notes are never labelled proof of complete capture.
+  The guide does not place a call, record a passed test or establish a pilot
+  result. Recents now hides cached data from another account and ignores stale
+  requests; the business-number panel resets per owner and ignores stale
+  session responses. Rendered/physical account-switch testing remains required.
+- Client API requests have a 30-second timeout covering fetch and response-body
+  reading. Network failures use sanitized messages and preserve ambiguous
+  call-start status; the dialer retains its request key for a lost response.
+  HTTP failure codes remain distinguishable. Three actual client-module tests
+  (`npm run client:test`) cover hanging requests, body stalls, same-key retry,
+  authentication headers, success cleanup and HTTP rejection. TypeScript and
+  all platform bundle exports pass. Transport cancellation is not proof that
+  a provider-side call or Google action was undone; reconciliation still applies.
 - Opt-in incoming-call notifications with session-bound device registration,
   private alerts, duplicate dispatch claims, ticket/receipt diagnostics, invalid
   device handling and authenticated cold-start/tap navigation. Dispatched

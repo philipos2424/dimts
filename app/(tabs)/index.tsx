@@ -4,6 +4,7 @@ import { useApp } from '../../src/AppContext';
 import { Banner } from '../../src/components/Banner';
 import { Empty } from '../../src/components/Empty';
 import { BusinessNumber } from '../../src/components/BusinessNumber';
+import { FirstCallLink } from '../../src/components/FirstCallLink';
 import { Txt } from '../../src/components/Txt';
 import { statusKey } from '../../src/i18n';
 import { color, space, statusColor } from '../../src/theme';
@@ -19,6 +20,7 @@ export default function Recents() {
       <View style={{ flex: 1 }}>
         {errorKey && <Banner message={t(errorKey)} onDismiss={clearError} />}
         <BusinessNumber />
+        <FirstCallLink />
         <Empty title={t('noCallsTitle')} body={t('noCallsBody')} />
       </View>
     );
@@ -29,7 +31,7 @@ export default function Recents() {
       {errorKey && <Banner message={t(errorKey)} onDismiss={clearError} />}
 
       <FlatList
-        ListHeaderComponent={<BusinessNumber />}
+        ListHeaderComponent={<><BusinessNumber /><FirstCallLink /></>}
         data={calls}
         keyExtractor={(item) => item.id}
         refreshControl={
