@@ -2,7 +2,7 @@
 
 The current Expo web app and Express API were deployed on 1 October 2026 to
 https://dimts.vercel.app in the existing `dimts` Vercel project. Deployment
-`dpl_FTP1rmgSTMvxVcKb26VqtFMKUpHE` reached READY and owns the production alias.
+`dpl_FKcgkVzyrX8m11SzBfFkUTyGpud9` reached READY and owns the production alias.
 The deploy CLI ended with a fetch error, but a subsequent provider inspection
 confirmed the deployment and alias. The root project now uses
 `vercel.json`, `api/index.js` and the `dist` Expo export; it no longer builds
@@ -12,8 +12,10 @@ excluded from uploads and Git.
 This is a reachable deployment, not a verified caller MVP. Public onboarding
 and first-call pages returned HTML 200, `/health` returned JSON 200, missing API
 paths returned JSON 404, and unsigned Twilio callbacks returned 403. A
-database-backed session lookup returned 500; private runtime logs report
-`DATABASE_URL` missing. Signed synthetic callbacks now return 204, including
+database-backed session lookup now returns the expected `401 session_expired`
+for an unissued token, confirming the deployed database connection. It
+previously returned 500 while `DATABASE_URL` was missing. Signed synthetic
+callbacks return 204, including
 URLs with query parameters; invalid signatures return 403. Named rewrite
 parameters previously added `?path=incoming` to the runtime URL and broke
 signature validation. Noncapturing routes preserve the URL and query string
@@ -41,8 +43,9 @@ query successfully reads the empty users table. The local SQL test proves
 that this backend role can read/write while a non-owner Data API role still
 cannot. Permissions are reproducible in `supabase-backend-access.sql`;
 passwords are excluded from the source. The administrator password was not
-changed. The exact pooler hostname is still needed from the dashboard, which
-currently requires sign-in. Do not infer its cluster index from the region.
+changed. Dashboard sign-in succeeded and the Connect dialog confirmed
+`aws-0-eu-central-2.pooler.supabase.com:6543`. Do not infer a project's cluster
+index from its region.
 
 ## Runtime settings and remaining verification
 
@@ -51,15 +54,16 @@ encoding. Device sign-in succeeded. Runtime provider settings and Twilio
 credentials were saved again; a private environment pull confirms public
 origin, database mode, provider names and budget caps as the expected plaintext
 values. Encrypted envelopes in `env ls` are not evidence of corrupt values.
-The database password is prepared privately, but no usable `DATABASE_URL`
-has been saved or deployed yet.
+The scoped backend connection was saved as a Production Secret and deployed.
+It uses `sslmode=verify-full` with `sslrootcert=server/db/supabase-ca.crt`.
+The public Supabase CA certificate was downloaded from the official dashboard
+link and explicitly included in the function bundle. Its SHA-256 fingerprint
+is `80:70:25:AD:50:D4:ED:21:9D:2C:9C:7D:29:9C:00:4F:82:4E:B0:0C:F7:F6:5A:FE:F6:07:D0:7B:72:E6:CA:FA`.
+Both a local TLS-verified query and the deployed session lookup pass. No TLS
+verification was disabled; no database password is stored in source.
 
-Configure a usable Supabase PostgreSQL connection string as `DATABASE_URL` in
-the project's Production environment. Keep it a Secret; do not paste the
-password into chat. Use the transaction pooler for Vercel. Redeploy after
-changing runtime settings and verify a random, unissued 64-hex bearer token
-returns `401 session_expired`, rather than a database 500. This tests database
-access without creating a user or bypassing phone verification.
+Keep `DATABASE_URL` a Secret and redeploy after changing it. The unissued-token
+check tests database access without creating a user or bypassing verification.
 
 The pilot settings select Ollama Cloud for summaries and the project's saved
 ElevenLabs key for transcription. A private Whisper server is not included in
@@ -75,10 +79,13 @@ proposal email to Caller. This verifies the local cloud credential and summary
 request, not recording/transcription or deployed end-to-end processing.
 
 The handset +251953405253 is verified in Twilio, and Ethiopia's low-risk Voice
-permission is enabled. Twilio's business number still points to the demo Voice
-webhook. Change it only after the public backend and signed callback checks
-pass, then stock the already-owned number with the operator script. The owner
-must sign in with OTP and claim the number before a real incoming test.
+permission is enabled. After public backend and signed callback checks passed,
+Twilio's owned business number was changed to POST directly to
+`https://dimts.vercel.app/twiml/incoming`; a provider read confirmed the setting.
+The operator script stocked the number without buying another one. The Verify
+service is accessible and uses six-digit codes. The owner must still sign in
+with OTP and claim the number before a real incoming test. No real SMS was
+sent by these automated checks, and no real phone call has been placed.
 
 After a two-person consent-based call, verify both voices, playback, transcript,
 summary and export. Google actions require separate OAuth configuration, and

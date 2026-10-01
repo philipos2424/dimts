@@ -4,7 +4,7 @@
   "installCommand": "npm ci && npm ci --prefix server",
   "buildCommand": "npx expo export --platform web --output-dir dist",
   "outputDirectory": "dist",
-  "functions": { "api/index.js": { "maxDuration": 300 } },
+  "functions": { "api/index.js": { "maxDuration": 300, "includeFiles": "server/db/supabase-ca.crt" } },
   "routes": [
     { "src": "/(?:api|twiml|webhooks|oauth)(?:/.*)?", "dest": "/api/index" },
     { "src": "/health", "dest": "/api/index" },

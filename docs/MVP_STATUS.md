@@ -46,10 +46,11 @@ Implemented and checked:
   https://dimts.vercel.app. The Dimts Supabase project is restored and the schema
   plus RLS protection are applied. All 235 backend tests pass. Public HTML,
   liveness and unsigned-callback rejection checks pass, but database-backed
-  authentication currently fails with a missing runtime `DATABASE_URL`.
+  database access now passes: an unissued token returns `401 session_expired`.
   Signed callbacks now pass, including query-string URLs; invalid signatures
-  are rejected. A dedicated scoped database login is prepared, awaiting the
-  exact pooler address from dashboard sign-in. Twilio routing remains on its demo.
+  are rejected. A dedicated scoped database login is deployed with verified
+  TLS and Supabase's CA. Twilio now routes to the backend, and the owned number
+  is stocked for account claiming. Owner OTP verification is pending.
   No real recording or signup is claimed. See `VERCEL_DEPLOYMENT.md`; this
   supersedes the earlier no-hosted-deployment observations above.
 
