@@ -1,5 +1,24 @@
 # Vercel pilot deployment
 
+## Signup restriction fix — 2 October 2026
+
+The latest production alias points to READY `dpl_EMERJqdpAW5vNsABB332LKuAQVjh`
+(`dimts-douhw9s7d-philiposw11-9068s-projects.vercel.app`). Verify errors for
+trial-unverified numbers and blocked country delivery now use explicit safe
+codes and client messages. All 245 backend tests, six client API-module tests
+and TypeScript pass; Vercel's web build succeeds.
+
+A live request using the screenshot's unverified number first returned
+HTTP 403 / Twilio `21608`. After deployment, the same request returns
+HTTP 403 / `verification_trial_number_required`. Read-only provider checks
+confirm the active trial account and recipient verification state. The failure
+is an upstream restriction; rejected attempts did not send an OTP. Actual
+delivery and completed signup remain unverified. Verify the handset in Twilio
+or use the previously verified pilot handset; no ownership check was bypassed.
+
+The following deployment details are historical and are superseded by this
+latest deployment identity.
+
 ## Latest deployment — 2 October 2026
 
 Production alias https://dimts.vercel.app now points to READY deployment

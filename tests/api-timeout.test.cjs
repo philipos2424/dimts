@@ -87,3 +87,12 @@ test('signup and call rejection messages explain the next step while retaining t
     await assert.rejects(harness.api.sendLoginCode('+15555550101'),err=>err.status===status && expected.test(err.message) && !/secret/.test(err.message));
   }
 });
+
+test('verification provider restrictions explain trial and country setup rather than claiming the user lacks access',async()=>{
+  for(const [code,expected] of [['verification_trial_number_required',/Twilio trial account.*Verify this mobile number/],
+    ['verification_country_disabled',/not enabled for this country/]]) {
+    const harness=loadApi(async()=>({ok:false,status:403,text:async()=>JSON.stringify({error:code,message:'private-provider-details'})}));
+    await assert.rejects(harness.api.sendLoginCode('+15555550101'),err=>err.status===403&&expected.test(err.message)&&
+      !/private-provider|not available for your account/.test(err.message));
+  }
+});

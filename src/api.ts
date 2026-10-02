@@ -172,6 +172,8 @@ function publicErrorMessage(status: number, body: string): string {
     handset_required: 'Use the mobile number you will answer, not the Dimts business number.',
     invalid_code: 'That verification code is incorrect or expired. Request another code and try again.',
     invalid_verification: 'Check your phone number and verification code, then try again.',
+    verification_trial_number_required: 'This pilot uses a Twilio trial account. Verify this mobile number in Twilio first, or use a verified test number.',
+    verification_country_disabled: 'Verification messages are not enabled for this country. The operator needs to check Twilio Verify geographic permissions.',
     authentication_required: 'Please sign in to continue.',
     session_expired: 'Your session expired. Please sign in again.',
     call_in_progress: 'Finish your current call before starting another.',

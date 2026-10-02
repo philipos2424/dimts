@@ -5,6 +5,28 @@ phone-call MVP.
 
 ## Review-driven update — 2 October 2026
 
+### Real signup rejection investigation
+
+A user's legitimate phone entry returned HTTP 403. A live retry confirmed
+Twilio error `21608`; a read-only provider audit confirms the account is an
+active Trial and the screenshot number is not a verified recipient. The
+previously selected pilot handset is verified. No code was sent by that
+rejected request. This is an upstream trial restriction, not proof that the
+user's Dimts account lacks permission. See [Twilio's Verify trial rules](https://www.twilio.com/docs/usage/trials/try-out-verify).
+
+The Verify adapter now maps trial-number rejection and country delivery
+restrictions to stable, sanitized error codes with actionable client messages.
+It does not bypass verification or automatically retry SMS. All 245 backend
+tests, six client tests and TypeScript pass. Real OTP delivery and owner
+verification remain pending; the earlier health checks do not prove them.
+
+The fix is deployed as READY `dpl_EMERJqdpAW5vNsABB332LKuAQVjh` at
+https://dimts.vercel.app. A live retry now returns the specific safe
+`verification_trial_number_required` error rather than a raw numeric provider
+code. The number remains blocked until the owner verifies it with Twilio; no
+OTP was delivered by these rejected attempts. The source fix cannot remove
+Twilio's account restriction.
+
 The [deep dive](CALLER_REVIEW_DEEP_DIVE.md) extends the store-review evidence with
 four Reddit threads, including positive/resolved reports, and provider access
 policy. Friendly signup/API errors replace raw server JSON; the English dialer
