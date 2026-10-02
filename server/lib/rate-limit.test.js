@@ -65,3 +65,29 @@ test('every response carries security headers; the web shell also gets a strict 
   assert.match(shell.headers.get('content-security-policy') ?? '', /default-src 'self'/);
   assert.match(shell.headers.get('content-security-policy') ?? '', /frame-ancestors 'none'/);
 });
+
+test('rotating made-up bearer tokens cannot escape the per-address ceiling', async () => {
+  await freshWindow();
+  let limited = false;
+  for (let i = 0; i < 301 && !limited; i++) {
+    const response = await get('/api/me', { Authorization: `Bearer fake${i}`, 'X-Forwarded-For': '198.51.100.7' });
+    limited = response.status === 429;
+  }
+  assert.ok(limited, 'one address is limited to 300 API requests a minute whatever token it sends');
+});
+
+test('the web shell policy lets the app load its own bundled fonts', async () => {
+  const shell = await get('/', { Accept: 'text/html' });
+  assert.match(shell.headers.get('content-security-policy') ?? '', /font-src[^;]*'self'/);
+});
+
+test('Vercel serves the same security headers and shell policy for static files', async () => {
+  const { WEB_SHELL_CSP } = await import('./security-headers.js');
+  const vercel = JSON.parse(await readFile(new URL('../../vercel.json', import.meta.url), 'utf8'));
+  const all = Object.fromEntries((vercel.headers ?? []).flatMap(rule => rule.headers.map(h => [h.key, h.value])));
+  assert.equal(all['Content-Security-Policy'], WEB_SHELL_CSP);
+  assert.equal(all['X-Content-Type-Options'], 'nosniff');
+  assert.equal(all['X-Frame-Options'], 'DENY');
+  assert.equal(all['Referrer-Policy'], 'no-referrer');
+  assert.match(all['Strict-Transport-Security'] ?? '', /max-age=\d+/);
+});

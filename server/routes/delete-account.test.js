@@ -98,3 +98,10 @@ test("deleting a contact deletes only that person's calls, and only for the owne
   assert.equal((await db.query('SELECT transcript FROM calls WHERE id=$1', [a.otherCall])).rows[0].transcript, 'Keep me');
   assert.equal(await count("SELECT count(*)::int n FROM audit_events WHERE user_id=$1 AND action='contact_deleted'", [a.id]), 1);
 });
+
+test('a call stuck in processing after its lease expired does not block account deletion', async () => {
+  const a = await account();
+  await db.query("UPDATE calls SET status='processing',processing_until=now()-interval '5 minutes' WHERE id=$1", [a.call]);
+  const response = await send('/api/me', a.token, 'DELETE', { confirm: 'delete-account' });
+  assert.equal(response.status, 202);
+});

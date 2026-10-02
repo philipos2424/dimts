@@ -5,7 +5,13 @@ import { assertDeletable, needsDeletionWork, scrubCall } from './scrub-call.js';
 import { processDeletion } from './process-deletion.js';
 
 async function scrubCalls(tx, rows) {
-  if (rows.some(call => call.status === 'processing')) {
+  // Only live work blocks erasure: an active lease, or a job queued in the
+  // last 15 minutes that no worker has claimed yet. Expired leases do not.
+  const now = Date.now();
+  const live = call => call.status === 'processing' && (call.processing_until
+    ? new Date(call.processing_until).getTime() > now
+    : !call.processing_requested_at || now - new Date(call.processing_requested_at).getTime() < 15 * 60_000);
+  if (rows.some(live)) {
     throw new HttpError(409, 'call_processing', 'Wait until your latest call notes are ready, then try again.');
   }
   for (const call of rows) await assertDeletable(tx, call);

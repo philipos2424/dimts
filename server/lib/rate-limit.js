@@ -25,11 +25,14 @@ function sweep() {
     .catch(err => console.error('[rate-limit] sweep failed', err?.message));
 }
 
-/** 120/min per session, 30/min per IP without one. Mounted on /api only. */
+/** 120/min per session, 30/min per IP without one, 300/min per IP overall. Mounted on /api only. */
 export async function apiRateLimit(req, _res, next) {
   try {
     sweep();
     const bearer = req.get('authorization')?.match(/^Bearer (\S+)$/i)?.[1];
+    // Every request also counts against its address, so inventing tokens
+    // cannot escape a ceiling.
+    await hit(`api-ip-all:${req.ip}`, 300, 60);
     if (bearer) await hit(`api-session:${bearer}`, 120, 60);
     else await hit(`api-ip:${req.ip}`, 30, 60);
     next();
