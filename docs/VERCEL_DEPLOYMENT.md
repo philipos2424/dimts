@@ -1,8 +1,25 @@
 # Vercel pilot deployment
 
+## Current production — 2 October 2026
+
+https://dimts.vercel.app points to READY `dpl_BGwiC9Rh48Ki4a9kw734rnJBvAgt`
+(`dimts-de4bk0bi5-philiposw11-9068s-projects.vercel.app`). Health and onboarding
+return 200; signed callbacks return 204 and invalid signatures return 403.
+The optional synthetic AI build check is disabled. When enabled, it failed
+because `ELEVENLABS_API_KEY` was unavailable to the build, although Vercel
+lists a Secret with that name. Transcription remains unverified.
+
+Real SMS delivery and completed signup are now confirmed for the selected
+verified pilot handset: the owner reported delivery, supplied the signed-in
+dashboard screenshot, and a read-only database audit confirms the matching
+business line and active session. No pilot call exists yet. The unverified
+alternative handset still encounters Twilio's trial restriction.
+
+Deployment identities and pending-signup statements below are historical.
+
 ## Signup restriction fix — 2 October 2026
 
-The latest production alias points to READY `dpl_EMERJqdpAW5vNsABB332LKuAQVjh`
+The signup-fix deployment was READY `dpl_EMERJqdpAW5vNsABB332LKuAQVjh`
 (`dimts-douhw9s7d-philiposw11-9068s-projects.vercel.app`). Verify errors for
 trial-unverified numbers and blocked country delivery now use explicit safe
 codes and client messages. All 245 backend tests, six client API-module tests
