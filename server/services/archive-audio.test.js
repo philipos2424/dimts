@@ -18,7 +18,14 @@ mock.module('./audio-store.js', { namedExports: {
 mock.module('./delete-recording.js', { namedExports: {
   deleteProviderRecording: async () => { providerCalls++; return providerResult; },
 } });
-const { archiveAudio, removeArchivedFromProvider } = await import('./archive-audio.js');
+let downloads = 0;
+mock.module('./originate.js', { namedExports: {
+  isE164: () => true, originateCall: async () => {},
+  fetchRecording: async () => { downloads++; return new Response(new Uint8Array([1, 2, 3, 4])); },
+} });
+const deferred = [];
+mock.module('../lib/defer.js', { namedExports: { defer: (promise, label) => { deferred.push(label); return promise; } } });
+const { archiveAudio, removeArchivedFromProvider, scheduleArchiveRetries } = await import('./archive-audio.js');
 const user = (await db.query("INSERT INTO users(phone) VALUES('+15555550301') RETURNING id")).rows[0];
 test.after(() => db.close());
 test.beforeEach(() => { configured = true; uploadError = null; storedSize = null; removed = []; providerResult = { status: 'confirmed' }; });
@@ -86,4 +93,20 @@ test('Twilio removal runs once per cooldown and records the verified outcome', a
   await db.query("UPDATE calls SET provider_archive_attempted_at=now()-interval '2 minutes' WHERE id=$1", [other.id]);
   providerResult = { status: 'confirmed' };
   assert.equal(await removeArchivedFromProvider(other.id), 'removed');
+});
+
+test('listing calls retries pending Twilio removals and failed uploads for that user only', async () => {
+  const other = (await db.query("INSERT INTO users(phone) VALUES('+15555550302') RETURNING id")).rows[0];
+  await db.query("UPDATE calls SET provider_archive_status='removed' WHERE user_id=$1", [user.id]);
+  const pending = await seed(); await db.query("UPDATE calls SET audio_object_key='k',provider_archive_status='pending' WHERE id=$1", [pending.id]);
+  const failed = await seed(); await db.query("UPDATE calls SET status='ready',provider_archive_status='upload_failed' WHERE id=$1", [failed.id]);
+  const done = await seed(); await db.query("UPDATE calls SET audio_object_key='k2',provider_archive_status='removed' WHERE id=$1", [done.id]);
+  await db.query(`INSERT INTO calls(user_id,user_phone,destination,status,recording_url,audio_object_key,provider_archive_status)
+    VALUES($1,'+1','+2','ready','https://api.twilio.com/y','k3','pending')`, [other.id]);
+  deferred.length = 0; downloads = 0; storedSize = 4;
+  await scheduleArchiveRetries(user.id);
+  assert.deepEqual(deferred.sort(), [`archive-remove:${pending.id}`, `archive-retry:${failed.id}`].sort());
+  await new Promise(r => setTimeout(r, 20));
+  assert.equal(downloads, 1);
+  assert.equal((await row(failed.id)).provider_archive_status, 'pending', 'retried upload now stored');
 });

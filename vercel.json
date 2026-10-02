@@ -1,6 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
+  "regions": ["fra1"],
   "installCommand": "npm ci && npm ci --prefix server",
   "buildCommand": "node server/scripts/check-ai-build.js && npx expo export --platform web --output-dir dist",
   "outputDirectory": "dist",

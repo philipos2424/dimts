@@ -15,6 +15,7 @@ import { hasRecordingAuthorization } from '../lib/recording-policy.js';
 import { reconcileCall } from '../services/end-call.js';
 import { checkCallDestination } from '../services/call-preflight.js';
 import { getAudio } from '../services/audio-store.js';
+import { scheduleArchiveRetries } from '../services/archive-audio.js';
 import { audit } from '../lib/audit.js';
 
 export const callsRouter = express.Router();
@@ -118,6 +119,7 @@ callsRouter.get('/', async (req, res, next) => {
   try {
     const user = await resolveUser(req);
     await reapStaleCalls(user.id);
+    await scheduleArchiveRetries(user.id).catch(err => console.error('[archive] retry scheduling failed', err?.message));
 
     const { rows } = await query(
       `SELECT ${LIST_COLUMNS} FROM calls c

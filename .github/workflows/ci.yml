@@ -1,0 +1,20 @@
+name: CI
+on:
+  push:
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm ci --prefix server
+      - run: npm test --prefix server
+      # node-forge (inside Expo's CLI, build tooling only) has no patched release yet;
+      # raise this back to high once one ships.
+      - run: npm audit --audit-level=critical
+      - run: npm audit --audit-level=high --prefix server
