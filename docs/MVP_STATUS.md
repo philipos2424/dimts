@@ -19,6 +19,9 @@ tests, the six client API tests and TypeScript pass. Twilio dashboard recovery,
 target verification, speech credentials and Google OAuth remain pending; this
 guard does not bypass any of them or prove recording success.
 
+The preflight guard is deployed READY as `dpl_9kYkPHmrFnaJhcz4YgwtgarmU5VU`
+at the production alias. This supersedes previous deployment identities below.
+
 ## End-call and stale-call repair — 2 October 2026
 
 The first real outgoing attempt reached the owner's handset. The owner asked

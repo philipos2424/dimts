@@ -2,8 +2,11 @@
 
 ## Current production — 2 October 2026
 
-https://dimts.vercel.app points to READY `dpl_4ZrSmkMNguwkYhZ6vpquFHYV1VDN`
-(`dimts-lx38ge8kj-philiposw11-9068s-projects.vercel.app`). The dialer now has
+https://dimts.vercel.app points to READY `dpl_9kYkPHmrFnaJhcz4YgwtgarmU5VU`
+(`dimts-a78ktf3nh-philiposw11-9068s-projects.vercel.app`). New outgoing calls
+check the connected account's trial recipient permissions before reserving or
+ringing a phone. Unverified targets receive an explicit, safe verification
+message. The dialer now has
 an explicit plus button beside Call, which prepends one plus sign without
 duplicating it. TypeScript and the hosted web build pass. Health and onboarding
 return 200; signed callbacks return 204 and invalid signatures return 403.
