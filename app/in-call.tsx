@@ -5,6 +5,7 @@ import { CallBriefing } from '../src/components/CallBriefing';
 import { useApp } from '../src/AppContext';
 import { getCall } from '../src/api';
 import { Txt } from '../src/components/Txt';
+import { EndCall } from '../src/components/EndCall';
 import { statusKey } from '../src/i18n';
 import { color, radius, space } from '../src/theme';
 
@@ -136,6 +137,7 @@ export default function InCall() {
       >
         <Txt tone="accent">{t('backToRecents')}</Txt>
       </Pressable>
+      {id && !SETTLED.has(status) && <EndCall id={id} onEnded={() => router.replace('/')} />}
     </ScrollView>
   );
 }

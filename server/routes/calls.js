@@ -13,6 +13,7 @@ import { callNotes } from '../lib/call-export.js';
 import { expireProcessing } from '../db/expire-processing.js';
 import { transcriptTurns } from '../lib/transcript-turns.js';
 import { hasRecordingAuthorization } from '../lib/recording-policy.js';
+import { reconcileCall } from '../services/end-call.js';
 
 export const callsRouter = express.Router();
 
@@ -66,6 +67,8 @@ callsRouter.post('/', async (req, res, next) => {
     const callback = new URL(config.publicBaseUrl);
     if (callback.protocol !== 'https:') throw new HttpError(503, 'callbacks_unavailable');
     await reapStaleCalls(user.id);
+    const active = await queryOne(`SELECT * FROM calls WHERE user_id=$1 AND request_key<>$2 AND status IN ('initiating','ringing','in-progress') LIMIT 1`, [user.id, requestKey]);
+    if (active?.twilio_call_sid) await reconcileCall(active);
     const { call, created } = await reserveCall(user, destination, record, requestKey);
     if (!created) return res.status(200).json({ callId: call.id, status: call.status });
 
@@ -94,6 +97,17 @@ callsRouter.post('/', async (req, res, next) => {
   } catch (err) {
     next(err);
   }
+});
+
+callsRouter.post('/:id/end', async (req, res, next) => {
+  try {
+    const user = await resolveUser(req);
+    const call = await queryOne('SELECT * FROM calls WHERE id=$1 AND user_id=$2', [req.params.id, user.id]);
+    if (!call) throw new HttpError(404, 'call_not_found');
+    const result = await reconcileCall(call, { stop: true });
+    if (!result.ended) throw new HttpError(409, 'call_stop_pending', 'The call is still starting or stopping. Try End call again shortly.');
+    res.json({ status: 'ended' });
+  } catch (err) { next(err); }
 });
 
 callsRouter.get('/', async (req, res, next) => {

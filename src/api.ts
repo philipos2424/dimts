@@ -236,6 +236,9 @@ export function listCalls(userPhone: string) {
   );
 }
 
+export function endCall(id: string) {
+  return request<{ status: 'ended' }>(`/api/calls/${id}/end`, '', { method: 'POST' });
+}
 export function getCall(id: string, userPhone: string) {
   return request<CallDetail>(`/api/calls/${id}`, userPhone);
 }

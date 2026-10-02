@@ -19,6 +19,11 @@ mock.module('../lib/users.js', { namedExports: {
   HttpError: class extends Error { constructor(status, code) { super(code); this.status = status; this.code = code; } },
 } });
 let providerCalls = 0;
+let stops = 0;
+mock.module('../services/end-call.js', { namedExports: { reconcileCall: async (_call, options) => {
+  if (options?.stop) { stops++; return { ended: true }; }
+  return { ended: false };
+} } });
 mock.module('../services/originate.js', { namedExports: {
   isE164: n => /^\+[1-9]\d{6,14}$/.test(n), fetchRecording: async () => {},
   originateCall: async () => { providerCalls++; return 'CA_TEST'; },
@@ -47,4 +52,18 @@ test('a retried HTTP request cannot originate twice; invalid requests never call
   assert.equal(providerCalls, 1);
   assert.equal((await post('request-0002')).status, 409);
   assert.equal(providerCalls, 1);
+});
+
+test('ending a call checks ownership before touching the provider', async () => {
+  const server = app.listen(0);
+  try {
+    const other = (await db.query("INSERT INTO users(phone) VALUES('+15555550103') RETURNING id")).rows[0];
+    const call = (await db.query("INSERT INTO calls(user_id,user_phone,destination) VALUES($1,'+15555550103','+15555550104') RETURNING id", [other.id])).rows[0];
+    const url = `http://127.0.0.1:${server.address().port}/calls/`;
+    assert.equal((await fetch(`${url}${call.id}/end`, { method: 'POST' })).status, 404);
+    assert.equal(stops, 0);
+    const own = (await db.query('SELECT id FROM calls WHERE user_id=$1 LIMIT 1', [user.id])).rows[0];
+    assert.equal((await fetch(`${url}${own.id}/end`, { method: 'POST' })).status, 200);
+    assert.equal(stops, 1);
+  } finally { server.close(); }
 });

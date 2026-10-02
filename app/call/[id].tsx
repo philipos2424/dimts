@@ -9,6 +9,7 @@ import { audioClock, CallPlayer, type SeekRequest } from '../../src/components/C
 import { FollowupReview } from '../../src/components/FollowupReview';
 import { Section } from '../../src/components/Section';
 import { Txt } from '../../src/components/Txt';
+import { EndCall } from '../../src/components/EndCall';
 import { type Key, statusKey } from '../../src/i18n';
 import { color, space } from '../../src/theme';
 import { exportCall } from '../../src/exportCall';
@@ -111,6 +112,7 @@ export default function CallDetailScreen() {
 
   return (
     <ScrollView ref={scroll} contentContainerStyle={{ padding: space.md, gap: space.lg }}>
+      {['initiating', 'ringing', 'in-progress'].includes(call.status) && <EndCall id={call.id} onEnded={() => { void load(); }} />}
       {errorKey && <Banner message={t(errorKey)} onDismiss={() => setErrorKey(null)} />}
 
       <Txt size="caption" tone="muted" selectable>Call ID: {call.id}</Txt>

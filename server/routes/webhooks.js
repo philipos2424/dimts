@@ -11,6 +11,7 @@ import { askRecordingConsent, dialCall, issueRecordingNotice } from '../lib/reco
 import { hasRecordingAuthorization, recordingAuthorizationSql } from '../lib/recording-policy.js';
 import { beginAgreedRecording } from '../db/start-recording.js';
 import { processDeletion } from '../services/process-deletion.js';
+import { reconcileCall } from '../services/end-call.js';
 
 const { VoiceResponse } = twilio.twiml;
 
@@ -145,6 +146,10 @@ webhooksRouter.post('/call-status', async (req, res) => {
   const call = await resolveCall({ callId: req.query.callId, callSid: CallSid });
 
   if (call) {
+    if (['completed', 'busy', 'no-answer', 'failed', 'canceled'].includes(CallStatus) && call.duration_sec == null) {
+      const result = await reconcileCall(call);
+      if (result.ended) return res.status(204).end();
+    }
     const mapped = { ringing: 'ringing', 'in-progress': 'in-progress' }[CallStatus];
 
     if (mapped) {

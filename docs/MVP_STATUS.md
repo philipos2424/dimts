@@ -3,6 +3,29 @@
 This build is in progress. Passing unit tests does not establish a working
 phone-call MVP.
 
+## End-call and stale-call repair — 2 October 2026
+
+The first real outgoing attempt reached the owner's handset. The owner asked
+to stop it, and an operator provider check confirmed the parent ended with no
+child legs. The database nevertheless remained `in-progress`, blocking a new
+call. The specified row was corrected to failed with zero connected duration
+and a descriptive error, after verifying the provider's terminal state.
+This is a real routing attempt, not a successful two-person recording test.
+
+Parent lifecycle completion now reconciles provider status and child duration
+through the same atomic finalizer as dial-done. Before a new call, an existing
+active row is checked against the provider; an idempotent retry of the same
+request does not need a provider check. A genuinely active provider call remains
+blocked. The authenticated owner can end a call through a new endpoint and
+End call controls on the live-call and call-detail screens. Cross-account
+call access returns 404 without touching the provider. Ambiguous child legs
+and unconfirmed stop outcomes do not clear an active reservation.
+
+All 255 backend tests and TypeScript pass; targeted final changes also pass.
+The reconciliation service was exercised against the specified real call and
+hosted database: it confirms ended and preserves the already finalized row.
+No audio/AI result was established. Physical UI end-call testing remains pending.
+
 ## Processing deadline — 2 October 2026
 
 The deployed function permits 300 seconds, but the previous per-stage timeouts
