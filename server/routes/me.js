@@ -5,6 +5,8 @@ import { claimNumber } from '../db/claim-number.js';
 import { HttpError, resolveUser } from '../lib/users.js';
 import { TERMS_VERSION, hasAcceptedTerms } from '../lib/terms.js';
 import { audit } from '../lib/audit.js';
+import { hit } from '../lib/rate-limit.js';
+import { buildExport } from '../services/export-user.js';
 
 export const meRouter = express.Router();
 
@@ -49,5 +51,15 @@ meRouter.get('/activity', async (req, res, next) => {
     const { rows } = await query(`SELECT action,target_type,target_id,created_at FROM audit_events
       WHERE user_id=$1 ORDER BY created_at DESC, id DESC LIMIT 200`, [user.id]);
     res.json({ events: rows });
+  } catch (err) { next(err); }
+});
+
+meRouter.get('/export', async (req, res, next) => {
+  try {
+    const user = await resolveUser(req);
+    await hit(`export:${user.id}`, 5, 3600);
+    const data = await buildExport(user.id);
+    await audit({ userId: user.id, action: 'data_exported', req });
+    res.set('Content-Disposition', `attachment; filename="dimts-export-${data.exported_at.slice(0, 10)}.json"`).json(data);
   } catch (err) { next(err); }
 });
