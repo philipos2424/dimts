@@ -95,7 +95,7 @@ export function preserveTimeAmbiguity(summary, transcript) {
   return { ...summary, summary: clean(summary.summary),
     next_moves: summary.next_moves.map(clean), key_points: summary.key_points.map(clean),
     action_items: summary.action_items.map(item => ({ ...item, task: clean(item.task) })),
-    agreements: summary.agreements.map(item => (item && typeof item === 'object' && typeof item.value === 'string'
+    agreements: (summary.agreements ?? []).map(item => (item && typeof item === 'object' && typeof item.value === 'string'
       ? { ...item, value: clean(item.value) } : item)) };
 }
 
