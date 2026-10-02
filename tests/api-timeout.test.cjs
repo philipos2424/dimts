@@ -82,6 +82,8 @@ test('signup and call rejection messages explain the next step while retaining t
   for (const [code,status,expected] of [['invalid_code',401,/incorrect or expired/],
     ['handset_required',400,/mobile number you will answer/],['session_expired',401,/sign in again/],
     ['call_in_progress',409,/Finish your current call/],['daily_call_limit',429,/today/],
+    ['destination_trial_number_required',403,/other phone.*Verified Caller IDs.*No call was started/],
+    ['handset_trial_number_required',403,/answering phone.*verified/],
     ['constructor',400,/Check your details/],['too_many_attempts',429,/wait/]]) {
     const harness=loadApi(async()=>({ok:false,status,text:async()=>JSON.stringify({error:code,message:'secret'})}));
     await assert.rejects(harness.api.sendLoginCode('+15555550101'),err=>err.status===status && expected.test(err.message) && !/secret/.test(err.message));

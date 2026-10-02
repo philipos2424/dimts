@@ -3,6 +3,22 @@
 This build is in progress. Passing unit tests does not establish a working
 phone-call MVP.
 
+## Trial destination preflight — 2 October 2026
+
+New outgoing attempts now read the provider account type/status and verify
+both trial dial-through legs before reserving minutes or originating the
+owner call. Full accounts skip trial-recipient checks. An unverified target
+gets an explicit safe instruction to use Verified Caller IDs; provider lookup
+failure blocks calling without revealing its error body. Existing request-key
+retries retain the original result without another preflight or paid call.
+
+A real read-only provider check confirms the pilot owner is verified and the
+selected destination is still unverified. It returns the expected safe 403
+without sending a verification message or placing a call. All 260 backend
+tests, the six client API tests and TypeScript pass. Twilio dashboard recovery,
+target verification, speech credentials and Google OAuth remain pending; this
+guard does not bypass any of them or prove recording success.
+
 ## End-call and stale-call repair — 2 October 2026
 
 The first real outgoing attempt reached the owner's handset. The owner asked

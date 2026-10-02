@@ -174,6 +174,8 @@ function publicErrorMessage(status: number, body: string): string {
     invalid_verification: 'Check your phone number and verification code, then try again.',
     verification_trial_number_required: 'This pilot uses a Twilio trial account. Verify this mobile number in Twilio first, or use a verified test number.',
     verification_country_disabled: 'Verification messages are not enabled for this country. The operator needs to check Twilio Verify geographic permissions.',
+    destination_trial_number_required: 'The other phone must be verified in this Twilio trial account. Add it under Verified Caller IDs, then try again. No call was started.',
+    handset_trial_number_required: 'Your answering phone must be verified in the connected Twilio trial account before this call can start.',
     authentication_required: 'Please sign in to continue.',
     session_expired: 'Your session expired. Please sign in again.',
     call_in_progress: 'Finish your current call before starting another.',

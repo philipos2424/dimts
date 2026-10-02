@@ -19,6 +19,12 @@ mock.module('../lib/users.js', { namedExports: {
   HttpError: class extends Error { constructor(status, code) { super(code); this.status = status; this.code = code; } },
 } });
 let providerCalls = 0;
+let rejectPreflight = false;
+let preflights = 0;
+mock.module('../services/call-preflight.js', { namedExports: { checkCallDestination: async () => {
+  preflights++;
+  if (rejectPreflight) throw Object.assign(new Error('unverified destination'), { status: 403, code: 'destination_trial_number_required' });
+} } });
 let stops = 0;
 mock.module('../services/end-call.js', { namedExports: { reconcileCall: async (_call, options) => {
   if (options?.stop) { stops++; return { ended: true }; }
@@ -50,8 +56,18 @@ test('a retried HTTP request cannot originate twice; invalid requests never call
   assert.equal(first.data.callId, retry.data.callId);
   assert.equal((await db.query('SELECT twilio_account_sid FROM calls WHERE id=$1', [first.data.callId])).rows[0].twilio_account_sid, process.env.TWILIO_ACCOUNT_SID);
   assert.equal(providerCalls, 1);
+  assert.equal(preflights, 1, 'an idempotent retry skips preflight');
   assert.equal((await post('request-0002')).status, 409);
   assert.equal(providerCalls, 1);
+});
+
+test('unverified trial destinations create no call reservation or provider call', async () => {
+  rejectPreflight = true;
+  const before = (await db.query('SELECT count(*)::int AS count FROM calls')).rows[0].count;
+  assert.equal((await post('request-unverified')).status, 403);
+  assert.equal((await db.query('SELECT count(*)::int AS count FROM calls')).rows[0].count, before);
+  assert.equal(providerCalls, 1);
+  rejectPreflight = false;
 });
 
 test('ending a call checks ownership before touching the provider', async () => {

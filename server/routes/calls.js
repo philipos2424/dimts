@@ -14,6 +14,7 @@ import { expireProcessing } from '../db/expire-processing.js';
 import { transcriptTurns } from '../lib/transcript-turns.js';
 import { hasRecordingAuthorization } from '../lib/recording-policy.js';
 import { reconcileCall } from '../services/end-call.js';
+import { checkCallDestination } from '../services/call-preflight.js';
 
 export const callsRouter = express.Router();
 
@@ -69,6 +70,8 @@ callsRouter.post('/', async (req, res, next) => {
     await reapStaleCalls(user.id);
     const active = await queryOne(`SELECT * FROM calls WHERE user_id=$1 AND request_key<>$2 AND status IN ('initiating','ringing','in-progress') LIMIT 1`, [user.id, requestKey]);
     if (active?.twilio_call_sid) await reconcileCall(active);
+    const previous = await queryOne('SELECT id FROM calls WHERE user_id=$1 AND request_key=$2', [user.id, requestKey]);
+    if (!previous) await checkCallDestination(user.phone, destination);
     const { call, created } = await reserveCall(user, destination, record, requestKey);
     if (!created) return res.status(200).json({ callId: call.id, status: call.status });
 
