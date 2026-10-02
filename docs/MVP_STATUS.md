@@ -3,6 +3,29 @@
 This build is in progress. Passing unit tests does not establish a working
 phone-call MVP.
 
+## Release 1: trust foundation (3 October 2026, branch `release-1-trust`)
+
+| Area | State |
+|---|---|
+| One `notice` consent rule, terms accepted at signup | Built, tested |
+| Audio archived to EU storage, Twilio copy removed after verification | Built, tested with mocked storage |
+| Export all data, delete account, delete contact | Built, tested |
+| Privacy requests from people who were recorded | Built, tested |
+| API rate limits, security headers, audit log | Built, tested |
+| Frankfurt region, CI workflow | Configured, **not yet deployed** |
+| Privacy policy, terms, subprocessors | **Drafts**: need lawyer review |
+
+**Not yet done in production (founder confirms each step):**
+1. Apply `server/db/schema.sql`, `supabase-privacy.sql` and `supabase-backend-access.sql`.
+2. Run `create-audio-bucket.js`.
+3. Set `SUPABASE_URL`, `SUPABASE_SECRET_KEY` and `AUDIT_SALT` in Vercel.
+4. Deploy.
+5. Run the backfill with `--dry-run`, then for real.
+6. Make one real outbound and one real inbound call.
+
+306 backend tests pass. TypeScript and the web export pass. See
+`docs/superpowers/specs/2026-10-02-dimts-roadmap.md`.
+
 ## Trial destination preflight — 2 October 2026
 
 New outgoing attempts now read the provider account type/status and verify
