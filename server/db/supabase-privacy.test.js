@@ -10,7 +10,7 @@ test('Supabase privacy migration shields every application table from non-owner 
     const metadata=await db.query(`SELECT count(*)::int AS total,bool_and(relrowsecurity) AS protected
       FROM pg_class JOIN pg_namespace ON pg_namespace.oid=relnamespace
       WHERE nspname='public' AND relkind='r'`);
-    assert.equal(metadata.rows[0].protected,true);assert.equal(metadata.rows[0].total,19);
+    assert.equal(metadata.rows[0].protected,true);assert.equal(metadata.rows[0].total,20);
     await db.query("INSERT INTO users(phone) VALUES('+15555550199')");
     await db.exec('CREATE ROLE dimts_data_api_test NOLOGIN; GRANT USAGE ON SCHEMA public TO dimts_data_api_test; GRANT SELECT,INSERT ON ALL TABLES IN SCHEMA public TO dimts_data_api_test; SET ROLE dimts_data_api_test');
     assert.equal((await db.query('SELECT phone FROM users')).rows.length,0);

@@ -263,3 +263,10 @@ ALTER TABLE calls ADD COLUMN IF NOT EXISTS agreements JSONB;
 ALTER TABLE calls ADD COLUMN IF NOT EXISTS conflicts JSONB;
 ALTER TABLE calls ADD COLUMN IF NOT EXISTS recap TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS language TEXT NOT NULL DEFAULT 'en' CHECK (language IN ('en','am'));
+CREATE TABLE IF NOT EXISTS promise_states (
+  call_id UUID NOT NULL REFERENCES calls(id) ON DELETE CASCADE,
+  item_index INT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('open','done','dismissed')),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (call_id, item_index)
+);

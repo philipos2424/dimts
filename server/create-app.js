@@ -13,6 +13,7 @@ import { callDeletionRouter, deletionsRouter } from './routes/call-deletion.js';
 import { notificationsRouter } from './routes/notifications.js';
 import { callsRouter, usageRouter } from './routes/calls.js';
 import { meRouter } from './routes/me.js';
+import { promisesRouter } from './routes/promises.js';
 import { myPrivacyRequestsRouter, privacyRequestsRouter } from './routes/privacy-requests.js';
 import { inboundRouter } from './routes/inbound.js';
 import { twimlRouter, webhooksRouter } from './routes/webhooks.js';
@@ -51,6 +52,7 @@ export function createApp({ webRoot = fileURLToPath(new URL('../dist/', import.m
   app.use('/api/calls', emailActionsRouter);
   app.use('/api/calls', followupsRouter);
   app.use('/api/usage', usageRouter);
+  app.use('/api/promises', promisesRouter);
   app.use('/api/me/privacy-requests', myPrivacyRequestsRouter);
   app.use('/api/me', meRouter);
   app.use('/api/privacy-requests', privacyRequestsRouter);
