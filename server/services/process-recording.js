@@ -12,6 +12,7 @@ import { archiveAudio, removeArchivedFromProvider } from './archive-audio.js';
 import { defer } from '../lib/defer.js';
 import { resolveAgreements } from '../lib/agreements.js';
 import { transcriptTurns } from '../lib/transcript-turns.js';
+import { checkConsistency } from './consistency.js';
 
 const DOWNLOAD_ATTEMPTS = 3;
 const DOWNLOAD_BACKOFF_MS = 2000;
@@ -190,6 +191,7 @@ export async function processRecording(callId, { force = false, signal: callerSi
     // update a contact. A stale worker cannot apply its old result.
     if (saved.rows.length) {
       await nameContact(call, result.text, signal);
+      await checkConsistency(callId, { signal });
       // Notes are safe and the audio is in EU storage: Twilio's copy can go.
       defer(removeArchivedFromProvider(callId), `archive-remove:${callId}`);
     }
