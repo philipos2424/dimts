@@ -3,6 +3,18 @@
 This build is in progress. Passing unit tests does not establish a working
 phone-call MVP.
 
+## Verified pilot signup — 2 October 2026
+
+The live `/api/auth/start` request for the previously selected Twilio-verified
+pilot handset returned HTTP 202 `code_sent`. The owner confirmed that the SMS
+arrived and then supplied a screenshot of the signed-in Recents dashboard with
+the assigned business line. A read-only production database audit confirms
+one matching owner/line assignment, one active owner session and zero calls.
+This establishes real OTP delivery, completed signup and business-number
+assignment for this pilot. It does not establish signup for arbitrary trial
+recipients or recording/AI success. Earlier pending-signup notes below are
+historical; the screenshot's unverified alternative handset remains restricted.
+
 ## Hosted AI check — 2 October 2026
 
 An opt-in build check now exercises transcription, summary and identity with
