@@ -11,7 +11,8 @@ import { emailActionsRouter } from './routes/email-actions.js';
 import { recordingRecoveryRouter } from './routes/recording-recovery.js';
 import { callDeletionRouter, deletionsRouter } from './routes/call-deletion.js';
 import { notificationsRouter } from './routes/notifications.js';
-import { callsRouter, meRouter, usageRouter } from './routes/calls.js';
+import { callsRouter, usageRouter } from './routes/calls.js';
+import { meRouter } from './routes/me.js';
 import { inboundRouter } from './routes/inbound.js';
 import { twimlRouter, webhooksRouter } from './routes/webhooks.js';
 

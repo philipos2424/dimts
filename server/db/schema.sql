@@ -216,3 +216,15 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_version TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
 ALTER TABLE calls DROP CONSTRAINT IF EXISTS calls_consent_mode_check;
 ALTER TABLE calls ADD CONSTRAINT calls_consent_mode_check CHECK (consent_mode IN ('all_parties','owner_only','notice'));
+
+-- Release 1: who did what to which data. No content, only references.
+CREATE TABLE IF NOT EXISTS audit_events (
+  id BIGSERIAL PRIMARY KEY,
+  user_id UUID,
+  action TEXT NOT NULL,
+  target_type TEXT,
+  target_id TEXT,
+  ip_hash TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS audit_events_user_idx ON audit_events(user_id, created_at DESC);

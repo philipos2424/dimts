@@ -4,6 +4,8 @@ import { query, queryOne } from '../db/pool.js';
 import { isE164 } from '../lib/phone.js';
 import { hashToken, HttpError, resolveUser } from '../lib/users.js';
 import { checkPhoneCode, sendPhoneCode } from '../services/verify-phone.js';
+import { audit } from '../lib/audit.js';
+import { hasAcceptedTerms } from '../lib/terms.js';
 
 export const authRouter = express.Router();
 
@@ -40,19 +42,21 @@ authRouter.post('/verify', async (req, res) => {
   const user = await queryOne(
     `INSERT INTO users (phone) VALUES ($1)
      ON CONFLICT (phone) DO UPDATE SET phone = EXCLUDED.phone
-     RETURNING id, phone, tier`, [phone]
+     RETURNING id, phone, tier, terms_version`, [phone]
   );
   const token = randomBytes(32).toString('hex');
   await query(
     `INSERT INTO sessions (token_hash, user_id, expires_at)
      VALUES ($1, $2, now() + interval '30 days')`, [hashToken(token), user.id]
   );
-  res.set('Cache-Control', 'no-store').json({ token, phone: user.phone });
+  await audit({ userId: user.id, action: 'signed_in', req });
+  res.set('Cache-Control', 'no-store').json({ token, phone: user.phone, terms_required: !hasAcceptedTerms(user) });
 });
 
 authRouter.post('/logout', async (req, res) => {
-  await resolveUser(req);
+  const user = await resolveUser(req);
   const token = req.get('authorization').slice(7);
   await query('DELETE FROM sessions WHERE token_hash = $1', [hashToken(token)]);
+  await audit({ userId: user.id, action: 'signed_out', req });
   res.json({ status: 'signed_out' });
 });

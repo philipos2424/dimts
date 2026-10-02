@@ -9,7 +9,8 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
   users, calls, usage_minutes, contacts, followup_events, call_budget_lock,
   sessions, agent_number_pool, auth_rate_limits, google_oauth_requests,
   google_connections, calendar_actions, email_actions, notification_devices,
-  call_notifications TO dimts_caller_backend;
+  call_notifications, audit_events TO dimts_caller_backend;
+GRANT USAGE ON SEQUENCE audit_events_id_seq TO dimts_caller_backend;
 
 DO $$
 DECLARE app_table TEXT;
@@ -18,7 +19,7 @@ BEGIN
     'users', 'calls', 'usage_minutes', 'contacts', 'followup_events',
     'call_budget_lock', 'sessions', 'agent_number_pool', 'auth_rate_limits',
     'google_oauth_requests', 'google_connections', 'calendar_actions',
-    'email_actions', 'notification_devices', 'call_notifications'
+    'email_actions', 'notification_devices', 'call_notifications', 'audit_events'
   ] LOOP
     EXECUTE format('DROP POLICY IF EXISTS dimts_backend_access ON public.%I', app_table);
     EXECUTE format('CREATE POLICY dimts_backend_access ON public.%I FOR ALL TO dimts_caller_backend USING (true) WITH CHECK (true)', app_table);

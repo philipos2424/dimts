@@ -7,7 +7,6 @@ import { defer } from '../lib/defer.js';
 import { fetchRecording, isE164, originateCall } from '../services/originate.js';
 import { processRecording } from '../services/process-recording.js';
 import { reserveCall } from '../db/reserve-call.js';
-import { claimNumber } from '../db/claim-number.js';
 import { expireRecordingWait } from '../db/expire-recording-wait.js';
 import { callNotes } from '../lib/call-export.js';
 import { expireProcessing } from '../db/expire-processing.js';
@@ -270,33 +269,4 @@ usageRouter.get('/', async (req, res, next) => {
   }
 });
 
-export const meRouter = express.Router();
-meRouter.post('/number', async (req, res, next) => {
-  try {
-    const user = await resolveUser(req);
-    if (user.agent_number) return res.json({ agent_number: user.agent_number });
-    if (!process.env.PUBLIC_BASE_URL) throw new HttpError(503, 'routing_unavailable', 'Business-number routing is not configured yet.');
-    const base = new URL(config.publicBaseUrl);
-    if (base.protocol !== 'https:') throw new HttpError(503, 'routing_unavailable');
-    res.json(await claimNumber(user.id, `${config.publicBaseUrl}/twiml/incoming`));
-  } catch (err) { next(err); }
-});
-
-/** The app needs to know which number to tell the user to publish. */
-meRouter.get('/', async (req, res, next) => {
-  try {
-    const user = await resolveUser(req);
-    const row = await queryOne(
-      'SELECT id, phone, tier, agent_number FROM users WHERE id = $1',
-      [user.id]
-    );
-
-    res.json({
-      phone: row.phone,
-      tier: row.tier,
-      agent_number: row.agent_number ?? null,
-    });
-  } catch (err) {
-    next(err);
-  }
-});
+export { meRouter } from './me.js';
