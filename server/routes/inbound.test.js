@@ -79,34 +79,35 @@ test.beforeEach(() => {
   contact = { id: 'c1', phone: '+14155552671', display_name: null };
   failContactLookup = false;
   failReservation = false;
-  reserved = { id:'call-1',status:'ringing' };
+  reserved = { id:'call-1',status:'ringing',direction:'inbound',user_phone:user.phone,record_enabled:true,
+    consent_mode:'notice',child_consent_at:new Date(),agent_number:user.agent_number };
   inserted.length = 0;
   notified.length = 0;
   process.env.ANNOUNCE_RECORDING = 'true';
 });
 
-test('asks for agreement before dialling or recording', async () => {
+test('the caller hears the Dimts notice and is connected to the owner with no key press', async () => {
   const { xml } = await incoming(CALL);
-
-  assert.match(xml, /<Gather/);
-  assert.match(xml, /accept\?callId=call-1/);
-  assert.doesNotMatch(xml, /<Dial|record=/);
+  assert.doesNotMatch(xml, /<Gather|<Hangup/);
+  assert.match(xml, /This call is recorded and summarized by Dimts AI\./);
+  assert.ok(xml.indexOf('<Say') < xml.indexOf('<Dial'), 'notice before dialling');
+  assert.match(xml, /record="do-not-record"/);
+  assert.match(xml, /party-consent\?callId=call-1/);
+  assert.match(xml, new RegExp(user.phone.slice(1)));
   assert.deepEqual(notified, ['call-1']);
 });
 
-test('announces recording to the caller before connecting', async () => {
-  const { xml } = await incoming(CALL);
-
-  const sayAt = xml.indexOf('<Say');
-  assert.ok(sayAt > -1, 'expected a consent announcement');
-  assert.doesNotMatch(xml, /<Dial/);
-  assert.match(xml, /only if both people agree/i);
-});
-
-test('cannot disable consent with the legacy announcement flag', async () => {
+test('the legacy announcement flag cannot switch the notice off', async () => {
   process.env.ANNOUNCE_RECORDING = 'false';
   const { xml } = await incoming(CALL);
-  assert.match(xml, /<Gather/);
+  assert.match(xml, /recorded and summarized by Dimts AI/);
+});
+
+test('an unrecorded call (owner has not accepted terms) connects without a notice', async () => {
+  reserved = { ...reserved, record_enabled: false, child_consent_at: null };
+  const { xml } = await incoming(CALL);
+  assert.doesNotMatch(xml, /Dimts AI|<Gather|<Hangup/);
+  assert.match(xml, /<Dial/);
 });
 
 test('records the call as inbound and links the contact', async () => {
@@ -134,7 +135,7 @@ test('still offers connection when the contact lookup fails', async () => {
   const { xml } = await incoming(CALL);
 
   // The AI layer must never be able to break a phone call.
-  assert.match(xml, /accept\?callId=call-1/);
+  assert.match(xml, /party-consent\?callId=call-1/);
 });
 
 test('cannot bridge when budget reservation fails', async () => {
@@ -142,14 +143,4 @@ test('cannot bridge when budget reservation fails', async () => {
   const { xml } = await incoming(CALL);
   assert.match(xml, /<Hangup/);
   assert.doesNotMatch(xml, /<Dial|<Gather/);
-});
-
-test('owner-only incoming caller hears notice before dialling the owner, without a caller acceptance prompt', async () => {
-  reserved = { id:'call-1',status:'ringing',direction:'inbound',user_phone:user.phone,
-    consent_mode:'owner_only',consent_scope:'Reviewed pilot',agent_number:user.agent_number };
-  const {xml}=await incoming(CALL);
-  assert.doesNotMatch(xml, /<Gather|<Hangup/);
-  assert.ok(xml.indexOf('<Say') < xml.indexOf('<Dial'));
-  assert.match(xml, /record="do-not-record"/); assert.match(xml, /party-consent\?callId=call-1/);
-  assert.match(xml, new RegExp(user.phone.slice(1)));
 });

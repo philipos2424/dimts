@@ -209,3 +209,10 @@ CREATE TABLE IF NOT EXISTS call_notifications (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE(call_id, device_id)
 );
+
+-- Release 1: one notice consent rule, terms acceptance and account deletion.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_accepted_at TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_version TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+ALTER TABLE calls DROP CONSTRAINT IF EXISTS calls_consent_mode_check;
+ALTER TABLE calls ADD CONSTRAINT calls_consent_mode_check CHECK (consent_mode IN ('all_parties','owner_only','notice'));

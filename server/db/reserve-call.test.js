@@ -10,7 +10,7 @@ test('call reservations enforce idempotency, concurrency and minute budgets usin
   const db = new PGlite();
   try {
     await db.exec(await readFile(new URL('./schema.sql', import.meta.url), 'utf8'));
-    const owner = (await db.query("INSERT INTO users(phone) VALUES('+15555550101') RETURNING *")).rows[0];
+    const owner = (await db.query("INSERT INTO users(phone,terms_version) VALUES('+15555550101','2026-10-02') RETURNING *")).rows[0];
     const reserve = (key, dest = '+15555550102', record = true) => db.transaction(tx => reserveCallInTransaction(tx, owner, dest, record, key));
     process.env.TWILIO_ACCOUNT_SID = 'invalid';
     await assert.rejects(reserve('invalid-account'), /Invalid TWILIO_ACCOUNT_SID/);
@@ -60,23 +60,37 @@ test('call reservations enforce idempotency, concurrency and minute budgets usin
   }
 });
 
-test('reservation snapshots policy and scope; retries preserve them after deployment settings change', async () => {
+test('new calls snapshot notice consent with the owner side pre-agreed from their accepted terms', async () => {
   const db = new PGlite();
   try {
     await db.exec(await readFile(new URL('./schema.sql', import.meta.url), 'utf8'));
-    const owner = (await db.query("INSERT INTO users(phone) VALUES('+15555550101') RETURNING *")).rows[0];
-    const reserve = key => db.transaction(tx => reserveCallInTransaction(tx, owner, '+15555550102', true, key));
-    process.env.RECORDING_CONSENT_MODE='owner_only';
-    await assert.rejects(reserve('missing-scope'), /APPROVED_SCOPE/);
+    const owner = (await db.query("INSERT INTO users(phone,terms_version) VALUES('+15555550101','2026-10-02') RETURNING *")).rows[0];
+    process.env.RECORDING_CONSENT_MODE = 'owner_only';
+    const out = await db.transaction(tx => reserveCallInTransaction(tx, owner, '+15555550102', true, 'out'));
+    assert.equal(out.call.consent_mode, 'notice'); assert.equal(out.call.consent_scope, null);
+    assert.ok(out.call.parent_consent_at); assert.equal(out.call.child_consent_at, null);
+    assert.equal(out.call.other_party_notice_issued_at, null);
+    await db.query("UPDATE calls SET status='completed',duration_sec=60 WHERE id=$1", [out.call.id]);
+    const unrecorded = await db.transaction(tx => reserveCallInTransaction(tx, owner, '+15555550102', false, 'plain'));
+    assert.equal(unrecorded.call.parent_consent_at, null);
+    await db.query("UPDATE calls SET status='completed',duration_sec=60 WHERE id=$1", [unrecorded.call.id]);
+    const inbound = await db.transaction(tx => reserveCallInTransaction(tx, owner, '+15555550103', true, 'in',
+      { direction: 'inbound', callSid: 'CA' + 'e'.repeat(32), contactId: null }));
+    assert.ok(inbound.call.child_consent_at); assert.equal(inbound.call.parent_consent_at, null);
+  } finally { delete process.env.RECORDING_CONSENT_MODE; await db.close(); }
+});
+
+test('owners who have not accepted the current terms cannot place recorded calls; inbound connects unrecorded', async () => {
+  const db = new PGlite();
+  try {
+    await db.exec(await readFile(new URL('./schema.sql', import.meta.url), 'utf8'));
+    const owner = (await db.query("INSERT INTO users(phone,terms_version) VALUES('+15555550101','2020-01-01') RETURNING *")).rows[0];
+    await assert.rejects(db.transaction(tx => reserveCallInTransaction(tx, owner, '+15555550102', true, 'out')),
+      { status: 409, code: 'terms_required' });
     assert.equal((await db.query('SELECT count(*)::int AS n FROM calls')).rows[0].n, 0);
-    process.env.RECORDING_OWNER_ONLY_APPROVED_SCOPE='Reviewed pilot';
-    const first=await reserve('original');
-    assert.equal(first.call.consent_mode,'owner_only'); assert.equal(first.call.consent_scope,'Reviewed pilot');
-    process.env.RECORDING_CONSENT_MODE='all_parties'; delete process.env.RECORDING_OWNER_ONLY_APPROVED_SCOPE;
-    const retry=await reserve('original'); assert.equal(retry.call.consent_mode,'owner_only'); assert.equal(retry.call.consent_scope,'Reviewed pilot');
-    await db.query("UPDATE calls SET status='completed',duration_sec=60 WHERE id=$1", [first.call.id]);
-    const second=await reserve('new'); assert.equal(second.call.consent_mode,'all_parties'); assert.equal(second.call.consent_scope,null);
-  } finally {
-    delete process.env.RECORDING_CONSENT_MODE; delete process.env.RECORDING_OWNER_ONLY_APPROVED_SCOPE; await db.close();
-  }
+    const inbound = await db.transaction(tx => reserveCallInTransaction(tx, owner, '+15555550103', true, 'in',
+      { direction: 'inbound', callSid: 'CA' + 'e'.repeat(32), contactId: null }));
+    assert.equal(inbound.call.record_enabled, false);
+    assert.equal(inbound.call.child_consent_at, null);
+  } finally { await db.close(); }
 });

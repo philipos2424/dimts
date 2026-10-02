@@ -9,8 +9,11 @@ export function askRecordingConsent(twiml, action, ownerOnly = false) {
   twiml.hangup();
 }
 
+// Legal text: a constant, never configuration, so it cannot drift between deployments.
+export const RECORDING_NOTICE = 'This call is recorded and summarized by Dimts AI.';
+
 export function issueRecordingNotice(twiml) {
-  twiml.say('This call may be recorded and transcribed for the account owner’s notes. Please tell the account owner if you do not want recording.');
+  twiml.say(RECORDING_NOTICE);
 }
 
 export function dialCall(twiml, call) {

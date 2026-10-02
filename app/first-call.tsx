@@ -25,7 +25,7 @@ export default function FirstCall() {
     </Section>
     <Section title="2. Start a short outgoing call">
       <Txt>Open the dialer and enter the other person’s number with its country code. Dimts first rings your signed-in mobile, then connects the other person. Follow the recording prompts on each phone.</Txt>
-      <Txt tone="muted">You will be asked whether to record. The other person hears a notice and may also be asked to agree. Declining or not responding to an agreement prompt lets the conversation continue without a recording.</Txt>
+      <Txt tone="muted">There is nothing to press. The other person hears: “This call is recorded and summarized by Dimts AI.” Then the conversation starts.</Txt>
       {!autoRecord && <Txt tone="muted">Recording is currently off. Enable it in Settings before this recording test.</Txt>}
       <Link label={autoRecord ? 'Open dialer (does not place a call)' : 'Open Settings to enable recording'}
         onPress={() => router.push(autoRecord ? '/dialer' : '/settings')} />

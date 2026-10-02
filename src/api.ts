@@ -94,7 +94,7 @@ export type CallDetail = CallSummary & {
   record_enabled: boolean;
   parent_consent_at: string | null;
   child_consent_at: string | null;
-  consent_mode: 'all_parties' | 'owner_only';
+  consent_mode: 'all_parties' | 'owner_only' | 'notice';
   recording_authorized: boolean;
   other_party_notice_issued_at: string | null;
   recording_start_status: 'pending' | 'started' | 'unknown' | 'failed' | null;

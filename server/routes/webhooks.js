@@ -62,7 +62,8 @@ twimlRouter.post('/bridge', async (req, res) => {
     return res.type('text/xml').send(twiml.toString());
   }
 
-  if (call.record_enabled !== false) askRecordingConsent(twiml, `${base}/twiml/accept?callId=${call.id}`, call.consent_mode === 'owner_only');
+  // Notice calls need no key press from the owner: their consent is on the account.
+  if (call.record_enabled !== false && call.consent_mode !== 'notice') askRecordingConsent(twiml, `${base}/twiml/accept?callId=${call.id}`, call.consent_mode === 'owner_only');
   else dialCall(twiml, call);
 
   res.type('text/xml').send(twiml.toString());
@@ -93,6 +94,23 @@ twimlRouter.post('/party-consent', async (req, res) => {
     AND (child_call_sid IS NULL OR child_call_sid=$2) RETURNING *`, [req.query.callId, req.body.CallSid]);
   if (!call) twiml.hangup();
   else if (call.record_enabled === false) twiml.say('This call is not being recorded. Connecting.');
+  else if (call.consent_mode === 'notice' && call.direction === 'outbound') {
+    if (!call.parent_consent_at) twiml.hangup();
+    else {
+      await queryOne(`UPDATE calls SET other_party_notice_issued_at=COALESCE(other_party_notice_issued_at,now())
+        WHERE id=$1 AND child_call_sid=$2 AND duration_sec IS NULL RETURNING id`, [call.id, req.body.CallSid]);
+      if (call.recording_start_status) return res.type('text/xml').send(twiml.toString());
+      issueRecordingNotice(twiml);
+      // Same empty-Gather technique as owner-only: wait out the notice, then record.
+      twiml.gather({ input:'dtmf',numDigits:1,timeout:1,method:'POST',actionOnEmptyResult:true,
+        action:`${config.publicBaseUrl}/twiml/record-after-notice?callId=${call.id}` });
+    }
+  }
+  else if (call.consent_mode === 'notice' && call.direction === 'inbound') {
+    // The caller heard the notice before the owner's phone rang.
+    if (!call.other_party_notice_issued_at || !call.child_consent_at) twiml.hangup();
+    else await beginAgreedRecording(call.id, req.body.CallSid);
+  }
   else if (call.consent_mode === 'owner_only' && !call.consent_scope?.trim()) twiml.hangup();
   else if (call.consent_mode === 'owner_only' && call.direction === 'outbound') {
     if (!call.parent_consent_at) twiml.hangup();
@@ -131,7 +149,7 @@ twimlRouter.post('/party-consent', async (req, res) => {
 twimlRouter.post('/record-after-notice', async (req, res) => {
   const call = await queryOne('SELECT * FROM calls WHERE id=$1', [req.query.callId]);
   const twiml = new VoiceResponse();
-  if (!call || call.consent_mode !== 'owner_only' || call.direction !== 'outbound' ||
+  if (!call || !['owner_only','notice'].includes(call.consent_mode) || call.direction !== 'outbound' ||
       !req.body?.CallSid || call.child_call_sid !== req.body.CallSid || call.duration_sec != null || !hasRecordingAuthorization(call)) twiml.hangup();
   else {
     const recording = await beginAgreedRecording(call.id, req.body.CallSid);

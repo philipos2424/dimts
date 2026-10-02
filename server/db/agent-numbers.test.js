@@ -32,6 +32,9 @@ test('findUserByAgentNumber normalises before lookup', async () => {
 
   assert.equal(user.id, 'u1');
   assert.deepEqual(statements[0].params, ['+14155551111']);
+  // Reservation needs the owner's terms version; deleted accounts never answer.
+  assert.match(statements[0].text, /terms_version/);
+  assert.match(statements[0].text, /deleted_at IS NULL/);
 });
 
 test('findUserByAgentNumber returns undefined for an unusable number', async () => {
