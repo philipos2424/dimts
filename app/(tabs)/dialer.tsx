@@ -7,11 +7,12 @@ import { Banner } from '../../src/components/Banner';
 import { Txt } from '../../src/components/Txt';
 import { CallBriefing } from '../../src/components/CallBriefing';
 import { geezDigits, type Key } from '../../src/i18n';
-import { color, radius, space, type } from '../../src/theme';
+import { radius, space, type, useTheme } from '../../src/theme';
 
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '*', '0', '#'];
 
 export default function Dialer() {
+  const { c } = useTheme();
   const { t, lang, userPhone, autoRecord } = useApp();
   const router = useRouter();
   const [number, setNumber] = useState('+1');
@@ -91,7 +92,7 @@ export default function Dialer() {
               height: 74,
               alignItems: 'center',
               justifyContent: 'center',
-              backgroundColor: pressed ? color.surface : 'transparent',
+              backgroundColor: pressed ? c.card : 'transparent',
               borderRadius: radius.md,
             })}
           >
@@ -140,10 +141,10 @@ export default function Dialer() {
             borderRadius: radius.pill,
             alignItems: 'center',
             justifyContent: 'center',
-            backgroundColor: dialable && !busy ? color.verdigris : color.line,
+            backgroundColor: dialable && !busy ? c.ok : c.line,
           }}
         >
-          <Txt size="title" weight="bold" style={{ color: color.parchment }}>
+          <Txt size="title" weight="bold" style={{ color: c.ink }}>
             {t('call')}
           </Txt>
         </Pressable>

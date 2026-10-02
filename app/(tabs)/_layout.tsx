@@ -2,28 +2,29 @@ import { Tabs, useRouter } from 'expo-router';
 import { Pressable } from 'react-native';
 import { useApp } from '../../src/AppContext';
 import { Txt } from '../../src/components/Txt';
-import { color, font, space } from '../../src/theme';
+import { font, space, useTheme } from '../../src/theme';
 
 export default function TabsLayout() {
+  const { c } = useTheme();
   const { t } = useApp();
   const router = useRouter();
 
   return (
     <Tabs
       screenOptions={{
-        headerStyle: { backgroundColor: color.ink },
-        headerTintColor: color.parchment,
+        headerStyle: { backgroundColor: c.bg },
+        headerTintColor: c.ink,
         headerTitleStyle: { fontFamily: font.bold, fontSize: 21 },
         headerShadowVisible: false,
-        sceneStyle: { backgroundColor: color.ink },
+        sceneStyle: { backgroundColor: c.bg },
         tabBarStyle: {
-          backgroundColor: color.surface,
-          borderTopColor: color.line,
+          backgroundColor: c.card,
+          borderTopColor: c.line,
           height: 62,
           paddingTop: space.sm,
         },
-        tabBarActiveTintColor: color.saffron,
-        tabBarInactiveTintColor: color.muted,
+        tabBarActiveTintColor: c.brand,
+        tabBarInactiveTintColor: c.muted,
         tabBarLabelStyle: { fontFamily: font.regular, fontSize: 12 },
         headerRight: () => (
           <Pressable

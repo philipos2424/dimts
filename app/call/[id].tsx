@@ -11,11 +11,12 @@ import { Section } from '../../src/components/Section';
 import { Txt } from '../../src/components/Txt';
 import { EndCall } from '../../src/components/EndCall';
 import { type Key, statusKey } from '../../src/i18n';
-import { color, space } from '../../src/theme';
+import { space, useTheme } from '../../src/theme';
 import { exportCall } from '../../src/exportCall';
 import { DeleteCallControl, DeletionStatus } from '../../src/components/CallDeletion';
 
 export default function CallDetailScreen() {
+  const { c } = useTheme();
   const { t } = useApp();
   const { userPhone } = useApp();
   const navigation = useNavigation();
@@ -224,7 +225,7 @@ export default function CallDetailScreen() {
               </Pressable>
               <Txt selectable style={{ lineHeight: 26 }}>{turn.text}</Txt>
             </View>)}
-          </View> : <Txt tone="muted" style={{ lineHeight: 26, color: color.parchment }}>
+          </View> : <Txt tone="muted" style={{ lineHeight: 26, color: c.ink }}>
             {call.transcript}
           </Txt>}
         </Section>

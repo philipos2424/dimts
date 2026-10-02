@@ -4,9 +4,10 @@ import { Platform, Pressable, ScrollView, Share, TextInput, View } from 'react-n
 import { useApp } from '../../src/AppContext';
 import { Contact, exportContact, listContacts, saveContact } from '../../src/api';
 import { Txt } from '../../src/components/Txt';
-import { color, radius, space } from '../../src/theme';
+import { radius, space, useTheme } from '../../src/theme';
 
 export default function Contacts() {
+  const { c } = useTheme();
   const { userPhone } = useApp();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [editing, setEditing] = useState<Contact | null>(null);
@@ -34,11 +35,11 @@ export default function Contacts() {
       } else await Share.share({ message: vcard, title: contact.display_name || contact.phone });
     } catch (e) { setError(e instanceof Error ? e.message : 'Unable to export'); }
   }
-  const input = { color: color.parchment, backgroundColor: color.raised, padding: space.md, borderRadius: radius.sm };
+  const input = { color: c.ink, backgroundColor: c.raised, padding: space.md, borderRadius: radius.sm };
   return <ScrollView contentContainerStyle={{ padding: space.md, gap: space.md }}>
     {error ? <Txt tone="muted">{error}</Txt> : null}
     {!contacts.length && <Txt tone="muted">Contacts appear here after your calls.</Txt>}
-    {contacts.map(contact => <View key={contact.id} style={{ padding: space.md, gap: space.sm, backgroundColor: color.surface, borderRadius: radius.md }}>
+    {contacts.map(contact => <View key={contact.id} style={{ padding: space.md, gap: space.sm, backgroundColor: c.card, borderRadius: radius.md }}>
       <Txt size="title">{contact.display_name || contact.phone}</Txt>
       <Txt tone="muted">{contact.phone}{contact.company ? ` · ${contact.company}` : ''}</Txt>
       {contact.notes ? <Txt>{contact.notes}</Txt> : null}

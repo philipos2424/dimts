@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import type { ActionItem } from '../api';
-import { color, radius, space } from '../theme';
+import { radius, space, useTheme } from '../theme';
 import { Txt } from './Txt';
 
 /**
@@ -10,6 +10,7 @@ import { Txt } from './Txt';
  * sees it.
  */
 export function ActionList({ items }: { items: ActionItem[] }) {
+  const { c } = useTheme();
   const [done, setDone] = useState<Record<number, boolean>>({});
 
   return (
@@ -32,14 +33,14 @@ export function ActionList({ items }: { items: ActionItem[] }) {
                 marginTop: 3,
                 borderRadius: radius.sm,
                 borderWidth: 1.5,
-                borderColor: checked ? color.saffron : color.line,
-                backgroundColor: checked ? color.saffron : 'transparent',
+                borderColor: checked ? c.brand : c.line,
+                backgroundColor: checked ? c.brand : 'transparent',
                 alignItems: 'center',
                 justifyContent: 'center',
               }}
             >
               {checked && (
-                <Txt size="caption" weight="bold" style={{ color: color.ink, lineHeight: 14 }}>
+                <Txt size="caption" weight="bold" style={{ color: c.bg, lineHeight: 14 }}>
                   ✓
                 </Txt>
               )}

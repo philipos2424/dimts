@@ -3,11 +3,12 @@ import { Linking, Pressable, TextInput, View } from 'react-native';
 import { type Followups, type FollowupEvent, generateFollowups, saveFollowups, rejectFollowup, getFollowupEvents } from '../api';
 import { bookReviewedMeeting, getCalendarAction, reconcileMeeting, refreshFollowups, type CalendarAction } from '../api';
 import { createReviewedEmailDraft, getEmailAction, reconcileEmail, type EmailAction } from '../api';
-import { color, space } from '../theme';
+import { space, useTheme } from '../theme';
 import { Section } from './Section';
 import { Txt } from './Txt';
 
 export function FollowupReview({ callId, initial }: { callId: string; initial: Followups | null }) {
+  const { c } = useTheme();
   const [draft, setDraft] = useState<Followups | null>(initial);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -38,7 +39,7 @@ export function FollowupReview({ callId, initial }: { callId: string; initial: F
     <View style={{ gap: space.xs }}>
       <Txt tone="muted">{label}</Txt>
       <TextInput accessibilityLabel={label} value={value} onChangeText={change} multiline={multiline}
-        style={{ color: color.parchment, borderWidth: 1, borderColor: color.parchment, padding: space.sm, minHeight: multiline ? 100 : 44 }} />
+        style={{ color: c.ink, borderWidth: 1, borderColor: c.ink, padding: space.sm, minHeight: multiline ? 100 : 44 }} />
     </View>
   );
   const button = (label: string, action: () => Promise<void>) => (

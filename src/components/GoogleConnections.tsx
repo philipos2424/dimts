@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react';
 import { Linking, Pressable, TextInput, View } from 'react-native';
 import { confirmGoogleConnection, disconnectGoogle, getGoogleStatus, startGoogleConnection,
   type GoogleKind, type GoogleStatus } from '../api';
-import { color, space } from '../theme';
+import { space, useTheme } from '../theme';
 import { Txt } from './Txt';
 
 export function GoogleConnections() {
+  const { c } = useTheme();
   const [status, setStatus] = useState<GoogleStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -43,9 +44,9 @@ export function GoogleConnections() {
         </Pressable>
       </View>;
     })}
-    <TextInput value={code} onChangeText={setCode} placeholder="One-time connection code" placeholderTextColor={color.line}
+    <TextInput value={code} onChangeText={setCode} placeholder="One-time connection code" placeholderTextColor={c.line}
       accessibilityLabel="One-time Google connection code" autoCapitalize="none" autoCorrect={false}
-      style={{ color: color.parchment, borderColor: color.line, borderWidth: 1, padding: space.sm }} />
+      style={{ color: c.ink, borderColor: c.line, borderWidth: 1, padding: space.sm }} />
     <Pressable accessibilityRole="button" disabled={busy || !/^[a-f0-9]{64}$/.test(code.trim())}
       onPress={() => run(async () => { await confirmGoogleConnection(code.trim()); setCode(''); setMessage('Google connected.'); })}>
       <Txt tone="accent">{busy ? 'Working…' : 'Finish connection'}</Txt>

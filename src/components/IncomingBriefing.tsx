@@ -3,11 +3,12 @@ import { AppState, Platform, Pressable, ScrollView, View } from 'react-native';
 import { usePathname, useRouter } from 'expo-router';
 import { useApp } from '../AppContext';
 import { getActiveIncoming } from '../api';
-import { color, space } from '../theme';
+import { space, useTheme } from '../theme';
 import { CallBriefing } from './CallBriefing';
 import { Txt } from './Txt';
 
 export function IncomingBriefing() {
+  const { c } = useTheme();
   const { userPhone } = useApp();
   const pathname = usePathname();
   const router = useRouter();
@@ -32,7 +33,7 @@ export function IncomingBriefing() {
     return () => { active = false; clearTimeout(timer); };
   }, [userPhone, pathname]);
   if (!userPhone || !call || dismissed === call.id) return null;
-  return <ScrollView style={{ maxHeight: 350, backgroundColor: color.raised }} contentContainerStyle={{ padding: space.md, gap: space.sm }}>
+  return <ScrollView style={{ maxHeight: 350, backgroundColor: c.raised }} contentContainerStyle={{ padding: space.md, gap: space.sm }}>
     <Txt weight="bold">Incoming call · {call.destination}</Txt>
     <Txt tone="muted">Answer on your phone. This panel shows your private call memory.</Txt>
     <CallBriefing callId={call.id} />

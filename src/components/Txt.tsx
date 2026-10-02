@@ -1,37 +1,34 @@
+import { Children } from 'react';
 import { Text, type TextProps, type TextStyle } from 'react-native';
-import { color, font, type } from '../theme';
+import { font, type Tone, type, useTheme } from '../theme';
 
 type Props = TextProps & {
   size?: keyof typeof type;
   weight?: 'regular' | 'bold';
-  tone?: 'primary' | 'muted' | 'faint' | 'accent';
+  tone?: Tone | 'primary' | 'accent';
+  serif?: boolean;
 };
 
-const tones = {
-  primary: color.parchment,
-  muted: color.muted,
-  faint: color.faint,
-  accent: color.saffron,
-} as const;
+const ETHIOPIC = /[ሀ-᎟ⶀ-⷟]/;
+const hasEthiopic = (children: React.ReactNode) =>
+  Children.toArray(children).some(child => typeof child === 'string' && ETHIOPIC.test(child));
 
 /**
- * Every string in the app goes through here so both scripts share one family.
- * Ethiopic glyphs sit taller than Latin, so line-height is set generously
- * enough that Amharic never clips.
+ * Every string goes through here. Latin text uses Inter (Fraunces for
+ * headings); any Ethiopic text switches to Noto Sans Ethiopic, which sits
+ * taller, so line height is generous enough that Amharic never clips.
  */
-export function Txt({
-  size = 'body',
-  weight = 'regular',
-  tone = 'primary',
-  style,
-  ...rest
-}: Props) {
+export function Txt({ size = 'body', weight = 'regular', tone = 'ink', serif = false, style, children, ...rest }: Props) {
+  const { c } = useTheme();
+  const ethiopic = hasEthiopic(children);
+  const family = ethiopic ? (weight === 'bold' || serif ? font.ethiopicBold : font.ethiopic)
+    : serif ? font.serif : weight === 'bold' ? font.bold : font.regular;
+  const colour = tone === 'primary' ? c.ink : tone === 'accent' ? c.brand : c[tone];
   const base: TextStyle = {
-    fontFamily: weight === 'bold' ? font.bold : font.regular,
+    fontFamily: family,
     fontSize: type[size],
-    lineHeight: Math.round(type[size] * 1.5),
-    color: tones[tone],
+    lineHeight: Math.round(type[size] * (ethiopic ? 1.55 : 1.4)),
+    color: colour,
   };
-
-  return <Text {...rest} style={[base, style]} />;
+  return <Text {...rest} style={[base, style]}>{children}</Text>;
 }

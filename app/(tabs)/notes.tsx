@@ -6,12 +6,13 @@ import { Banner } from '../../src/components/Banner';
 import { CallPlayer } from '../../src/components/CallPlayer';
 import { Empty } from '../../src/components/Empty';
 import { Txt } from '../../src/components/Txt';
-import { color, radius, space } from '../../src/theme';
+import { radius, space, useTheme } from '../../src/theme';
 import { formatWhen, useCalls } from '../../src/useCalls';
 import { useEffect, useState } from 'react';
 import { type CallDetail, getCall } from '../../src/api';
 
 export default function Notes() {
+  const { c } = useTheme();
   const { t, lang, userPhone } = useApp();
   const router = useRouter();
   const { calls, errorKey, clearError } = useCalls();
@@ -55,7 +56,7 @@ export default function Notes() {
               gap: space.md,
               padding: space.md,
               borderRadius: radius.md,
-              backgroundColor: color.surface,
+              backgroundColor: c.card,
             }}
           >
             <View
