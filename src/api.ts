@@ -94,6 +94,9 @@ export type CallDetail = CallSummary & {
   record_enabled: boolean;
   parent_consent_at: string | null;
   child_consent_at: string | null;
+  consent_mode: 'all_parties' | 'owner_only';
+  recording_authorized: boolean;
+  other_party_notice_issued_at: string | null;
   recording_start_status: 'pending' | 'started' | 'unknown' | 'failed' | null;
   recording_url: string | null;
   audio_url: string | null;
@@ -158,6 +161,36 @@ export function disconnectGoogle(kind: GoogleKind) {
   return request(`/api/integrations/google/${kind}`, '', { method: 'DELETE' });
 }
 
+function publicErrorMessage(status: number, body: string): string {
+  // Only map known error codes. Never display raw provider responses or a
+  // server's arbitrary message (which may contain private configuration).
+  let code = '';
+  try { if (body.length <= 4096) code = JSON.parse(body)?.error; } catch { /* non-JSON error */ }
+  if (status >= 500) return 'Dimts could not complete this request. Please try again shortly.';
+  const messages: Record<string, string> = {
+    invalid_phone: 'Enter a mobile number with its country code, starting with +.',
+    handset_required: 'Use the mobile number you will answer, not the Dimts business number.',
+    invalid_code: 'That verification code is incorrect or expired. Request another code and try again.',
+    invalid_verification: 'Check your phone number and verification code, then try again.',
+    authentication_required: 'Please sign in to continue.',
+    session_expired: 'Your session expired. Please sign in again.',
+    call_in_progress: 'Finish your current call before starting another.',
+    daily_call_limit: 'You have reached today’s call limit. Try again tomorrow.',
+    call_minutes_limit: 'The call minute limit has been reached. Check your available usage.',
+    number_pool_empty: 'No business number is available yet. Your account is still saved.',
+    recording_check_cooldown: 'Please wait a minute before checking the recording again.',
+    recording_not_recoverable: 'This call is not eligible for recording recovery.',
+    processing_active: 'Your notes are still being prepared. Refresh to check their progress.',
+  };
+  if (typeof code === 'string' && Object.prototype.hasOwnProperty.call(messages, code)) return messages[code];
+  if (status === 401) return 'Please sign in again to continue.';
+  if (status === 403) return 'This action is not available for your account.';
+  if (status === 404) return 'This item is no longer available. Refresh and try again.';
+  if (status === 409) return 'This item changed. Refresh to check its result before trying again.';
+  if (status === 429) return 'Too many attempts. Please wait before trying again.';
+  return 'Unable to complete this request. Check your details and try again.';
+}
+
 async function request<T>(
   path: string,
   userPhone: string,
@@ -181,7 +214,7 @@ async function request<T>(
     });
     if (!response.ok) {
       const detail = await response.text().catch(() => '');
-      throw new ApiError('errorGeneric', `HTTP ${response.status}: ${detail}`, response.status);
+      throw new ApiError('errorGeneric', publicErrorMessage(response.status, detail), response.status);
     }
     return await response.json() as T;
   } catch (err) {

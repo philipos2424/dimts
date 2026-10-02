@@ -1,5 +1,9 @@
 # Call recording reviews → Dimts product decisions
 
+Latest extension: [2 October deep dive, Reddit evidence and corrective work](CALLER_REVIEW_DEEP_DIVE.md).
+Its configurable recording-policy changes supersede the all-party-only
+implementation descriptions below; the general production default stays all-party.
+
 Research date: 1 October 2026. Audience: US first; international availability
 must be validated separately for routing, language, carrier and pricing.
 

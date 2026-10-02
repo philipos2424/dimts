@@ -3,6 +3,37 @@
 This build is in progress. Passing unit tests does not establish a working
 phone-call MVP.
 
+## Review-driven update — 2 October 2026
+
+The [deep dive](CALLER_REVIEW_DEEP_DIVE.md) extends the store-review evidence with
+four Reddit threads, including positive/resolved reports, and provider access
+policy. Friendly signup/API errors replace raw server JSON; the English dialer
+shows actionable rejection messages. Every nondeleted call detail shows a
+selectable call ID. Detailed new error text is English; translated dialer
+fallbacks remain available.
+
+Scoped owner-only recording is implemented for incoming and outgoing calls:
+only the account owner accepts, the other person hears a notice, and capture
+uses a per-call policy snapshot. Shared atomic authorization guards also govern
+receipts/recovery and the UI. Existing calls and the general production pilot
+remain all-party. Owner-only requires an explicit operator scope; this setting
+does not detect location, enforce the scope or certify legality worldwide.
+The additive three-column migration is applied to Dimts Supabase.
+
+These changes are deployed at https://dimts.vercel.app as READY deployment
+`dpl_6NccbRtjbLZJ5BX626GBGyZjnqJV`. Live database/session checks, callback
+signature guards, invalid signup rejection before SMS and updated served
+client text pass. See [deployment evidence](VERCEL_DEPLOYMENT.md).
+
+All 243 backend tests and five actual client API-module tests pass; TypeScript
+and web/Android/iOS exports pass. These checks include notice-before-start,
+owner-leg selection, refusal/timeout, replay, policy snapshots, recovery and
+SQL/JavaScript authorization equivalence. A real two-phone recording, native
+playback/export and the transcription credential remain unverified.
+
+The dated observations below are historical; later deployment observations
+supersede earlier local-only or unavailable-service findings.
+
 Provider deletion now retains the original Twilio account on new reservations
 and legacy calls with canonical recording URLs. Unknown ownership or changed
 configuration blocks provider requests and never confirms removal from another

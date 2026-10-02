@@ -59,3 +59,24 @@ test('call reservations enforce idempotency, concurrency and minute budgets usin
     await db.close();
   }
 });
+
+test('reservation snapshots policy and scope; retries preserve them after deployment settings change', async () => {
+  const db = new PGlite();
+  try {
+    await db.exec(await readFile(new URL('./schema.sql', import.meta.url), 'utf8'));
+    const owner = (await db.query("INSERT INTO users(phone) VALUES('+15555550101') RETURNING *")).rows[0];
+    const reserve = key => db.transaction(tx => reserveCallInTransaction(tx, owner, '+15555550102', true, key));
+    process.env.RECORDING_CONSENT_MODE='owner_only';
+    await assert.rejects(reserve('missing-scope'), /APPROVED_SCOPE/);
+    assert.equal((await db.query('SELECT count(*)::int AS n FROM calls')).rows[0].n, 0);
+    process.env.RECORDING_OWNER_ONLY_APPROVED_SCOPE='Reviewed pilot';
+    const first=await reserve('original');
+    assert.equal(first.call.consent_mode,'owner_only'); assert.equal(first.call.consent_scope,'Reviewed pilot');
+    process.env.RECORDING_CONSENT_MODE='all_parties'; delete process.env.RECORDING_OWNER_ONLY_APPROVED_SCOPE;
+    const retry=await reserve('original'); assert.equal(retry.call.consent_mode,'owner_only'); assert.equal(retry.call.consent_scope,'Reviewed pilot');
+    await db.query("UPDATE calls SET status='completed',duration_sec=60 WHERE id=$1", [first.call.id]);
+    const second=await reserve('new'); assert.equal(second.call.consent_mode,'all_parties'); assert.equal(second.call.consent_scope,null);
+  } finally {
+    delete process.env.RECORDING_CONSENT_MODE; delete process.env.RECORDING_OWNER_ONLY_APPROVED_SCOPE; await db.close();
+  }
+});

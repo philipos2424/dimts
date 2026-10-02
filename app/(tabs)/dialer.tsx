@@ -16,6 +16,7 @@ export default function Dialer() {
   const router = useRouter();
   const [number, setNumber] = useState('+1');
   const [errorKey, setErrorKey] = useState<Key | null>(null);
+  const [errorDetail, setErrorDetail] = useState('');
   const [busy, setBusy] = useState(false);
   const pending = useRef<{ key: string; number: string; record: boolean } | null>(null);
   const submitting = useRef(false);
@@ -29,6 +30,7 @@ export default function Dialer() {
       pending.current = { key: newCallRequestKey(), number, record: autoRecord };
     }
     setBusy(true);
+    setErrorKey(null); setErrorDetail('');
     try {
       const { callId } = await startCall(number, userPhone, autoRecord, pending.current.key);
       pending.current = null;
@@ -37,6 +39,7 @@ export default function Dialer() {
       // Retain the key after a lost response: retry must resolve the same call.
       if (err instanceof ApiError && err.status && err.status < 500) pending.current = null;
       setErrorKey(err instanceof ApiError ? err.messageKey : 'errorCallFailed');
+      setErrorDetail(err instanceof ApiError ? err.message : '');
     } finally {
       setBusy(false);
       submitting.current = false;
@@ -46,7 +49,7 @@ export default function Dialer() {
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1, justifyContent: 'space-between' }}>
       {errorKey && (
-        <Banner message={t(errorKey)} onDismiss={() => setErrorKey(null)} />
+        <Banner message={lang === 'en' && errorDetail ? errorDetail : t(errorKey)} onDismiss={() => { setErrorKey(null); setErrorDetail(''); }} />
       )}
 
       <View style={{ alignItems: 'center', paddingVertical: space.xl }}>

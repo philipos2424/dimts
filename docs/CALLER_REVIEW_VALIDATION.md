@@ -1,6 +1,7 @@
 # Caller pilot: tests derived from recording-app reviews
 
 Prepared 1 October 2026. No live tests are marked passed in this document.
+Updated 2 October 2026: [Reddit and review deep dive](CALLER_REVIEW_DEEP_DIVE.md).
 See [review evidence](CALL_RECORDING_REVIEW_RESEARCH.md) for sources and limits,
 and [MVP status](MVP_STATUS.md) for implementation status.
 
@@ -51,6 +52,9 @@ Country/carrier results are scoped to that tested combination.
 | R18 | User attempts unsupported ordinary handset/WhatsApp recording. | Product states the limitation clearly; never implies recording occurred. |
 | R19 | Before any paid offer, explain price and cancellation without coaching. | User can state interval, total charge, included telecom/AI usage, overage behavior and cancellation path. Billing must exist before testing a real subscription. |
 | R20 | User cannot find a recording and requests help. | Can locate recovery/export and the actual support route; diagnostics omit content/secrets unless separately chosen. |
+| R21 | Scoped owner-only deployment, both directions; repeat owner decline/timeout. | Only the owner receives an acceptance prompt. Other person hears notice before capture; no false other-party consent. Decline/timeout connects unrecorded. Inspect provider events and audible beginning. General worldwide deployment remains all-party. |
+| R22 | Signup invalid/expired code, rate limit, backend failure; call rejected by usage/active-call limits. | Understandable next step, no raw JSON/provider details. Ambiguous call-start retry keeps the same request key; definite rejection remains distinguishable. |
+| R23 | Recovery after scoped owner-only call; change server policy before retry/callback. | Original call policy is retained. Recovery accepts only an authorized owner leg with issued notice and recorded scope; no duplicate recording or processing. |
 
 ## Recording outcomes
 

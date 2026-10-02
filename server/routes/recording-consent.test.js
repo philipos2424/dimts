@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import express from 'express';
 import { PGlite } from '@electric-sql/pglite';
 import { readFile } from 'node:fs/promises';
+import { hasRecordingAuthorization } from '../lib/recording-policy.js';
 process.env.SKIP_TWILIO_SIGNATURE_CHECK = 'true';
 process.env.PUBLIC_BASE_URL = 'https://example.test';
 process.env.TWILIO_NUMBER = '+15555550999';
@@ -16,7 +17,7 @@ const parent = 'CA' + 'a'.repeat(32), child = 'CA' + 'b'.repeat(32), recording =
 mock.module('../services/start-recording.js', { namedExports: {
   startCallRecording: async call => {
     starts++;
-    assert.ok(call.parent_consent_at && call.child_consent_at);
+    assert.ok(hasRecordingAuthorization(call));
     assert.equal(call.twilio_call_sid, parent);
     if (block) await block;
     if (failure) throw failure;
@@ -131,4 +132,63 @@ test('late recording receipt recovers a completed call after its audio wait expi
   assert.equal((await row(id)).recording_url, 'delayed-audio'); assert.equal(processed, before + 1);
   await expireRecordingWait(user.id);
   assert.equal((await row(id)).status, 'processing');
+});
+
+async function ownerSeed(direction = 'outbound') {
+  const id = await seed(direction);
+  await db.query("UPDATE calls SET consent_mode='owner_only',consent_scope='Operator-reviewed test scope' WHERE id=$1", [id]);
+  return id;
+}
+
+test('owner-only outbound plays notice before starting, never fabricates other-party consent and starts once', async () => {
+  const id = await ownerSeed(), before = starts;
+  assert.match((await post(id, '/twiml/bridge', { CallSid: parent })).xml, /other person will hear/);
+  await post(id, '/twiml/accept', { CallSid: parent, Digits: '1' });
+  const notice = await post(id, '/twiml/party-consent', { CallSid: child });
+  assert.match(notice.xml, /<Say.*recorded.*<Gather/s);
+  assert.match(notice.xml, /actionOnEmptyResult="true"/);
+  assert.match(notice.xml, /timeout="1"/);
+  assert.doesNotMatch(notice.xml, /<Redirect|Press 1|to agree/); assert.equal(starts, before);
+  await post(id, '/twiml/record-after-notice', { CallSid: child });
+  await post(id, '/twiml/record-after-notice', { CallSid: child });
+  assert.equal(starts, before + 1);
+  const saved = await row(id);
+  assert.ok(saved.parent_consent_at && saved.other_party_notice_issued_at);
+  assert.equal(saved.child_consent_at, null); assert.equal(saved.child_consent_choice, null);
+  assert.match((await post(id, '/twiml/record-after-notice', { CallSid: parent })).xml, /Hangup/);
+  const processingBefore = processed;
+  await post(id, '/webhooks/recording-ready', { CallSid: parent, RecordingStatus: 'completed', RecordingSid: recording, RecordingUrl: 'owner-audio' });
+  assert.equal((await row(id)).recording_url, 'owner-audio'); assert.equal(processed, processingBefore + 1);
+});
+
+test('owner-only inbound asks the account owner on child leg; external caller cannot accept for the owner', async () => {
+  const id = await ownerSeed('inbound'), before = starts;
+  await db.query('UPDATE calls SET other_party_notice_issued_at=now() WHERE id=$1', [id]);
+  assert.match((await post(id, '/twiml/accept', { CallSid: parent, Digits: '1' })).xml, /Hangup/);
+  assert.equal((await row(id)).parent_consent_at, null);
+  assert.match((await post(id, '/twiml/party-consent', { CallSid: child })).xml, /<Gather.*You can record/s);
+  await post(id, '/twiml/party-consent', { CallSid: child, Digits: '1' }, true);
+  assert.equal(starts, before + 1); assert.ok((await row(id)).child_consent_at);
+  assert.equal((await row(id)).parent_consent_choice, null);
+});
+
+test('owner-only refusals, timeouts, missing notice or scope cannot start or process recording', async () => {
+  const before = starts, processingBefore = processed;
+  for (const direction of ['outbound', 'inbound']) for (const digits of ['2', '']) {
+    const id = await ownerSeed(direction);
+    await db.query('UPDATE calls SET other_party_notice_issued_at=now() WHERE id=$1', [id]);
+    await post(id, direction === 'outbound' ? '/twiml/accept' : '/twiml/party-consent',
+      { CallSid: direction === 'outbound' ? parent : child, Digits: digits }, direction === 'inbound');
+    assert.equal((await row(id)).record_enabled, false);
+    await post(id, '/webhooks/recording-ready', { CallSid: parent, RecordingStatus: 'completed', RecordingSid: recording, RecordingUrl: 'forbidden' });
+    assert.equal((await row(id)).recording_url, null);
+  }
+  const missing = await ownerSeed();
+  await post(missing, '/twiml/accept', { CallSid: parent, Digits: '1' });
+  assert.match((await post(missing, '/twiml/record-after-notice', { CallSid: child })).xml, /Hangup/);
+  await db.query("UPDATE calls SET consent_scope=NULL,child_call_sid=$2,other_party_notice_issued_at=now() WHERE id=$1", [missing, child]);
+  assert.match((await post(missing, '/twiml/record-after-notice', { CallSid: child })).xml, /Hangup/);
+  await post(missing, '/webhooks/recording-ready', { CallSid: parent, RecordingStatus: 'completed', RecordingSid: recording, RecordingUrl: 'forbidden' });
+  assert.equal((await row(missing)).recording_url, null);
+  assert.equal(starts, before); assert.equal(processed, processingBefore);
 });

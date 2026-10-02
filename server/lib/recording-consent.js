@@ -1,16 +1,22 @@
 import { config } from '../config.js';
 
-export function askRecordingConsent(twiml, action) {
+export function askRecordingConsent(twiml, action, ownerOnly = false) {
   twiml.gather({ input: 'dtmf', numDigits: 1, timeout: 15, method: 'POST', action, actionOnEmptyResult: true })
-    .say('This call can be recorded and transcribed for notes, only if both people agree. Press 1 to agree, or press 2 to connect without recording. No response means no recording.');
+    .say(ownerOnly
+      ? 'You can record and transcribe this call for your notes. The other person will hear a recording notice. Press 1 to agree, or press 2 to connect without recording. No response means no recording.'
+      : 'This call can be recorded and transcribed for notes, only if both people agree. Press 1 to agree, or press 2 to connect without recording. No response means no recording.');
   twiml.say('We could not receive your choice. Goodbye.');
   twiml.hangup();
+}
+
+export function issueRecordingNotice(twiml) {
+  twiml.say('This call may be recorded and transcribed for the account owner’s notes. Please tell the account owner if you do not want recording.');
 }
 
 export function dialCall(twiml, call) {
   const base = config.publicBaseUrl;
   const dial = twiml.dial({
-    // Recording starts through the REST API only after both choices are saved.
+    // Recording starts through the REST API after this call's policy is met.
     record: 'do-not-record',
     answerOnBridge: true,
     action: `${base}/twiml/dial-done?callId=${call.id}`, method: 'POST', timeout: 30,

@@ -1,5 +1,37 @@
 # Vercel pilot deployment
 
+## Latest deployment — 2 October 2026
+
+Production alias https://dimts.vercel.app now points to READY deployment
+`dpl_6NccbRtjbLZJ5BX626GBGyZjnqJV`
+(`dimts-f6xwq2svc-philiposw11-9068s-projects.vercel.app`). This contains the
+review-driven error/call-ID changes and configurable recording policy described
+in [the deep dive](CALLER_REVIEW_DEEP_DIVE.md).
+
+The additive consent-policy migration is applied to the Dimts database.
+Production `RECORDING_CONSENT_MODE` is explicitly saved as `all_parties`.
+Owner-only is implemented but not globally enabled for unrestricted locations.
+
+All 243 backend tests, five client API tests, TypeScript and web/Android/iOS
+bundle exports pass. A scan of 65 exported client files found none of the
+configured private values. These are bundle exports, not installed-device tests.
+
+Live checks after deployment: health/onboarding 200; unknown API 404;
+unissued-session lookup 401 `session_expired`; invalid signup 400 `invalid_phone`
+before sending SMS. Signed call-status callbacks return 204, including URLs
+with query strings; bad signatures return 403. The new post-notice callback
+rejects a missing call with signed 200/hangup and rejects unsigned requests
+with 403. The served application bundle includes the new onboarding and safe
+error text. No real SMS, paid phone call or recording was created by these probes.
+
+One initial upload ended with a fetch error; a provider listing confirmed no new
+deployment before retry. A subsequent build succeeded. The final build corrects
+the Number-whisper flow to use supported Say/Gather instructions rather than
+Redirect. Provider inspection confirms READY and the production alias.
+
+The following 1 October observations describe earlier deployments and remain
+historical evidence; the latest deployment details above supersede them.
+
 The current Expo web app and Express API were deployed on 1 October 2026 to
 https://dimts.vercel.app in the existing `dimts` Vercel project. Deployment
 `dpl_FKcgkVzyrX8m11SzBfFkUTyGpud9` reached READY and owns the production alias.

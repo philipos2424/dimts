@@ -7,7 +7,8 @@ import { verifyTwilioSignature } from '../lib/twilio-signature.js';
 import { currentMonth } from '../lib/users.js';
 import { finishCall } from '../db/finish-call.js';
 import { processRecording } from '../services/process-recording.js';
-import { askRecordingConsent, dialCall } from '../lib/recording-consent.js';
+import { askRecordingConsent, dialCall, issueRecordingNotice } from '../lib/recording-consent.js';
+import { hasRecordingAuthorization, recordingAuthorizationSql } from '../lib/recording-policy.js';
 import { beginAgreedRecording } from '../db/start-recording.js';
 import { processDeletion } from '../services/process-deletion.js';
 
@@ -60,7 +61,7 @@ twimlRouter.post('/bridge', async (req, res) => {
     return res.type('text/xml').send(twiml.toString());
   }
 
-  if (call.record_enabled !== false) askRecordingConsent(twiml, `${base}/twiml/accept?callId=${call.id}`);
+  if (call.record_enabled !== false) askRecordingConsent(twiml, `${base}/twiml/accept?callId=${call.id}`, call.consent_mode === 'owner_only');
   else dialCall(twiml, call);
 
   res.type('text/xml').send(twiml.toString());
@@ -69,7 +70,7 @@ twimlRouter.post('/bridge', async (req, res) => {
 twimlRouter.post('/accept', async (req, res) => {
   const call = await resolveCall({ callId: req.query.callId, callSid: req.body?.CallSid });
   const twiml = new VoiceResponse();
-  if (!call || call.duration_sec != null) twiml.hangup();
+  if (!call || call.duration_sec != null || (call.consent_mode === 'owner_only' && call.direction !== 'outbound')) twiml.hangup();
   else {
     const accepted = req.body?.Digits === '1' && call.record_enabled !== false;
     const chosen = await queryOne(`UPDATE calls SET parent_consent_choice=$2,
@@ -91,7 +92,21 @@ twimlRouter.post('/party-consent', async (req, res) => {
     AND (child_call_sid IS NULL OR child_call_sid=$2) RETURNING *`, [req.query.callId, req.body.CallSid]);
   if (!call) twiml.hangup();
   else if (call.record_enabled === false) twiml.say('This call is not being recorded. Connecting.');
-  else if (!call.parent_consent_at) twiml.hangup();
+  else if (call.consent_mode === 'owner_only' && !call.consent_scope?.trim()) twiml.hangup();
+  else if (call.consent_mode === 'owner_only' && call.direction === 'outbound') {
+    if (!call.parent_consent_at) twiml.hangup();
+    else {
+      await queryOne(`UPDATE calls SET other_party_notice_issued_at=COALESCE(other_party_notice_issued_at,now())
+        WHERE id=$1 AND child_call_sid=$2 AND duration_sec IS NULL RETURNING id`, [call.id, req.body.CallSid]);
+      issueRecordingNotice(twiml);
+      // <Number url> supports Say/Gather but not Redirect. An empty Gather
+      // waits after Say, then posts on timeout; it asks for no acceptance and
+      // never stores the other person's digits as consent.
+      twiml.gather({ input:'dtmf',numDigits:1,timeout:1,method:'POST',actionOnEmptyResult:true,
+        action:`${config.publicBaseUrl}/twiml/record-after-notice?callId=${call.id}` });
+    }
+  }
+  else if (call.consent_mode === 'owner_only' ? !call.other_party_notice_issued_at : !call.parent_consent_at) twiml.hangup();
   else if (req.query.choice === '1') {
     const choice = req.body.Digits === '1' ? 'accepted' : 'declined';
     const chosen = await queryOne(`UPDATE calls SET child_consent_choice=$3,
@@ -107,7 +122,19 @@ twimlRouter.post('/party-consent', async (req, res) => {
   } else if (call.child_consent_choice) {
     await beginAgreedRecording(call.id, req.body.CallSid);
   } else {
-    askRecordingConsent(twiml, `${config.publicBaseUrl}/twiml/party-consent?callId=${call.id}&choice=1`);
+    askRecordingConsent(twiml, `${config.publicBaseUrl}/twiml/party-consent?callId=${call.id}&choice=1`, call.consent_mode === 'owner_only');
+  }
+  res.type('text/xml').send(twiml.toString());
+});
+
+twimlRouter.post('/record-after-notice', async (req, res) => {
+  const call = await queryOne('SELECT * FROM calls WHERE id=$1', [req.query.callId]);
+  const twiml = new VoiceResponse();
+  if (!call || call.consent_mode !== 'owner_only' || call.direction !== 'outbound' ||
+      !req.body?.CallSid || call.child_call_sid !== req.body.CallSid || call.duration_sec != null || !hasRecordingAuthorization(call)) twiml.hangup();
+  else {
+    const recording = await beginAgreedRecording(call.id, req.body.CallSid);
+    if (recording.record_enabled === false) twiml.say('Recording is unavailable. Connecting without recording.');
   }
   res.type('text/xml').send(twiml.toString());
 });
@@ -177,14 +204,14 @@ webhooksRouter.post('/recording-ready', async (req, res) => {
     return res.status(204).end();
   }
 
-  if (call && call.record_enabled !== false && call.parent_consent_at && call.child_consent_at && RecordingStatus === 'completed' && RecordingUrl) {
+  if (call && hasRecordingAuthorization(call) && RecordingStatus === 'completed' && RecordingUrl) {
     if (call.recording_start_status && (!/^RE[a-f0-9]{32}$/i.test(req.body.RecordingSid ?? '') ||
       (call.recording_sid && call.recording_sid !== req.body.RecordingSid))) return res.status(204).end();
     const accepted = await queryOne(
       `UPDATE calls SET recording_url = $2, status = 'processing', error=NULL,processing_requested_at=now(),
         recording_sid=COALESCE(recording_sid,$3),recording_start_status='started'
        WHERE id = $1 AND recording_url IS NULL AND status <> 'ready'
-         AND record_enabled AND parent_consent_at IS NOT NULL AND child_consent_at IS NOT NULL
+         AND ${recordingAuthorizationSql}
          AND (recording_sid IS NULL OR recording_sid=$3)
        RETURNING id`,
       [call.id, RecordingUrl, req.body.RecordingSid ?? null]

@@ -1,8 +1,10 @@
 import { isE164 } from './phone.js';
+import { recordingPolicy } from './recording-policy.js';
 
 // Validate before listening or migrating. Error messages name settings only;
 // never include database URLs, tokens or other configured values.
 export function validateDeployment(env = process.env) {
+  recordingPolicy(env);
   const required = name => { if (!env[name]?.trim()) throw new Error(`Set ${name}`); return env[name]; };
   const match = (name, pattern) => { if (!pattern.test(required(name))) throw new Error(`Invalid ${name}`); };
   function url(name, protocols) {

@@ -89,3 +89,22 @@ test('database failure after lookup retries only a read after cooldown; ambiguou
     assert.equal((await row(id)).recording_url, status === 'found' ? url : null);
   }
 });
+
+test('owner-only recovery accepts only the owner leg with scoped notice, in either direction', async () => {
+  for (const direction of ['outbound', 'inbound']) {
+    const id = await seed();
+    const owner = direction === 'outbound' ? 'parent_consent_at' : 'child_consent_at';
+    const other = direction === 'outbound' ? 'child_consent_at' : 'parent_consent_at';
+    await db.query(`UPDATE calls SET direction=$2,consent_mode='owner_only',consent_scope='Reviewed test scope',
+      ${owner}=NULL,${other}=now() WHERE id=$1`, [id, direction]);
+    const before = lookups;
+    assert.equal((await post(id)).status, 409);
+    await db.query(`UPDATE calls SET ${owner}=now(),${other}=NULL WHERE id=$1`, [id]);
+    assert.equal((await post(id)).status, 409, 'notice required');
+    await db.query('UPDATE calls SET other_party_notice_issued_at=now(),consent_scope=NULL WHERE id=$1', [id]);
+    assert.equal((await post(id)).status, 409, 'scope required'); assert.equal(lookups, before);
+    await db.query("UPDATE calls SET consent_scope='Reviewed test scope' WHERE id=$1", [id]);
+    assert.equal((await post(id)).status, 202); assert.equal(lookups, before + 1);
+    assert.equal((await row(id))[other], null);
+  }
+});

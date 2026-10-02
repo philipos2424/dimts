@@ -66,3 +66,24 @@ test('HTTP call failures retain their status so the dialer can distinguish rejec
     err=>err.messageKey==='errorCallFailed' && err.status===409);
   assert.equal(harness.timers.size,0);
 });
+
+test('provider and server details never appear in public error messages, including malformed responses', async()=>{
+  for (const body of ['{"error":"internal_error","message":"password-secret"}', '<html>secret-token</html>',
+    '{broken-secret', JSON.stringify({error:'session_expired',message:'secret-token'}),
+    JSON.stringify({error:'invalid_code',message:'secret-token'})]) {
+    const harness=loadApi(async()=>({ok:false,status:500,text:async()=>body}));
+    await assert.rejects(harness.api.sendLoginCode('+15555550101'),err=>err.status===500 &&
+      /try again shortly/.test(err.message) && !/secret|HTTP|internal_error|expired|incorrect/.test(err.message));
+    assert.equal(harness.timers.size,0);
+  }
+});
+
+test('signup and call rejection messages explain the next step while retaining their status', async()=>{
+  for (const [code,status,expected] of [['invalid_code',401,/incorrect or expired/],
+    ['handset_required',400,/mobile number you will answer/],['session_expired',401,/sign in again/],
+    ['call_in_progress',409,/Finish your current call/],['daily_call_limit',429,/today/],
+    ['constructor',400,/Check your details/],['too_many_attempts',429,/wait/]]) {
+    const harness=loadApi(async()=>({ok:false,status,text:async()=>JSON.stringify({error:code,message:'secret'})}));
+    await assert.rejects(harness.api.sendLoginCode('+15555550101'),err=>err.status===status && expected.test(err.message) && !/secret/.test(err.message));
+  }
+});

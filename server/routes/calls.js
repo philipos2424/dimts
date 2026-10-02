@@ -12,6 +12,7 @@ import { expireRecordingWait } from '../db/expire-recording-wait.js';
 import { callNotes } from '../lib/call-export.js';
 import { expireProcessing } from '../db/expire-processing.js';
 import { transcriptTurns } from '../lib/transcript-turns.js';
+import { hasRecordingAuthorization } from '../lib/recording-policy.js';
 
 export const callsRouter = express.Router();
 
@@ -125,6 +126,7 @@ callsRouter.get('/:id', async (req, res, next) => {
               c.recording_url, c.transcript, c.transcript_data, c.transcript_recording_url, c.summary, c.next_moves,
               c.action_items, c.key_points, c.followups, c.error, c.created_at,
               c.record_enabled, c.parent_consent_at, c.child_consent_at, c.recording_start_status,
+              c.consent_mode, c.consent_scope, c.other_party_notice_issued_at,
               c.deleted_at,c.provider_deletion_status,c.provider_deletion_error,c.provider_deleted_at,
               k.display_name AS contact_name, k.company
          FROM calls c
@@ -135,9 +137,10 @@ callsRouter.get('/:id', async (req, res, next) => {
 
     if (!call) throw new HttpError(404, 'call_not_found');
 
-    const { transcript_data, transcript_recording_url, ...detail } = call;
+    const { transcript_data, transcript_recording_url, consent_scope, ...detail } = call;
     res.set('Cache-Control','private, no-store').json({
       ...detail,
+      recording_authorized: hasRecordingAuthorization(call),
       transcript_turns: transcriptTurns(call),
       // The app never gets Twilio's URL directly; it would need Twilio
       // credentials to fetch it.

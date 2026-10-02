@@ -113,6 +113,7 @@ export default function CallDetailScreen() {
     <ScrollView ref={scroll} contentContainerStyle={{ padding: space.md, gap: space.lg }}>
       {errorKey && <Banner message={t(errorKey)} onDismiss={() => setErrorKey(null)} />}
 
+      <Txt size="caption" tone="muted" selectable>Call ID: {call.id}</Txt>
       {call.audio_url && <CallPlayer callId={call.id} seekRequest={seekRequest} />}
       <View style={{ gap: space.sm }}>
         <Txt tone="muted" size="caption">Keep your own copy of this call.</Txt>
@@ -140,11 +141,10 @@ export default function CallDetailScreen() {
           </Txt>
           {call.status === 'failed' && !call.audio_url && call.duration_sec != null && (
             <View style={{ gap: space.sm }}>
-              <Txt size="caption" tone="muted" selectable>Call ID: {call.id}</Txt>
               <Pressable accessibilityRole="button" onPress={load} style={{ paddingVertical: space.sm }}>
                 <Txt tone="accent" weight="bold">Check for delayed recording</Txt>
               </Pressable>
-              {call.record_enabled && call.parent_consent_at && call.child_consent_at && <Pressable
+              {call.recording_authorized && <Pressable
                 accessibilityRole="button" disabled={checkingRecording} onPress={checkRecording} style={{ minHeight: 44, justifyContent: 'center' }}>
                 <Txt tone="accent">{checkingRecording ? 'Checking recording provider…' : 'Recover recording from provider'}</Txt>
               </Pressable>}

@@ -88,6 +88,8 @@ function seedCall(overrides = {}) {
     destination: '+251911234567',
     duration_sec: null,
     recording_url: null,
+    record_enabled: true,
+    consent_mode: 'all_parties',
     parent_consent_at: '2026-10-01T00:00:00Z',
     child_consent_at: '2026-10-01T00:00:01Z',
     ...overrides,

@@ -5,7 +5,8 @@ import { findUserByAgentNumber } from '../db/agent-numbers.js';
 import { findOrCreateContact } from '../db/contacts.js';
 import { reserveCall } from '../db/reserve-call.js';
 import { verifyTwilioSignature } from '../lib/twilio-signature.js';
-import { askRecordingConsent } from '../lib/recording-consent.js';
+import { askRecordingConsent, dialCall, issueRecordingNotice } from '../lib/recording-consent.js';
+import { queryOne } from '../db/pool.js';
 import { sendIncomingNotification } from '../services/notifications.js';
 import { defer } from '../lib/defer.js';
 
@@ -61,7 +62,14 @@ inboundRouter.post('/', async (req, res) => {
 
   const base = config.publicBaseUrl;
   if (['ringing','in-progress'].includes(call.status)) defer(sendIncomingNotification(call.id), `incoming-notification:${call.id}`);
-  if (['initiating', 'ringing'].includes(call.status)) askRecordingConsent(twiml, `${base}/twiml/accept?callId=${call.id}`);
+  if (['initiating', 'ringing'].includes(call.status)) {
+    if (call.consent_mode === 'owner_only' && call.consent_scope?.trim()) {
+      const announced = await queryOne(`UPDATE calls SET other_party_notice_issued_at=COALESCE(other_party_notice_issued_at,now())
+        WHERE id=$1 AND twilio_call_sid=$2 AND duration_sec IS NULL RETURNING *`, [call.id, CallSid]);
+      if (!announced) twiml.hangup();
+      else { issueRecordingNotice(twiml); dialCall(twiml, announced); }
+    } else askRecordingConsent(twiml, `${base}/twiml/accept?callId=${call.id}`);
+  }
   else twiml.hangup();
 
   res.type('text/xml').send(twiml.toString());

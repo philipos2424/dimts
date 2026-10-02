@@ -2,11 +2,11 @@ import { queryOne } from './pool.js';
 import { startCallRecording } from '../services/start-recording.js';
 import { processDeletion } from '../services/process-deletion.js';
 import { defer } from '../lib/defer.js';
+import { recordingAuthorizationSql } from '../lib/recording-policy.js';
 
 export async function beginAgreedRecording(callId, childSid) {
   const call = await queryOne(`UPDATE calls SET recording_start_status='pending'
-    WHERE id=$1 AND child_call_sid=$2 AND record_enabled AND parent_consent_at IS NOT NULL
-      AND child_consent_at IS NOT NULL AND twilio_call_sid IS NOT NULL
+    WHERE id=$1 AND child_call_sid=$2 AND ${recordingAuthorizationSql} AND twilio_call_sid IS NOT NULL
       AND recording_start_status IS NULL AND duration_sec IS NULL RETURNING *`, [callId, childSid]);
   if (!call) return queryOne('SELECT * FROM calls WHERE id=$1', [callId]);
   let sid;
