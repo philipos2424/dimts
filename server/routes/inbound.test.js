@@ -14,7 +14,7 @@ const inserted = [];
 const notified = [];
 mock.module('../services/notifications.js', { namedExports: {
   sendIncomingNotification: async id => { notified.push(id); },
-  checkPushReceipts: async () => {}, validPushToken: () => true,
+  checkPushReceipts: async () => {}, validPushToken: () => true, sendPrivacyRequestNotification: async () => {},
 } });
 mock.module('../db/reserve-call.js', { namedExports: {
   reserveCall: async (owner, caller, record, key, options) => {

@@ -28,6 +28,7 @@ export async function deleteAccount(userId) {
     await tx.query('SELECT id FROM users WHERE id=$1 FOR UPDATE', [userId]);
     const { rows } = await tx.query('SELECT * FROM calls WHERE user_id=$1 AND deleted_at IS NULL FOR UPDATE', [userId]);
     const ids = await scrubCalls(tx, rows);
+    await tx.query('UPDATE privacy_request_targets SET resolved_at=COALESCE(resolved_at,now()) WHERE user_id=$1', [userId]);
     for (const table of ['contacts', 'google_oauth_requests', 'google_connections', 'notification_devices', 'sessions']) {
       await tx.query(`DELETE FROM ${table} WHERE user_id=$1`, [userId]);
     }
@@ -50,6 +51,8 @@ export async function deleteContact(userId, contactId) {
     if (!contact) throw new HttpError(404, 'contact_not_found');
     const { rows } = await tx.query('SELECT * FROM calls WHERE user_id=$1 AND contact_id=$2 AND deleted_at IS NULL FOR UPDATE', [userId, contactId]);
     const ids = await scrubCalls(tx, rows);
+    await tx.query(`UPDATE privacy_request_targets SET resolved_at=now()
+      WHERE user_id=$1 AND contact_id=$2 AND resolved_at IS NULL`, [userId, contactId]);
     await tx.query('UPDATE calls SET contact_id=NULL WHERE contact_id=$1', [contactId]);
     await tx.query('DELETE FROM contacts WHERE id=$1', [contactId]);
     return { ids, deleted: rows.length };

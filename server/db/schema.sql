@@ -243,3 +243,17 @@ ALTER TABLE calls ADD COLUMN IF NOT EXISTS audio_archived_at TIMESTAMPTZ;
 ALTER TABLE calls ADD COLUMN IF NOT EXISTS provider_archive_status TEXT;
 ALTER TABLE calls ADD COLUMN IF NOT EXISTS provider_archive_attempted_at TIMESTAMPTZ;
 ALTER TABLE calls ADD COLUMN IF NOT EXISTS storage_deletion_status TEXT;
+
+-- Release 1: people who were recorded can ask businesses to delete their data.
+CREATE TABLE IF NOT EXISTS privacy_requests (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  phone_hash TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS privacy_request_targets (
+  request_id UUID NOT NULL REFERENCES privacy_requests(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id),
+  contact_id UUID REFERENCES contacts(id) ON DELETE SET NULL,
+  resolved_at TIMESTAMPTZ,
+  PRIMARY KEY (request_id, user_id)
+);

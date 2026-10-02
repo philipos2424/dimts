@@ -83,3 +83,18 @@ export async function checkPushReceipts(userId) {
       [job.device_id,userId,job.session_hash]);
   }
 }
+
+/** Best-effort nudge: someone asked this business to delete their call data. */
+export async function sendPrivacyRequestNotification(userId) {
+  try {
+    const { rows } = await query(`SELECT d.push_token FROM notification_devices d JOIN sessions s ON s.token_hash=d.session_hash
+      WHERE d.user_id=$1 AND NOT d.disabled AND s.expires_at>now()`, [userId]);
+    if (!rows.length) return;
+    await fetch(SEND, { method: 'POST', headers: headers(), signal: AbortSignal.timeout(5000),
+      body: JSON.stringify(rows.map(row => ({ to: row.push_token, title: 'Privacy request',
+        body: 'Someone asked for their call data to be deleted. Review it in Dimts within 30 days.',
+        data: { type: 'privacy-request' } }))) });
+  } catch (err) {
+    console.error('[notifications] privacy request push failed', err?.message);
+  }
+}
