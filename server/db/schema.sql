@@ -236,3 +236,9 @@ CREATE TABLE IF NOT EXISTS rate_limits (
   hits INT NOT NULL DEFAULT 0,
   PRIMARY KEY (key, window_start)
 );
+
+-- Release 1: call audio moves off Twilio into private EU storage.
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS audio_object_key TEXT;
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS audio_archived_at TIMESTAMPTZ;
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS provider_archive_status TEXT;
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS provider_archive_attempted_at TIMESTAMPTZ;

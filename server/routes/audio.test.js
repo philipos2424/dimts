@@ -28,6 +28,16 @@ mock.module('../services/originate.js', { namedExports: {
     return new Response(new Uint8Array([1, 2, 3, 4]), { headers: { 'content-length': '4' } });
   },
 } });
+let storeReads = [];
+mock.module('../services/audio-store.js', { namedExports: {
+  audioStoreConfigured: () => false, objectKey: (u, c) => `${u}/${c}.mp3`,
+  putAudio: async () => {}, headAudio: async () => null, removeAudio: async () => 'confirmed',
+  getAudio: async (key, { range } = {}) => {
+    storeReads.push([key, range ?? null]);
+    if (range) return new Response(new Uint8Array([6]), { status: 206, headers: { 'content-range': 'bytes 1-1/3', 'content-length': '1', 'accept-ranges': 'bytes' } });
+    return new Response(new Uint8Array([5, 6, 7]), { headers: { 'content-length': '3', 'accept-ranges': 'bytes' } });
+  },
+} });
 const { callsRouter } = await import('./calls.js');
 const app = express(); app.use('/calls', callsRouter);
 app.use((err, _req, res, _next) => res.status(err.status || 500).json({ error: err.code || 'internal_error' }));
@@ -84,4 +94,24 @@ test('native seeking preserves partial content and unsatisfiable ranges; malform
   assert.deepEqual([...new Uint8Array(await partial.arrayBuffer())], [2, 3]);
   const absent = await request(tokens[0], 'bytes=99-');
   assert.equal(absent.status, 416); assert.equal(absent.headers.get('content-range'), 'bytes */4');
+});
+
+test('archived audio streams from EU storage, supports seeking, and each hour of listening is audited once', async () => {
+  const archived = (await db.query(`INSERT INTO calls(user_id,user_phone,destination,status,recording_url,audio_object_key)
+    VALUES($1,'+15555550100','+15555550103','ready','provider-only-url',$2) RETURNING id`,
+    [users[0].id, `${users[0].id}/archived.mp3`])).rows[0];
+  const before = downloads;
+  const get = range => fetch(`${base}/calls/${archived.id}/audio`, { headers: { Authorization: `Bearer ${tokens[0]}`, ...(range ? { Range: range } : {}) } });
+  const full = await get();
+  assert.equal(full.status, 200);
+  assert.deepEqual([...new Uint8Array(await full.arrayBuffer())], [5, 6, 7]);
+  const part = await get('bytes=1-1');
+  assert.equal(part.status, 206); assert.equal(part.headers.get('content-range'), 'bytes 1-1/3');
+  await part.arrayBuffer();
+  assert.equal(downloads, before, 'Twilio is never contacted for archived audio');
+  assert.deepEqual(storeReads.map(r => r[1]), [null, 'bytes=1-1']);
+  const audited = (await db.query("SELECT count(*)::int n FROM audit_events WHERE action='audio_played' AND target_id=$1", [archived.id])).rows[0].n;
+  assert.equal(audited, 1);
+  const other = await fetch(`${base}/calls/${archived.id}/audio`, { headers: { Authorization: `Bearer ${tokens[1]}` } });
+  assert.equal(other.status, 404);
 });
