@@ -118,7 +118,15 @@ export default function Dialer() {
           paddingTop: space.md,
         }}
       >
-        <View style={{ width: 64 }} />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="+"
+          onPress={() => setNumber((n) => n.startsWith('+') ? n : `+${n}`)}
+          hitSlop={12}
+          style={{ width: 64, minHeight: 64, alignItems: 'center', justifyContent: 'center' }}
+        >
+          <Txt size="title" tone="accent">+</Txt>
+        </Pressable>
 
         <Pressable
           accessibilityRole="button"
