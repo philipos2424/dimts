@@ -7,6 +7,7 @@ import { TERMS_VERSION, hasAcceptedTerms } from '../lib/terms.js';
 import { audit } from '../lib/audit.js';
 import { hit } from '../lib/rate-limit.js';
 import { buildExport } from '../services/export-user.js';
+import { deleteAccount } from '../services/delete-account.js';
 
 export const meRouter = express.Router();
 
@@ -61,5 +62,15 @@ meRouter.get('/export', async (req, res, next) => {
     const data = await buildExport(user.id);
     await audit({ userId: user.id, action: 'data_exported', req });
     res.set('Content-Disposition', `attachment; filename="dimts-export-${data.exported_at.slice(0, 10)}.json"`).json(data);
+  } catch (err) { next(err); }
+});
+
+meRouter.delete('/', async (req, res, next) => {
+  try {
+    const user = await resolveUser(req);
+    if (req.body?.confirm !== 'delete-account') throw new HttpError(400, 'deletion_confirmation_required');
+    const result = await deleteAccount(user.id);
+    await audit({ userId: user.id, action: 'account_deleted', req });
+    res.status(202).json(result);
   } catch (err) { next(err); }
 });
