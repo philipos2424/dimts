@@ -10,10 +10,10 @@ const counts = new Map();
 const users = new Map();
 mock.module('../db/pool.js', { namedExports: {
   queryOne: async (sql, params) => {
-    if (sql.includes('auth_rate_limits')) {
+    if (sql.includes('rate_limits')) {
       const count = (counts.get(params[0]) ?? 0) + 1;
       counts.set(params[0], count);
-      return { attempts: count };
+      return { hits: count, remaining: 60 };
     }
     if (sql.includes('INSERT INTO users')) {
       const user = { id: `owner-${params[0]}`, phone: params[0], tier: 'free' };

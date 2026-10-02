@@ -228,3 +228,11 @@ CREATE TABLE IF NOT EXISTS audit_events (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS audit_events_user_idx ON audit_events(user_id, created_at DESC);
+
+-- Release 1: durable request counters shared by every function instance.
+CREATE TABLE IF NOT EXISTS rate_limits (
+  key TEXT NOT NULL,
+  window_start TIMESTAMPTZ NOT NULL,
+  hits INT NOT NULL DEFAULT 0,
+  PRIMARY KEY (key, window_start)
+);

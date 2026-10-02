@@ -5,21 +5,13 @@ import { isE164 } from '../lib/phone.js';
 import { hashToken, HttpError, resolveUser } from '../lib/users.js';
 import { checkPhoneCode, sendPhoneCode } from '../services/verify-phone.js';
 import { audit } from '../lib/audit.js';
+import { hit } from '../lib/rate-limit.js';
 import { hasAcceptedTerms } from '../lib/terms.js';
 
 export const authRouter = express.Router();
 
 // Durable counters also work across concurrent Vercel function instances.
-async function limit(key, maximum) {
-  const row = await queryOne(
-    `INSERT INTO auth_rate_limits (key, window_start, attempts)
-     VALUES ($1, date_trunc('hour', now()), 1)
-     ON CONFLICT (key, window_start) DO UPDATE
-       SET attempts = auth_rate_limits.attempts + 1
-     RETURNING attempts`, [hashToken(key)]
-  );
-  if (row.attempts > maximum) throw new HttpError(429, 'too_many_attempts', 'Try again later.');
-}
+const limit = (key, maximum) => hit(key, maximum, 3600);
 
 authRouter.post('/start', async (req, res) => {
   const { phone } = req.body ?? {};
