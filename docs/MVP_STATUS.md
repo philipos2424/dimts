@@ -18,6 +18,10 @@ new requests after expiry and preserving a recoverable error without deleting
 the saved media. Existing checkpoint/retry tests also pass. These tests do not
 establish that a real call has been recorded or successfully transcribed.
 
+The deadline fix is deployed READY as `dpl_C5gaYhw2Tuz7kcrANgPXHyyBz385`
+at https://dimts.vercel.app. Post-deployment health/onboarding and callback
+signature checks pass. This supersedes the earlier normal deployment identity.
+
 ## Verified pilot signup — 2 October 2026
 
 The live `/api/auth/start` request for the previously selected Twilio-verified

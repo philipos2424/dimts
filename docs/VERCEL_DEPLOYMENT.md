@@ -2,8 +2,8 @@
 
 ## Current production — 2 October 2026
 
-https://dimts.vercel.app points to READY `dpl_BGwiC9Rh48Ki4a9kw734rnJBvAgt`
-(`dimts-de4bk0bi5-philiposw11-9068s-projects.vercel.app`). Health and onboarding
+https://dimts.vercel.app points to READY `dpl_C5gaYhw2Tuz7kcrANgPXHyyBz385`
+(`dimts-ln6nio1v5-philiposw11-9068s-projects.vercel.app`). Health and onboarding
 return 200; signed callbacks return 204 and invalid signatures return 403.
 The optional synthetic AI build check is disabled. When enabled, it failed
 because `ELEVENLABS_API_KEY` was unavailable to the build, although Vercel
