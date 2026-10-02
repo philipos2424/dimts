@@ -53,6 +53,6 @@ export function parseIdentity(content) {
   return { name, company, confidence: name ? confidence : 0 };
 }
 
-export async function identifyCaller(transcript) {
-  return parseIdentity(await completeJson(IDENTIFY_PROMPT, openingOf(transcript)));
+export async function identifyCaller(transcript, options = {}) {
+  return parseIdentity(await completeJson(IDENTIFY_PROMPT, openingOf(transcript), 'json', options));
 }

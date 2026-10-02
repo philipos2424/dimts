@@ -17,11 +17,12 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
  * Twilio occasionally 404s the media for a second or two after the
  * recording-ready webhook fires, before the file is durably stored.
  */
-async function downloadRecording(recordingUrl) {
+async function downloadRecording(recordingUrl, signal) {
   let lastStatus;
 
   for (let attempt = 1; attempt <= DOWNLOAD_ATTEMPTS; attempt += 1) {
-    const response = await fetchRecording(recordingUrl);
+    signal.throwIfAborted();
+    const response = await fetchRecording(recordingUrl, { signal });
     if (response.ok) return response.blob();
 
     lastStatus = response.status;
@@ -38,13 +39,13 @@ async function downloadRecording(recordingUrl) {
  * Best-effort by design: a call whose notes are perfectly good should not be
  * marked failed because the identification model was unavailable.
  */
-async function nameContact(call, transcript) {
+async function nameContact(call, transcript, signal) {
   if (!call.contact_id) return;
 
   try {
     await touchLastCall(call.contact_id);
 
-    const identity = await identifyCaller(transcript);
+    const identity = await identifyCaller(transcript, { signal });
     const existing = {
       display_name: call.contact_display_name,
       name_source: call.contact_name_source,
@@ -67,7 +68,11 @@ async function nameContact(call, transcript) {
  * Any failure is recorded on the row so
  * the app can show why rather than spinning on 'processing' forever.
  */
-export async function processRecording(callId, { force = false } = {}) {
+export async function processRecording(callId, { force = false, signal: callerSignal } = {}) {
+  // Leave 30 seconds within Vercel's 300-second limit to persist failure and
+  // release the lease. Stage timeouts alone can otherwise add up past it.
+  const deadline = AbortSignal.timeout(270_000);
+  const signal = callerSignal ? AbortSignal.any([callerSignal, deadline]) : deadline;
   const lease = randomUUID();
   const call = await queryOne(
     `WITH claimed AS (
@@ -104,9 +109,9 @@ export async function processRecording(callId, { force = false } = {}) {
       result = { text: call.transcript, raw: call.transcript_data,
         language: call.language, languageProbability: call.language_probability };
     } else {
-      const audio = await downloadRecording(call.recording_url);
+      const audio = await downloadRecording(call.recording_url, signal);
       await renew();
-      result = await transcribe(audio, { direction: call.direction });
+      result = await transcribe(audio, { direction: call.direction, signal });
       const saved = await queryOne(`UPDATE calls SET transcript=$3,transcript_data=$4,
         language=$5,language_probability=$6,transcript_recording_url=$7,
         processing_until=now()+interval '10 minutes'
@@ -122,7 +127,7 @@ export async function processRecording(callId, { force = false } = {}) {
     }
 
     await renew();
-    const summary = await summarize(result.text);
+    const summary = await summarize(result.text, { signal });
 
     const saved = await query(
       `UPDATE calls
@@ -154,13 +159,13 @@ export async function processRecording(callId, { force = false } = {}) {
     );
     // Only the worker that committed the notes may spend on identification or
     // update a contact. A stale worker cannot apply its old result.
-    if (saved.rows.length) await nameContact(call, result.text);
+    if (saved.rows.length) await nameContact(call, result.text, signal);
   } catch (err) {
     await query(
       `UPDATE calls SET status = 'failed', error = $2,
         processing_token = NULL, processing_until = NULL
        WHERE id = $1 AND processing_token = $3`,
-      [callId, String(err?.message ?? err).slice(0, 500), lease]
+      [callId, signal.aborted ? 'AI processing was interrupted or timed out. Your saved recording is retained; retry processing from this call.' : String(err?.message ?? err).slice(0, 500), lease]
     );
     throw err;
   }

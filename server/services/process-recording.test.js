@@ -143,3 +143,14 @@ test('passes incoming direction and saves language with the notes', async () => 
   assert.equal(saved.params[8], 0.99);
   assert.match(saved.sql, /processing_token = \$10/);
 });
+
+test('interrupted processing releases its lease and keeps a recoverable error', async () => {
+  await assert.rejects(processRecording('call-1', { signal: AbortSignal.abort() }));
+  assert.equal(transcriptions.length, 0);
+  assert.equal(adopted.length, 0);
+  const failed = updates.find(update => update.sql.includes("status = 'failed'"));
+  assert.match(failed.params[1], /saved recording is retained; retry processing/);
+  assert.match(failed.sql, /processing_token = NULL/);
+  assert.match(failed.sql, /processing_token = \$3/);
+  assert.doesNotMatch(failed.sql, /recording_url\s*=/);
+});

@@ -77,7 +77,7 @@ export function preserveTimeAmbiguity(summary, transcript) {
     action_items: summary.action_items.map(item => ({ ...item, task: clean(item.task) })) };
 }
 
-export async function summarize(transcript) {
+export async function summarize(transcript, options = {}) {
   const result = parseSummary(await completeJson(SYSTEM_PROMPT, transcript, {
     type: 'object', additionalProperties: false,
     properties: {
@@ -88,6 +88,6 @@ export async function summarize(transcript) {
         required: ['task', 'owner'], additionalProperties: false } },
       key_points: { type: 'array', items: { type: 'string' } },
     }, required: ['summary', 'next_moves', 'action_items', 'key_points'],
-  }));
+  }, options));
   return preserveTimeAmbiguity(result, transcript);
 }

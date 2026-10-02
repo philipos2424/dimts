@@ -3,6 +3,21 @@
 This build is in progress. Passing unit tests does not establish a working
 phone-call MVP.
 
+## Processing deadline — 2 October 2026
+
+The deployed function permits 300 seconds, but the previous per-stage timeouts
+could add up beyond that limit (download, transcription, summary, identity).
+Processing now shares a 270-second deadline across media fetches, transcription
+and LLM requests, leaving time to persist an interrupted/timeout error and
+release the lease. Saved recording and transcript checkpoints remain available
+to the existing retry flow. Identification remains best-effort after notes are
+committed; a deadline does not fabricate a contact identity.
+
+All 249 backend tests pass, including shared-deadline cancellation, preventing
+new requests after expiry and preserving a recoverable error without deleting
+the saved media. Existing checkpoint/retry tests also pass. These tests do not
+establish that a real call has been recorded or successfully transcribed.
+
 ## Verified pilot signup — 2 October 2026
 
 The live `/api/auth/start` request for the previously selected Twilio-verified

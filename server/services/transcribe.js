@@ -73,7 +73,7 @@ export function normalizeScribeResponse(data, { direction = 'outbound' } = {}) {
   };
 }
 
-async function callScribe(audio, fields) {
+async function callScribe(audio, fields, signal) {
   const form = new FormData();
   form.set('file', audio, audio.type === 'audio/wav' ? 'recording.wav' : 'recording.mp3');
   form.set('model_id', config.scribeModelId);
@@ -85,7 +85,7 @@ async function callScribe(audio, fields) {
     method: 'POST',
     headers: { 'xi-api-key': config.elevenLabsApiKey },
     body: form,
-    signal: AbortSignal.timeout(120_000),
+    signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(120_000)]) : AbortSignal.timeout(120_000),
   });
 
   return response;
@@ -99,25 +99,26 @@ async function callScribe(audio, fields) {
  * 400 — the two options cannot be combined.
  */
 export async function transcribe(audioBlob, options = {}) {
+  options.signal?.throwIfAborted();
   if (config.transcribeProvider === 'whisper') {
     const form = new FormData();
     form.set('file', audioBlob, 'recording.mp3');
     const response = await fetch(`${config.whisperBaseUrl}/transcribe`, {
       method: 'POST', body: form,
       headers: { Authorization: `Bearer ${config.whisperApiToken}` },
-      signal: AbortSignal.timeout(300_000),
+      signal: options.signal ? AbortSignal.any([options.signal, AbortSignal.timeout(300_000)]) : AbortSignal.timeout(300_000),
     });
     if (response.status === 422) throw new Error('The saved recording could not be decoded in a supported audio layout. Play or export it to check the file; AI notes were not generated.');
     if (!response.ok) throw new Error(`Local Whisper failed (HTTP ${response.status})`);
     return normalizeScribeResponse(await response.json(), options);
   }
   if (config.transcribeProvider !== 'elevenlabs') throw new Error('Unsupported TRANSCRIBE_PROVIDER');
-  let response = await callScribe(audioBlob, { use_multi_channel: true });
+  let response = await callScribe(audioBlob, { use_multi_channel: true }, options.signal);
 
   if (response.status === 400) {
     await response.body?.cancel();
     console.warn('[scribe] multichannel rejected (HTTP 400), retrying with diarize');
-    response = await callScribe(audioBlob, { diarize: true });
+    response = await callScribe(audioBlob, { diarize: true }, options.signal);
   }
 
   if (!response.ok) {
