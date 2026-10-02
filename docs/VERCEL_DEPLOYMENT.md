@@ -2,17 +2,23 @@
 
 ## Current production — 2 October 2026
 
-https://dimts.vercel.app points to READY `dpl_C5gaYhw2Tuz7kcrANgPXHyyBz385`
-(`dimts-ln6nio1v5-philiposw11-9068s-projects.vercel.app`). Health and onboarding
+https://dimts.vercel.app points to READY `dpl_FngM4dBLVJLJcopq7BJfzYscjajz`
+(`dimts-5qk4jbdcz-philiposw11-9068s-projects.vercel.app`). Health and onboarding
 return 200; signed callbacks return 204 and invalid signatures return 403.
 The optional synthetic AI build check is disabled. When enabled, it failed
 because `ELEVENLABS_API_KEY` was unavailable to the build, although Vercel
 lists a Secret with that name. Transcription remains unverified.
 
+The end-call and stale-provider-state fix is deployed. An unauthenticated
+request to the new end-call endpoint returns 401. The specified ended test
+attempt was reconciled against Twilio and the production database; it no
+longer occupies an active reservation. The attempt never connected a second
+leg and provides no two-person recording evidence.
+
 Real SMS delivery and completed signup are now confirmed for the selected
 verified pilot handset: the owner reported delivery, supplied the signed-in
 dashboard screenshot, and a read-only database audit confirms the matching
-business line and active session. No pilot call exists yet. The unverified
+business line and active session. The unverified
 alternative handset still encounters Twilio's trial restriction.
 
 Deployment identities and pending-signup statements below are historical.

@@ -26,6 +26,10 @@ The reconciliation service was exercised against the specified real call and
 hosted database: it confirms ended and preserves the already finalized row.
 No audio/AI result was established. Physical UI end-call testing remains pending.
 
+Deployment `dpl_FngM4dBLVJLJcopq7BJfzYscjajz` is READY at the production
+alias. Health/onboarding, valid and invalid signature probes, and the new
+unauthenticated end-call rejection all pass. This is the current deployment.
+
 ## Processing deadline — 2 October 2026
 
 The deployed function permits 300 seconds, but the previous per-stage timeouts
