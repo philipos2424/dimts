@@ -54,7 +54,8 @@ function Gate() {
       />
       <Stack.Screen name="settings" />
       <Stack.Screen name="first-call" options={{ title: 'Test your first call' }} />
-      <Stack.Screen name="call/[id]" />
+      <Stack.Screen name="call/[id]" options={{ title: '' }} />
+      <Stack.Screen name="person/[id]" options={{ title: '' }} />
       <Stack.Screen name="terms-accept" options={{ headerShown: false }} />
       <Stack.Screen name="privacy" options={{ title: 'Privacy' }} />
       <Stack.Screen name="terms" options={{ title: 'Terms' }} />

@@ -1,5 +1,5 @@
-import { useRouter } from 'expo-router';
-import { useRef, useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useApp } from '../../src/AppContext';
 import { ApiError, startCall, newCallRequestKey } from '../../src/api';
@@ -15,7 +15,10 @@ export default function Dialer() {
   const { c } = useTheme();
   const { t, lang, userPhone, autoRecord } = useApp();
   const router = useRouter();
+  const params = useLocalSearchParams<{ number?: string }>();
   const [number, setNumber] = useState('+1');
+  // Opened from a person page: start with their number.
+  useEffect(() => { if (params.number && /^\+[1-9]\d{6,14}$/.test(params.number)) setNumber(params.number); }, [params.number]);
   const [errorKey, setErrorKey] = useState<Key | null>(null);
   const [errorDetail, setErrorDetail] = useState('');
   const [busy, setBusy] = useState(false);

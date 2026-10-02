@@ -5,8 +5,7 @@ import { HttpError, resolveUser } from '../lib/users.js';
 export const promisesRouter = express.Router();
 
 // Commitments come from each call's action items; only their status is stored.
-promisesRouter.get('/', async (req, res) => {
-  const user = await resolveUser(req);
+export async function listPromises(userId, contactId = null) {
   const { rows } = await query(`SELECT c.id AS call_id, item.ordinality - 1 AS index, item.value->>'task' AS task,
       item.value->>'owner' AS owner, c.contact_id, k.display_name AS contact_name, c.destination AS phone, c.created_at
     FROM calls c
@@ -15,14 +14,20 @@ promisesRouter.get('/', async (req, res) => {
     LEFT JOIN contacts k ON k.id = c.contact_id
     LEFT JOIN promise_states s ON s.call_id = c.id AND s.item_index = item.ordinality - 1
     WHERE c.user_id=$1 AND c.status='ready' AND c.deleted_at IS NULL
+      AND ($2::uuid IS NULL OR c.contact_id = $2::uuid)
       AND c.created_at > now() - interval '90 days'
       AND item.value->>'owner' IN ('User','Caller') AND coalesce(s.status,'open')='open'
-    ORDER BY c.created_at DESC, item.ordinality`, [user.id]);
+    ORDER BY c.created_at DESC, item.ordinality`, [userId, contactId]);
   const shape = ({ owner, index, ...rest }) => ({ ...rest, index: Number(index) });
-  res.json({
+  return {
     you_owe: rows.filter(r => r.owner === 'User').map(shape),
     waiting_on: rows.filter(r => r.owner === 'Caller').map(shape),
-  });
+  };
+}
+
+promisesRouter.get('/', async (req, res) => {
+  const user = await resolveUser(req);
+  res.json(await listPromises(user.id));
 });
 
 promisesRouter.post('/:callId/:index', async (req, res) => {
