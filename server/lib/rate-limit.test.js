@@ -18,8 +18,14 @@ const { hit } = await import('./rate-limit.js');
 const server = createApp({ webRoot }).listen(0), origin = `http://127.0.0.1:${server.address().port}`;
 test.after(async () => { await new Promise(r => server.close(r)); await db.close(); });
 const get = (path, headers = {}) => fetch(origin + path, { headers });
+// Fixed one-minute windows: start a burst early in a window so it cannot straddle two.
+async function freshWindow() {
+  const second = (await db.query('SELECT extract(second FROM now())::int AS s')).rows[0].s;
+  if (second > 30) await new Promise(r => setTimeout(r, (61 - second) * 1000));
+}
 
 test('hit allows the maximum and refuses the next request with a retry hint', async () => {
+  await freshWindow();
   for (let i = 0; i < 3; i++) await hit('unit:key', 3, 60);
   await assert.rejects(hit('unit:key', 3, 60), err => err.status === 429 && err.code === 'too_many_requests'
     && Number.isInteger(err.retryAfter) && err.retryAfter >= 1 && err.retryAfter <= 60);
@@ -28,6 +34,7 @@ test('hit allows the maximum and refuses the next request with a retry hint', as
 
 test('each session gets 120 API requests a minute; another session is unaffected', async () => {
   const a = { Authorization: 'Bearer ' + 'a'.repeat(64) }, b = { Authorization: 'Bearer ' + 'b'.repeat(64) };
+  await freshWindow();
   for (let i = 0; i < 120; i++) assert.notEqual((await get('/api/me', a)).status, 429, `request ${i + 1}`);
   const limited = await get('/api/me', a);
   assert.equal(limited.status, 429);
@@ -36,6 +43,7 @@ test('each session gets 120 API requests a minute; another session is unaffected
 });
 
 test('unauthenticated API callers get 30 requests a minute per IP; Twilio routes are never limited', async () => {
+  await freshWindow();
   for (let i = 0; i < 30; i++) assert.notEqual((await get('/api/usage')).status, 429, `request ${i + 1}`);
   assert.equal((await get('/api/usage')).status, 429);
   for (let i = 0; i < 40; i++) {

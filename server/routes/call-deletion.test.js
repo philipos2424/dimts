@@ -22,6 +22,11 @@ mock.module('../services/originate.js',{namedExports:{isE164:()=>true,originateC
 mock.module('../services/transcribe.js',{namedExports:{transcribe:async()=>({text:'Caller: Hello\nUser: Hi',raw:{},language:'en',languageProbability:1})}});
 mock.module('../services/summarize.js',{namedExports:{summarize:async()=>{if(summaryHook)await summaryHook();return{summary:'Never restore this',next_moves:[],action_items:[],key_points:[]};}}});
 mock.module('../services/identify.js',{namedExports:{identifyCaller:async()=>({name:null,company:null,confidence:0})}});
+let storeResult='confirmed',storeRemovals=[];
+mock.module('../services/audio-store.js',{namedExports:{
+  audioStoreConfigured:()=>false,objectKey:(u,c)=>`${u}/${c}.mp3`,putAudio:async()=>{},headAudio:async()=>null,
+  getAudio:async()=>new Response(new Uint8Array([1])),removeAudio:async key=>{storeRemovals.push(key);return storeResult;},
+}});
 mock.module('../lib/twilio-signature.js',{namedExports:{verifyTwilioSignature:(_req,_res,next)=>next()}});
 const {callsRouter}=await import('./calls.js');
 const {callDeletionRouter,deletionsRouter}=await import('./call-deletion.js');
@@ -49,7 +54,7 @@ async function request(path,method='GET',body,token=tokens[0]){
 }
 async function until(check){const deadline=Date.now()+3000;while(!await check()){if(Date.now()>deadline)throw new Error('Deletion worker timed out');await new Promise(r=>setTimeout(r,5));}}
 test.after(async()=>{await new Promise(r=>server.close(r));await db.close();});
-test.afterEach(()=>{providerResult={status:'confirmed'};providerHook=undefined;summaryHook=undefined;startHook=undefined;failReceipt=false;});
+test.afterEach(()=>{storeResult='confirmed';providerResult={status:'confirmed'};providerHook=undefined;summaryHook=undefined;startHook=undefined;failReceipt=false;});
 
 test('deletion requires owner and explicit confirmation, scrubs content immediately, preserves usage and exposes provider confirmation',async()=>{
   const id=await seed(),before=providerCalls;
@@ -134,4 +139,36 @@ test('a recording startup receipt arriving after local deletion schedules remova
   release();await starting;
   await until(async()=>(await row(id)).provider_deletion_status==='confirmed'&&providerCalls>=before+2);
   assert.equal((await row(id)).status,'deleted');assert.equal((await row(id)).recording_url,null);assert.equal((await row(id)).transcript,null);
+});
+
+test('deleting an archived call removes the EU copy too and reports both stores',async()=>{
+  const id=await seed();const key=`${users[0].id}/${id}.mp3`;
+  await db.query("UPDATE calls SET audio_object_key=$2,provider_archive_status='removed' WHERE id=$1",[id,key]);
+  storeRemovals=[];
+  assert.equal((await request(`/calls/${id}`,'DELETE',{confirm:'delete-call'})).status,202);
+  await until(async()=>(await row(id)).storage_deletion_status==='confirmed');
+  const saved=await row(id);
+  assert.deepEqual(storeRemovals,[key]);assert.equal(saved.audio_object_key,null);
+  assert.equal(saved.provider_deletion_status,'confirmed');
+  assert.equal((await request(`/calls/${id}/audio`)).status,404);
+});
+test('an uncertain storage removal is visible and retried after the cooldown',async()=>{
+  const id=await seed();const key=`${users[0].id}/${id}.mp3`;
+  await db.query("UPDATE calls SET audio_object_key=$2 WHERE id=$1",[id,key]);
+  storeResult='unknown';
+  await request(`/calls/${id}`,'DELETE',{confirm:'delete-call'});
+  await until(async()=>(await row(id)).storage_deletion_status==='unknown');
+  const listed=(await request('/deletions')).data.deletions.find(c=>c.id===id);
+  assert.equal(listed.storage_deletion_status,'unknown');assert.ok(!('audio_object_key' in listed));
+  await db.query("UPDATE calls SET provider_deletion_attempted_at=now()-interval '2 minutes' WHERE id=$1",[id]);
+  storeResult='confirmed';
+  assert.equal((await request(`/calls/${id}/deletion/retry`,'POST')).status,202);
+  await until(async()=>(await row(id)).storage_deletion_status==='confirmed');
+  assert.equal((await row(id)).audio_object_key,null);
+});
+test('a call that was never archived needs no storage removal',async()=>{
+  const id=await seed();storeRemovals=[];
+  await request(`/calls/${id}`,'DELETE',{confirm:'delete-call'});
+  await until(async()=>(await row(id)).provider_deletion_status==='confirmed');
+  assert.equal((await row(id)).storage_deletion_status,'not_required');assert.deepEqual(storeRemovals,[]);
 });

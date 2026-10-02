@@ -242,3 +242,4 @@ ALTER TABLE calls ADD COLUMN IF NOT EXISTS audio_object_key TEXT;
 ALTER TABLE calls ADD COLUMN IF NOT EXISTS audio_archived_at TIMESTAMPTZ;
 ALTER TABLE calls ADD COLUMN IF NOT EXISTS provider_archive_status TEXT;
 ALTER TABLE calls ADD COLUMN IF NOT EXISTS provider_archive_attempted_at TIMESTAMPTZ;
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS storage_deletion_status TEXT;
