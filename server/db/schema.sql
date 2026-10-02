@@ -257,3 +257,9 @@ CREATE TABLE IF NOT EXISTS privacy_request_targets (
   resolved_at TIMESTAMPTZ,
   PRIMARY KEY (request_id, user_id)
 );
+
+-- Release 2: verified agreements, contradictions, recaps and the owner's language.
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS agreements JSONB;
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS conflicts JSONB;
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS recap TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS language TEXT NOT NULL DEFAULT 'en' CHECK (language IN ('en','am'));

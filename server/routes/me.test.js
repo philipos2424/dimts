@@ -50,3 +50,12 @@ test('activity lists only the signed-in user\'s events, newest first', async () 
   assert.deepEqual(body.events.map(e => e.action), ['call_deleted', 'signed_in']);
   assert.ok(!('user_id' in body.events[0]) && !('ip_hash' in body.events[0]));
 });
+
+test('the summary language is validated, saved and returned', async () => {
+  const owner = await signedIn('+15555550209');
+  assert.equal((await api('/api/me', owner.token)).body.language, 'en');
+  assert.equal((await api('/api/me', owner.token, { method: 'PATCH', body: { language: 'fr' } })).status, 400);
+  const saved = await api('/api/me', owner.token, { method: 'PATCH', body: { language: 'am' } });
+  assert.equal(saved.status, 200); assert.equal(saved.body.language, 'am');
+  assert.equal((await api('/api/me', owner.token)).body.language, 'am');
+});
