@@ -270,3 +270,5 @@ CREATE TABLE IF NOT EXISTS promise_states (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (call_id, item_index)
 );
+CREATE INDEX IF NOT EXISTS calls_search_idx ON calls
+  USING gin (to_tsvector('simple', coalesce(summary,'') || ' ' || coalesce(transcript,'')));
