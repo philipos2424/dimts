@@ -64,3 +64,14 @@ test('exports are limited to five an hour', async () => {
 test('an export needs a signed-in user', async () => {
   assert.equal((await fetch(origin + '/api/me/export')).status, 401);
 });
+
+test('an export includes agreements, conflicts and promise statuses', async () => {
+  const d = await signedIn('+15555550404');
+  const call = (await db.query(`INSERT INTO calls(user_id,user_phone,destination,status,agreements,conflicts,action_items)
+    VALUES($1,'+1','+2','ready','[{"subject":"unit price","value":"450 birr"}]','[{"note":"changed"}]','[{"task":"Send","owner":"User"}]') RETURNING id`, [d.id])).rows[0];
+  await db.query("INSERT INTO promise_states(call_id,item_index,status) VALUES($1,0,'done')", [call.id]);
+  const data = await (await exportFor(d.token)).json();
+  assert.equal(data.calls[0].agreements[0].value, '450 birr');
+  assert.equal(data.calls[0].conflicts[0].note, 'changed');
+  assert.deepEqual(data.promise_states.map(p => [p.call_id, p.item_index, p.status]), [[call.id, 0, 'done']]);
+});

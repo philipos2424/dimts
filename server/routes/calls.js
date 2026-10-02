@@ -15,6 +15,7 @@ import { hasRecordingAuthorization } from '../lib/recording-policy.js';
 import { reconcileCall } from '../services/end-call.js';
 import { checkCallDestination } from '../services/call-preflight.js';
 import { getAudio } from '../services/audio-store.js';
+import { todayCard } from '../lib/today.js';
 import { scheduleArchiveRetries } from '../services/archive-audio.js';
 import { audit } from '../lib/audit.js';
 
@@ -22,7 +23,9 @@ export const callsRouter = express.Router();
 
 const LIST_COLUMNS = `
   c.id, c.destination, c.status, c.duration_sec, c.direction, c.summary,
-  c.created_at, k.display_name AS contact_name, k.company
+  c.created_at, k.display_name AS contact_name, k.company, c.contact_id,
+  c.followups, c.next_moves, c.error, c.agreements, c.conflicts,
+  (c.recording_url IS NOT NULL OR c.audio_object_key IS NOT NULL) AS has_audio
 `;
 
 /**
@@ -130,7 +133,7 @@ callsRouter.get('/', async (req, res, next) => {
       [user.id]
     );
 
-    res.json({ calls: rows });
+    res.json({ calls: rows.map(todayCard) });
   } catch (err) {
     next(err);
   }
@@ -148,6 +151,7 @@ callsRouter.get('/:id', async (req, res, next) => {
               c.record_enabled, c.parent_consent_at, c.child_consent_at, c.recording_start_status,
               c.consent_mode, c.consent_scope, c.other_party_notice_issued_at,
               c.deleted_at,c.provider_deletion_status,c.provider_deletion_error,c.provider_deleted_at,
+              c.agreements, c.conflicts, c.contact_id,
               k.display_name AS contact_name, k.company
          FROM calls c
          LEFT JOIN contacts k ON k.id = c.contact_id

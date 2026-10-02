@@ -172,3 +172,14 @@ test('a call that was never archived needs no storage removal',async()=>{
   await until(async()=>(await row(id)).provider_deletion_status==='confirmed');
   assert.equal((await row(id)).storage_deletion_status,'not_required');assert.deepEqual(storeRemovals,[]);
 });
+
+test('deleting a call also clears its agreements, conflicts, recap and promise statuses',async()=>{
+  const id=await seed();
+  await db.query(`UPDATE calls SET agreements='[{"subject":"price","value":"450"}]',conflicts='[{"note":"x"}]',recap='Hi there',
+    action_items='[{"task":"Send","owner":"User"}]' WHERE id=$1`,[id]);
+  await db.query("INSERT INTO promise_states(call_id,item_index,status) VALUES($1,0,'done')",[id]);
+  await request(`/calls/${id}`,'DELETE',{confirm:'delete-call'});
+  const saved=await row(id);
+  assert.equal(saved.agreements,null);assert.equal(saved.conflicts,null);assert.equal(saved.recap,null);assert.equal(saved.action_items,null);
+  assert.equal((await db.query('SELECT count(*)::int n FROM promise_states WHERE call_id=$1',[id])).rows[0].n,0);
+});

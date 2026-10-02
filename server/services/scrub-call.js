@@ -24,6 +24,7 @@ export async function scrubCall(tx, current) {
   const { rows: [deleted] } = await tx.query(`UPDATE calls SET deleted_at=now(),status='deleted',record_enabled=false,
     destination='',user_phone='',contact_id=NULL,agent_number=NULL,recording_url=NULL,transcript=NULL,transcript_data=NULL,
     transcript_recording_url=NULL,summary=NULL,action_items=NULL,key_points=NULL,next_moves=NULL,followups=NULL,error=NULL,
+    agreements=NULL,conflicts=NULL,recap=NULL,
     language=NULL,language_probability=NULL,processing_token=NULL,processing_until=NULL,
     recording_lookup_token=NULL,recording_lookup_until=NULL,
     twilio_account_sid=$3,provider_deletion_status=$2,provider_deletion_error=NULL,
@@ -32,6 +33,7 @@ export async function scrubCall(tx, current) {
     WHERE id=$1 RETURNING *`,
   [current.id, providerStatus, recordingAccount(current)]);
   await tx.query('DELETE FROM followup_events WHERE call_id=$1', [current.id]);
+  await tx.query('DELETE FROM promise_states WHERE call_id=$1', [current.id]);
   await tx.query('DELETE FROM call_notifications WHERE call_id=$1', [current.id]);
   await tx.query("UPDATE calendar_actions SET meeting='{}'::jsonb WHERE call_id=$1", [current.id]);
   await tx.query("UPDATE email_actions SET email='{}'::jsonb WHERE call_id=$1", [current.id]);
