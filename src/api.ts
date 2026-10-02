@@ -140,7 +140,36 @@ export function verifyLoginCode(phone: string, code: string) {
   });
 }
 export function getMe() {
-  return request<{ phone: string; tier: string; agent_number: string | null }>('/api/me', '');
+  return request<{ phone: string; tier: string; agent_number: string | null; terms_required: boolean }>('/api/me', '');
+}
+export function acceptTerms(version: string) {
+  return request<{ accepted_at: string }>('/api/me/terms', '', { method: 'POST', body: JSON.stringify({ version }) });
+}
+export type ActivityEvent = { action: string; target_type: string | null; target_id: string | null; created_at: string };
+export function getActivity() {
+  return request<{ events: ActivityEvent[] }>('/api/me/activity', '').then(r => r.events);
+}
+export function deleteAccount() {
+  return request<{ queued: number }>('/api/me', '', { method: 'DELETE', body: JSON.stringify({ confirm: 'delete-account' }) });
+}
+export function deleteContact(id: string) {
+  return request<{ deleted_calls: number }>(`/api/contacts/${encodeURIComponent(id)}`, '', { method: 'DELETE', body: JSON.stringify({ confirm: 'delete-contact' }) });
+}
+export type PrivacyRequest = { id: string; contact_id: string | null; created_at: string; due_at: string };
+export function getPrivacyRequests() {
+  return request<{ requests: PrivacyRequest[] }>('/api/me/privacy-requests', '').then(r => r.requests);
+}
+export function startPrivacyRequest(phone: string) {
+  return request<{ status: string }>('/api/privacy-requests/start', '', { method: 'POST', body: JSON.stringify({ phone }) });
+}
+export function verifyPrivacyRequest(phone: string, code: string) {
+  return request<{ status: string; message: string }>('/api/privacy-requests/verify', '', { method: 'POST', body: JSON.stringify({ phone, code }) });
+}
+export async function fetchDataExport(signal: AbortSignal) {
+  const response = await fetch(`${BASE}/api/me/export`, { headers: authHeaders(''), cache: 'no-store', signal });
+  if (response.status === 429) throw new Error('You can download your data five times an hour. Try again later.');
+  if (!response.ok) throw new Error('Unable to prepare your data. Try again.');
+  return new Uint8Array(await response.arrayBuffer());
 }
 export function claimBusinessNumber() {
   return request<{ agent_number: string }>('/api/me/number', '', { method: 'POST' });
@@ -185,6 +214,12 @@ function publicErrorMessage(status: number, body: string): string {
     recording_check_cooldown: 'Please wait a minute before checking the recording again.',
     recording_not_recoverable: 'This call is not eligible for recording recovery.',
     processing_active: 'Your notes are still being prepared. Refresh to check their progress.',
+    terms_required: 'Accept the terms to place recorded calls.',
+    terms_version_mismatch: 'The terms were updated. Reload the app to read the current version.',
+    call_processing: 'Wait until your latest call notes are ready, then try again.',
+    call_not_finished: 'Wait until the call has finished, then try again.',
+    external_action_unresolved: 'Check the pending calendar or Gmail action first, then try again.',
+    too_many_requests: 'Too many requests. Please wait a moment and try again.',
   };
   if (typeof code === 'string' && Object.prototype.hasOwnProperty.call(messages, code)) return messages[code];
   if (status === 401) return 'Please sign in again to continue.';

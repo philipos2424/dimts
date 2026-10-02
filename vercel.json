@@ -10,7 +10,7 @@
     { "src": "/(?:api|twiml|webhooks|oauth)(?:/.*)?", "dest": "/api/index" },
     { "src": "/health", "dest": "/api/index" },
     { "handle": "filesystem" },
-    { "src": "/(?:onboarding|first-call|settings|dialer|contacts|notes|in-call)", "dest": "/index.html" },
+    { "src": "/(?:onboarding|first-call|settings|dialer|contacts|notes|in-call|privacy|terms|privacy-request|terms-accept)", "dest": "/index.html" },
     { "src": "/call/[^/]+", "dest": "/index.html" }
   ]
 }
