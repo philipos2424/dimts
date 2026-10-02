@@ -75,7 +75,7 @@ export function normalizeScribeResponse(data, { direction = 'outbound' } = {}) {
 
 async function callScribe(audio, fields) {
   const form = new FormData();
-  form.set('file', audio, 'recording.mp3');
+  form.set('file', audio, audio.type === 'audio/wav' ? 'recording.wav' : 'recording.mp3');
   form.set('model_id', config.scribeModelId);
   for (const [key, value] of Object.entries(fields)) {
     form.set(key, String(value));
@@ -115,14 +115,14 @@ export async function transcribe(audioBlob, options = {}) {
   let response = await callScribe(audioBlob, { use_multi_channel: true });
 
   if (response.status === 400) {
-    const detail = await response.text().catch(() => '');
-    console.warn('[scribe] multichannel rejected, retrying with diarize:', detail);
+    await response.body?.cancel();
+    console.warn('[scribe] multichannel rejected (HTTP 400), retrying with diarize');
     response = await callScribe(audioBlob, { diarize: true });
   }
 
   if (!response.ok) {
-    const detail = await response.text().catch(() => '');
-    throw new Error(`ElevenLabs ${response.status}: ${detail.slice(0, 500)}`);
+    await response.body?.cancel();
+    throw new Error(`ElevenLabs request failed (HTTP ${response.status})`);
   }
 
   return normalizeScribeResponse(await response.json(), options);

@@ -3,6 +3,30 @@
 This build is in progress. Passing unit tests does not establish a working
 phone-call MVP.
 
+## Hosted AI check — 2 October 2026
+
+An opt-in build check now exercises transcription, summary and identity with
+a checked-in 23.5-second synthetic stereo conversation. It never uses customer
+recordings or prints provider responses, model output or keys. The first two
+production-target test builds failed before transcription: the second reports
+`Missing required environment variable ELEVENLABS_API_KEY`. Vercel lists the
+Secret by name, but that does not prove a usable value reaches the deployment.
+No speech-provider request or AI success was established by these builds.
+Failed deployments: `dpl_3b4XZqPAd4N53Sq8wuNCN4Qq9aZG` and
+`dpl_31AnZQjtwERsKwnLgY2R44nacJRL`. Neither replaced the live alias.
+
+The check is disabled again (`AI_SMOKE_ON_BUILD=0`) for normal builds. A usable
+speech-to-text key is still needed before retesting the hosted audio pipeline.
+Transcription error logging now excludes raw provider response bodies, and a
+regression test checks that an HTTP 401 cannot expose that body and that a WAV
+upload has the correct filename. All 245 existing backend tests and the new
+provider regression test pass. Real phone OTP, call recording/playback and
+Google account actions remain unverified.
+
+Normal deployment `dpl_BGwiC9Rh48Ki4a9kw734rnJBvAgt` is READY and owns
+https://dimts.vercel.app, with the optional AI check disabled. This deployment
+does not resolve the missing usable speech key or establish real call success.
+
 ## Review-driven update — 2 October 2026
 
 ### Real signup rejection investigation
