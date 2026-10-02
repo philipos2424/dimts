@@ -9,6 +9,7 @@ import { GoogleConnections } from '../src/components/GoogleConnections';
 import { CallDeletionHistory } from '../src/components/CallDeletion';
 import { NotificationSettings } from '../src/components/NotificationSettings';
 import { FirstCallLink } from '../src/components/FirstCallLink';
+import { DataControls } from '../src/components/DataControls';
 import type { Lang } from '../src/i18n';
 import { color, radius, space } from '../src/theme';
 
@@ -34,6 +35,7 @@ export default function Settings() {
       <GoogleConnections />
       <CallDeletionHistory />
       <NotificationSettings />
+      <DataControls />
       <Section title={t('language')}>
         <View style={{ flexDirection: 'row', gap: space.sm }}>
           {LANGUAGES.map(({ code, label }) => {

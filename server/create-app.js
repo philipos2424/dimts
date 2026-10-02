@@ -11,9 +11,13 @@ import { emailActionsRouter } from './routes/email-actions.js';
 import { recordingRecoveryRouter } from './routes/recording-recovery.js';
 import { callDeletionRouter, deletionsRouter } from './routes/call-deletion.js';
 import { notificationsRouter } from './routes/notifications.js';
-import { callsRouter, meRouter, usageRouter } from './routes/calls.js';
+import { callsRouter, usageRouter } from './routes/calls.js';
+import { meRouter } from './routes/me.js';
+import { myPrivacyRequestsRouter, privacyRequestsRouter } from './routes/privacy-requests.js';
 import { inboundRouter } from './routes/inbound.js';
 import { twimlRouter, webhooksRouter } from './routes/webhooks.js';
+import { apiRateLimit } from './lib/rate-limit.js';
+import { securityHeaders, WEB_SHELL_CSP } from './lib/security-headers.js';
 
 export function createApp({ webRoot = fileURLToPath(new URL('../dist/', import.meta.url)) } = {}) {
   const app = express();
@@ -21,6 +25,7 @@ export function createApp({ webRoot = fileURLToPath(new URL('../dist/', import.m
   // Twilio signature validation anchors on PUBLIC_BASE_URL rather than the
   // request host, but trusting the proxy keeps req.ip and friends honest.
   app.set('trust proxy', 1);
+  app.use(securityHeaders);
 
   app.use(express.json());
   app.use(express.urlencoded({ extended: false })); // Twilio posts form-encoded
@@ -30,6 +35,7 @@ export function createApp({ webRoot = fileURLToPath(new URL('../dist/', import.m
     res.set('Cache-Control', 'no-store');
     next();
   });
+  app.use('/api', apiRateLimit);
   app.use('/api/auth', authRouter);
   app.use('/api/notifications', notificationsRouter);
   app.use('/api/integrations/google', googleRouter);
@@ -45,19 +51,23 @@ export function createApp({ webRoot = fileURLToPath(new URL('../dist/', import.m
   app.use('/api/calls', emailActionsRouter);
   app.use('/api/calls', followupsRouter);
   app.use('/api/usage', usageRouter);
+  app.use('/api/me/privacy-requests', myPrivacyRequestsRouter);
   app.use('/api/me', meRouter);
+  app.use('/api/privacy-requests', privacyRequestsRouter);
   app.use('/twiml/incoming', inboundRouter);
   app.use('/twiml', twimlRouter);
   app.use('/webhooks', webhooksRouter);
 
   if (existsSync(webRoot)) {
-    app.use(express.static(webRoot, { extensions: ['html'] }));
+    app.use(express.static(webRoot, { extensions: ['html'],
+      setHeaders: (res, file) => { if (file.endsWith('.html')) res.set('Content-Security-Policy', WEB_SHELL_CSP); } }));
     // Expo's single-page export needs the app shell on browser refresh/deep
     // links. Whitelist app routes so missing APIs/webhooks/assets stay errors.
-    app.get(['/', '/onboarding', '/settings', '/first-call', '/dialer', '/contacts', '/notes', '/in-call', '/call/:id'],
+    app.get(['/', '/onboarding', '/settings', '/first-call', '/dialer', '/contacts', '/notes', '/in-call', '/call/:id',
+      '/privacy', '/terms', '/privacy-request', '/terms-accept'],
       (req,res,next) => {
         if (!req.accepts('html') || (req.params.id && !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(req.params.id))) return next();
-        res.set('Cache-Control','no-cache').sendFile('index.html',{root:webRoot});
+        res.set({ 'Cache-Control': 'no-cache', 'Content-Security-Policy': WEB_SHELL_CSP }).sendFile('index.html',{root:webRoot});
       });
   }
 
@@ -76,6 +86,7 @@ export function createApp({ webRoot = fileURLToPath(new URL('../dist/', import.m
   app.use((err, _req, res, _next) => {
     const status = err?.status ?? 500;
     if (status >= 500) console.error('[error]', err);
+    if (err?.retryAfter) res.set('Retry-After', String(err.retryAfter));
 
     res.status(status).json({
       error: err?.code ?? 'internal_error',

@@ -34,7 +34,7 @@ function BusinessNumberForAccount() {
     <Txt weight="bold">Your business line</Txt>
     {number ? <>
       <Txt size="title">{number}</Txt>
-      <Txt tone="muted">Share this number with callers. Incoming calls ring your verified mobile; agreed recordings become call notes.</Txt>
+      <Txt tone="muted">Share this number with callers. Incoming calls ring your verified mobile; every call becomes notes.</Txt>
       <Pressable accessibilityRole="button" onPress={() => Share.share({ message: number }).catch(() => setMessage('Could not open sharing.'))}>
         <Txt tone="accent">Share business number</Txt>
       </Pressable>

@@ -10,10 +10,10 @@ const counts = new Map();
 const users = new Map();
 mock.module('../db/pool.js', { namedExports: {
   queryOne: async (sql, params) => {
-    if (sql.includes('auth_rate_limits')) {
+    if (sql.includes('rate_limits')) {
       const count = (counts.get(params[0]) ?? 0) + 1;
       counts.set(params[0], count);
-      return { attempts: count };
+      return { hits: count, remaining: 60 };
     }
     if (sql.includes('INSERT INTO users')) {
       const user = { id: `owner-${params[0]}`, phone: params[0], tier: 'free' };
@@ -87,4 +87,14 @@ test('bounds SMS attempts before calling the paid provider again', async () => {
 test('rejects malformed phone numbers before sending SMS', async () => {
   assert.equal((await request('/api/auth/start', { phone: '475' })).status, 400);
   assert.equal(sent.length, 0);
+});
+test('sign-in reports that terms are required and audits sign-in and sign-out without the raw IP', async () => {
+  const login = await request('/api/auth/verify', { phone: '+14754053943', code: '123456' });
+  assert.equal(login.body.terms_required, true);
+  const signedIn = writes.find(w => w.sql.includes('audit_events') && w.params.includes('signed_in'));
+  assert.ok(signedIn, 'signed_in audited');
+  assert.equal(signedIn.params[0], 'owner-+14754053943');
+  assert.ok(!signedIn.params.some(p => typeof p === 'string' && p.includes('127.0.0.1')), 'IP is hashed');
+  await request('/api/auth/logout', {}, login.body.token);
+  assert.ok(writes.some(w => w.sql.includes('audit_events') && w.params.includes('signed_out')));
 });

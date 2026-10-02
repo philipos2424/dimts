@@ -209,3 +209,51 @@ CREATE TABLE IF NOT EXISTS call_notifications (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE(call_id, device_id)
 );
+
+-- Release 1: one notice consent rule, terms acceptance and account deletion.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_accepted_at TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_version TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+ALTER TABLE calls DROP CONSTRAINT IF EXISTS calls_consent_mode_check;
+ALTER TABLE calls ADD CONSTRAINT calls_consent_mode_check CHECK (consent_mode IN ('all_parties','owner_only','notice'));
+
+-- Release 1: who did what to which data. No content, only references.
+CREATE TABLE IF NOT EXISTS audit_events (
+  id BIGSERIAL PRIMARY KEY,
+  user_id UUID,
+  action TEXT NOT NULL,
+  target_type TEXT,
+  target_id TEXT,
+  ip_hash TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS audit_events_user_idx ON audit_events(user_id, created_at DESC);
+
+-- Release 1: durable request counters shared by every function instance.
+CREATE TABLE IF NOT EXISTS rate_limits (
+  key TEXT NOT NULL,
+  window_start TIMESTAMPTZ NOT NULL,
+  hits INT NOT NULL DEFAULT 0,
+  PRIMARY KEY (key, window_start)
+);
+
+-- Release 1: call audio moves off Twilio into private EU storage.
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS audio_object_key TEXT;
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS audio_archived_at TIMESTAMPTZ;
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS provider_archive_status TEXT;
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS provider_archive_attempted_at TIMESTAMPTZ;
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS storage_deletion_status TEXT;
+
+-- Release 1: people who were recorded can ask businesses to delete their data.
+CREATE TABLE IF NOT EXISTS privacy_requests (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  phone_hash TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS privacy_request_targets (
+  request_id UUID NOT NULL REFERENCES privacy_requests(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id),
+  contact_id UUID REFERENCES contacts(id) ON DELETE SET NULL,
+  resolved_at TIMESTAMPTZ,
+  PRIMARY KEY (request_id, user_id)
+);

@@ -4,20 +4,14 @@ import { query, queryOne } from '../db/pool.js';
 import { isE164 } from '../lib/phone.js';
 import { hashToken, HttpError, resolveUser } from '../lib/users.js';
 import { checkPhoneCode, sendPhoneCode } from '../services/verify-phone.js';
+import { audit } from '../lib/audit.js';
+import { hit } from '../lib/rate-limit.js';
+import { hasAcceptedTerms } from '../lib/terms.js';
 
 export const authRouter = express.Router();
 
 // Durable counters also work across concurrent Vercel function instances.
-async function limit(key, maximum) {
-  const row = await queryOne(
-    `INSERT INTO auth_rate_limits (key, window_start, attempts)
-     VALUES ($1, date_trunc('hour', now()), 1)
-     ON CONFLICT (key, window_start) DO UPDATE
-       SET attempts = auth_rate_limits.attempts + 1
-     RETURNING attempts`, [hashToken(key)]
-  );
-  if (row.attempts > maximum) throw new HttpError(429, 'too_many_attempts', 'Try again later.');
-}
+const limit = (key, maximum) => hit(key, maximum, 3600);
 
 authRouter.post('/start', async (req, res) => {
   const { phone } = req.body ?? {};
@@ -40,19 +34,21 @@ authRouter.post('/verify', async (req, res) => {
   const user = await queryOne(
     `INSERT INTO users (phone) VALUES ($1)
      ON CONFLICT (phone) DO UPDATE SET phone = EXCLUDED.phone
-     RETURNING id, phone, tier`, [phone]
+     RETURNING id, phone, tier, terms_version`, [phone]
   );
   const token = randomBytes(32).toString('hex');
   await query(
     `INSERT INTO sessions (token_hash, user_id, expires_at)
      VALUES ($1, $2, now() + interval '30 days')`, [hashToken(token), user.id]
   );
-  res.set('Cache-Control', 'no-store').json({ token, phone: user.phone });
+  await audit({ userId: user.id, action: 'signed_in', req });
+  res.set('Cache-Control', 'no-store').json({ token, phone: user.phone, terms_required: !hasAcceptedTerms(user) });
 });
 
 authRouter.post('/logout', async (req, res) => {
-  await resolveUser(req);
+  const user = await resolveUser(req);
   const token = req.get('authorization').slice(7);
   await query('DELETE FROM sessions WHERE token_hash = $1', [hashToken(token)]);
+  await audit({ userId: user.id, action: 'signed_out', req });
   res.json({ status: 'signed_out' });
 });

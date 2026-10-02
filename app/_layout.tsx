@@ -9,18 +9,24 @@ import { IncomingBriefing } from '../src/components/IncomingBriefing';
 import { IncomingNotificationObserver } from '../src/components/IncomingNotificationObserver';
 import { color, font } from '../src/theme';
 
+const PUBLIC = new Set(['privacy', 'terms', 'privacy-request']);
+
 function Gate() {
-  const { ready, userPhone } = useApp();
+  const { ready, userPhone, termsRequired } = useApp();
   const segments = useSegments();
   const router = useRouter();
 
   useEffect(() => {
     if (!ready) return;
-    const onOnboarding = segments[0] === 'onboarding';
+    const screen = segments[0] as string | undefined;
+    // Legal pages and the privacy-request page are public.
+    if (screen && PUBLIC.has(screen)) return;
+    const onOnboarding = screen === 'onboarding';
 
     if (!userPhone && !onOnboarding) router.replace('/onboarding');
-    else if (userPhone && onOnboarding) router.replace('/');
-  }, [ready, userPhone, segments, router]);
+    else if (userPhone && termsRequired && screen !== 'terms-accept') router.replace('/terms-accept');
+    else if (userPhone && !termsRequired && (onOnboarding || screen === 'terms-accept')) router.replace('/');
+  }, [ready, userPhone, termsRequired, segments, router]);
 
   return (
     <View style={{ flex: 1 }}>
@@ -44,6 +50,10 @@ function Gate() {
       <Stack.Screen name="settings" />
       <Stack.Screen name="first-call" options={{ title: 'Test your first call' }} />
       <Stack.Screen name="call/[id]" />
+      <Stack.Screen name="terms-accept" options={{ headerShown: false }} />
+      <Stack.Screen name="privacy" options={{ title: 'Privacy' }} />
+      <Stack.Screen name="terms" options={{ title: 'Terms' }} />
+      <Stack.Screen name="privacy-request" options={{ title: 'Privacy request' }} />
     </Stack>
     </View>
   );

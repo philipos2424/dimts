@@ -5,12 +5,11 @@ import { PGlite } from '@electric-sql/pglite';
 import { recordingPolicy, hasRecordingAuthorization, recordingAuthorizationSql } from './recording-policy.js';
 import { validateDeployment } from './deployment-config.js';
 
-test('owner-only requires an explicit operator scope; default and invalid policies fail safely', () => {
-  assert.deepEqual(recordingPolicy({}), { mode: 'all_parties', scope: null });
-  for (const scope of [undefined, '', '   ']) assert.throws(() => recordingPolicy({ RECORDING_CONSENT_MODE:'owner_only', RECORDING_OWNER_ONLY_APPROVED_SCOPE:scope }), /APPROVED_SCOPE/);
-  assert.throws(() => validateDeployment({ RECORDING_CONSENT_MODE:'owner_only' }), /APPROVED_SCOPE/);
-  assert.throws(() => recordingPolicy({ RECORDING_CONSENT_MODE:'unknown' }), /CONSENT_MODE/);
-  assert.deepEqual(recordingPolicy({ RECORDING_CONSENT_MODE:'owner_only', RECORDING_OWNER_ONLY_APPROVED_SCOPE:' Reviewed pilot ' }), { mode:'owner_only', scope:'Reviewed pilot' });
+test('every new call uses the single notice policy regardless of legacy environment settings', () => {
+  assert.deepEqual(recordingPolicy({}), { mode: 'notice', scope: null });
+  assert.deepEqual(recordingPolicy({ RECORDING_CONSENT_MODE:'owner_only' }), { mode: 'notice', scope: null });
+  // Consent settings no longer block deployment; the next check reached is the database mode.
+  assert.throws(() => validateDeployment({ RECORDING_CONSENT_MODE:'owner_only' }), /DATABASE_MODE/);
 });
 
 test('atomic SQL and UI authorization agree for every combination of direction, policy, choices, notice and scope', async () => {
@@ -18,7 +17,7 @@ test('atomic SQL and UI authorization agree for every combination of direction, 
   try {
     await db.exec(await readFile(new URL('../db/schema.sql', import.meta.url), 'utf8'));
     const owner = (await db.query("INSERT INTO users(phone) VALUES('+15555550101') RETURNING id")).rows[0];
-    for (const mode of ['all_parties','owner_only']) for (const direction of ['outbound','inbound'])
+    for (const mode of ['all_parties','owner_only','notice']) for (const direction of ['outbound','inbound'])
       for (const parent of [null,new Date()]) for (const child of [null,new Date()])
         for (const notice of [null,new Date()]) for (const scope of [null,'   ','Reviewed pilot']) for (const enabled of [true,false]) {
           const call = (await db.query(`INSERT INTO calls(user_id,user_phone,destination,consent_mode,direction,

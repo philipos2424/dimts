@@ -7,7 +7,6 @@ import { defer } from '../lib/defer.js';
 import { fetchRecording, isE164, originateCall } from '../services/originate.js';
 import { processRecording } from '../services/process-recording.js';
 import { reserveCall } from '../db/reserve-call.js';
-import { claimNumber } from '../db/claim-number.js';
 import { expireRecordingWait } from '../db/expire-recording-wait.js';
 import { callNotes } from '../lib/call-export.js';
 import { expireProcessing } from '../db/expire-processing.js';
@@ -15,6 +14,9 @@ import { transcriptTurns } from '../lib/transcript-turns.js';
 import { hasRecordingAuthorization } from '../lib/recording-policy.js';
 import { reconcileCall } from '../services/end-call.js';
 import { checkCallDestination } from '../services/call-preflight.js';
+import { getAudio } from '../services/audio-store.js';
+import { scheduleArchiveRetries } from '../services/archive-audio.js';
+import { audit } from '../lib/audit.js';
 
 export const callsRouter = express.Router();
 
@@ -117,6 +119,7 @@ callsRouter.get('/', async (req, res, next) => {
   try {
     const user = await resolveUser(req);
     await reapStaleCalls(user.id);
+    await scheduleArchiveRetries(user.id).catch(err => console.error('[archive] retry scheduling failed', err?.message));
 
     const { rows } = await query(
       `SELECT ${LIST_COLUMNS} FROM calls c
@@ -208,17 +211,23 @@ callsRouter.get('/:id/audio', async (req, res, next) => {
   try {
     const user = await resolveUser(req);
     const call = await queryOne(
-      'SELECT recording_url FROM calls WHERE id = $1 AND user_id = $2',
+      'SELECT id, recording_url, audio_object_key FROM calls WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL',
       [req.params.id, user.id]
     );
 
-    if (!call?.recording_url) throw new HttpError(404, 'recording_not_found');
+    if (!call?.recording_url && !call?.audio_object_key) throw new HttpError(404, 'recording_not_found');
 
     const range = req.get('range');
     if (range && (range.length > 64 || !/^bytes=(?:\d+-\d*|-\d+)$/.test(range))) {
       return res.status(416).end();
     }
-    const upstream = await fetchRecording(call.recording_url, { range });
+    // Archived audio lives in EU storage; older calls still stream from Twilio.
+    const upstream = call.audio_object_key
+      ? await getAudio(call.audio_object_key, { range })
+      : await fetchRecording(call.recording_url, { range });
+    const recent = await queryOne(`SELECT 1 AS seen FROM audit_events WHERE user_id=$1 AND action='audio_played'
+      AND target_id=$2 AND created_at > now()-interval '1 hour' LIMIT 1`, [user.id, call.id]);
+    if (!recent) await audit({ userId: user.id, action: 'audio_played', targetType: 'call', targetId: call.id, req });
     if (upstream.status === 416) {
       const contentRange = upstream.headers.get('content-range');
       if (/^bytes \*\/\d+$/.test(contentRange ?? '')) res.set('Content-Range', contentRange);
@@ -270,33 +279,3 @@ usageRouter.get('/', async (req, res, next) => {
   }
 });
 
-export const meRouter = express.Router();
-meRouter.post('/number', async (req, res, next) => {
-  try {
-    const user = await resolveUser(req);
-    if (user.agent_number) return res.json({ agent_number: user.agent_number });
-    if (!process.env.PUBLIC_BASE_URL) throw new HttpError(503, 'routing_unavailable', 'Business-number routing is not configured yet.');
-    const base = new URL(config.publicBaseUrl);
-    if (base.protocol !== 'https:') throw new HttpError(503, 'routing_unavailable');
-    res.json(await claimNumber(user.id, `${config.publicBaseUrl}/twiml/incoming`));
-  } catch (err) { next(err); }
-});
-
-/** The app needs to know which number to tell the user to publish. */
-meRouter.get('/', async (req, res, next) => {
-  try {
-    const user = await resolveUser(req);
-    const row = await queryOne(
-      'SELECT id, phone, tier, agent_number FROM users WHERE id = $1',
-      [user.id]
-    );
-
-    res.json({
-      phone: row.phone,
-      tier: row.tier,
-      agent_number: row.agent_number ?? null,
-    });
-  } catch (err) {
-    next(err);
-  }
-});

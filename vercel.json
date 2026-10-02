@@ -1,15 +1,68 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
+  "regions": [
+    "fra1"
+  ],
   "installCommand": "npm ci && npm ci --prefix server",
   "buildCommand": "node server/scripts/check-ai-build.js && npx expo export --platform web --output-dir dist",
   "outputDirectory": "dist",
-  "functions": { "api/index.js": { "maxDuration": 300, "includeFiles": "server/db/supabase-ca.crt" } },
+  "functions": {
+    "api/index.js": {
+      "maxDuration": 300,
+      "includeFiles": "server/db/supabase-ca.crt"
+    }
+  },
   "routes": [
-    { "src": "/(?:api|twiml|webhooks|oauth)(?:/.*)?", "dest": "/api/index" },
-    { "src": "/health", "dest": "/api/index" },
-    { "handle": "filesystem" },
-    { "src": "/(?:onboarding|first-call|settings|dialer|contacts|notes|in-call)", "dest": "/index.html" },
-    { "src": "/call/[^/]+", "dest": "/index.html" }
+    {
+      "src": "/(?:api|twiml|webhooks|oauth)(?:/.*)?",
+      "dest": "/api/index"
+    },
+    {
+      "src": "/health",
+      "dest": "/api/index"
+    },
+    {
+      "handle": "filesystem"
+    },
+    {
+      "src": "/(?:onboarding|first-call|settings|dialer|contacts|notes|in-call|privacy|terms|privacy-request|terms-accept)",
+      "dest": "/index.html"
+    },
+    {
+      "src": "/call/[^/]+",
+      "dest": "/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Strict-Transport-Security",
+          "value": "max-age=63072000; includeSubDomains"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "no-referrer"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(), geolocation=(), microphone=()"
+        },
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; frame-ancestors 'none'"
+        }
+      ]
+    }
   ]
 }

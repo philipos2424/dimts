@@ -7,6 +7,9 @@ import { transcribe } from './transcribe.js';
 import { summarize } from './summarize.js';
 import { randomUUID } from 'node:crypto';
 import { recordingQualityError } from '../lib/recording-quality.js';
+import { getAudio } from './audio-store.js';
+import { archiveAudio, removeArchivedFromProvider } from './archive-audio.js';
+import { defer } from '../lib/defer.js';
 
 const DOWNLOAD_ATTEMPTS = 3;
 const DOWNLOAD_BACKOFF_MS = 2000;
@@ -31,6 +34,23 @@ async function downloadRecording(recordingUrl, signal) {
   }
 
   throw new Error(`Could not download recording (HTTP ${lastStatus})`);
+}
+
+/**
+ * Archived audio is read from EU storage. Otherwise download from Twilio and
+ * archive those exact bytes before any AI work, so an AI failure never leaves
+ * the only copy on Twilio.
+ */
+async function loadAudio(call, signal) {
+  if (call.audio_object_key) {
+    const response = await getAudio(call.audio_object_key, { signal });
+    if (!response.ok) throw new Error(`Could not read archived recording (HTTP ${response.status})`);
+    return response.blob();
+  }
+  const downloaded = await downloadRecording(call.recording_url, signal);
+  const bytes = new Uint8Array(await downloaded.arrayBuffer());
+  await archiveAudio(call, bytes);
+  return new Blob([bytes], { type: 'audio/mpeg' });
 }
 
 /**
@@ -83,7 +103,7 @@ export async function processRecording(callId, { force = false, signal: callerSi
          AND (processing_until IS NULL OR processing_until < now())
        RETURNING *
      )
-     SELECT c.id, c.recording_url, c.contact_id, c.direction,c.transcript,c.transcript_data,
+     SELECT c.id, c.user_id, c.recording_url, c.audio_object_key, c.contact_id, c.direction,c.transcript,c.transcript_data,
             c.transcript_recording_url,c.language,c.language_probability,
             k.display_name  AS contact_display_name,
             k.name_source   AS contact_name_source,
@@ -109,7 +129,7 @@ export async function processRecording(callId, { force = false, signal: callerSi
       result = { text: call.transcript, raw: call.transcript_data,
         language: call.language, languageProbability: call.language_probability };
     } else {
-      const audio = await downloadRecording(call.recording_url, signal);
+      const audio = await loadAudio(call, signal);
       await renew();
       result = await transcribe(audio, { direction: call.direction, signal });
       const saved = await queryOne(`UPDATE calls SET transcript=$3,transcript_data=$4,
@@ -159,7 +179,11 @@ export async function processRecording(callId, { force = false, signal: callerSi
     );
     // Only the worker that committed the notes may spend on identification or
     // update a contact. A stale worker cannot apply its old result.
-    if (saved.rows.length) await nameContact(call, result.text, signal);
+    if (saved.rows.length) {
+      await nameContact(call, result.text, signal);
+      // Notes are safe and the audio is in EU storage: Twilio's copy can go.
+      defer(removeArchivedFromProvider(callId), `archive-remove:${callId}`);
+    }
   } catch (err) {
     await query(
       `UPDATE calls SET status = 'failed', error = $2,
