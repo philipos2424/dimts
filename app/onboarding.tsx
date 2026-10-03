@@ -14,6 +14,7 @@ export default function Onboarding() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [touched, setTouched] = useState(false);
+  const [notice, setNotice] = useState('');
 
   const valid = /^\+[1-9]\d{6,14}$/.test(value);
   async function submit() {
@@ -22,6 +23,12 @@ export default function Onboarding() {
       if (!sent) { await sendLoginCode(value); setSent(true); }
       else { const session = await verifyLoginCode(value, code); await signIn(session.token, session.phone); }
     } catch (err) { setError(err instanceof Error ? err.message : 'Unable to sign in.'); }
+    finally { setBusy(false); }
+  }
+  async function callWithCode() {
+    setBusy(true); setError(''); setNotice('');
+    try { await sendLoginCode(value, 'call'); setNotice('Answer the call: it reads out your code.'); }
+    catch (err) { setError(err instanceof Error ? err.message : 'Unable to call you.'); }
     finally { setBusy(false); }
   }
 
@@ -75,6 +82,7 @@ export default function Onboarding() {
           placeholderTextColor={c.faint} accessibilityLabel="Verification code"
           style={{ color: c.ink, padding: space.md, backgroundColor: c.card }} />}
         {error ? <Txt tone="muted">{error}</Txt> : null}
+        {notice ? <Txt tone="muted">{notice}</Txt> : null}
 
         <Pressable
           accessibilityRole="button"
@@ -96,7 +104,10 @@ export default function Onboarding() {
             {busy ? 'Please wait…' : sent ? 'Verify and continue' : 'Send verification code'}
           </Txt>
         </Pressable>
-        {sent && <Pressable onPress={() => { setSent(false); setCode(''); setError(''); }}>
+        {sent && <Pressable accessibilityRole="button" disabled={busy} onPress={callWithCode} style={{ minHeight: 44, justifyContent: 'center' }}>
+          <Txt tone="accent">No text message? Call me with the code</Txt>
+        </Pressable>}
+        {sent && <Pressable onPress={() => { setSent(false); setCode(''); setError(''); setNotice(''); }}>
           <Txt tone="accent">Change number or send another code</Txt>
         </Pressable>}
       </View>
