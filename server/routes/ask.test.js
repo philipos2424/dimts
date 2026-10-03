@@ -90,3 +90,21 @@ test('questions must be 3 to 500 characters and are limited to 30 an hour', asyn
   for (let i = 0; i < 30; i++) await ask(o.token, 'anything at all');
   assert.equal((await ask(o.token, 'anything at all')).status, 429);
 });
+
+test('a follow-up finds the same calls through the question before it, and earlier answers are context, not evidence', async () => {
+  const o = await signedIn('+15555551299');
+  await seed(o.id, 'Abebe', 'User: Cement price?\nCaller: 450 birr per bag, delivery on Friday.');
+  reply = { answer: 'Friday.', citations: [{ call: 'C1', line: 2 }] };
+  const followUp = await fetch(origin + '/api/ask', { method: 'POST',
+    headers: { Authorization: `Bearer ${o.token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ question: 'and when is delivery?', history: [
+      { question: 'What cement price did Abebe give?', answer: '450 birr per bag.' },
+      { question: 'x'.repeat(2000), answer: 7 },
+    ] }) }).then(r => r.json());
+  assert.equal(followUp.grounded, true);
+  const { input, system } = prompts.at(-1);
+  assert.match(input, /Earlier in this conversation:\nQ: What cement price did Abebe give\?\nA: 450 birr per bag\./);
+  assert.doesNotMatch(input, /xxxxxxxxxx/, 'malformed turns are dropped');
+  assert.match(input, /Caller: 450 birr per bag, delivery on Friday\./, 'the call was found through the earlier question');
+  assert.match(system, /not evidence/);
+});

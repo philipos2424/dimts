@@ -55,8 +55,9 @@ export function setPromise(callId: string, index: number, status: 'open' | 'done
 export function getRecap(callId: string, refresh = false) {
   return request<{ text: string }>(`/api/calls/${encodeURIComponent(callId)}/recap${refresh ? '?refresh=1' : ''}`, '', { method: 'POST' });
 }
-export function askQuestion(question: string) {
-  return request<AskAnswer>('/api/ask', '', { method: 'POST', body: JSON.stringify({ question }) });
+export type AskTurn = { question: string; answer: string };
+export function askQuestion(question: string, history: AskTurn[] = []) {
+  return request<AskAnswer>('/api/ask', '', { method: 'POST', body: JSON.stringify({ question, history }) });
 }
 export function getPerson(id: string) { return request<Person>(`/api/contacts/${encodeURIComponent(id)}`, ''); }
 export function renameContact(id: string, display_name: string, company: string, notes: string) {

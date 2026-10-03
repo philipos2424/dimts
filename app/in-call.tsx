@@ -68,7 +68,7 @@ export default function InCall() {
           call.recording_start_status === 'pending' ? 'Starting the agreed recording…' : 'Connecting…');
         if (SETTLED.has(call.status)) {
           clearInterval(poll);
-          router.replace('/');
+          router.replace('/calls');
         }
       } catch {
         // Keep the screen up; Recents will show the real outcome.
@@ -140,13 +140,13 @@ export default function InCall() {
 
       <Pressable
         accessibilityRole="button"
-        onPress={() => router.replace('/')}
+        onPress={() => router.replace('/calls')}
         style={{ marginTop: space.xxl }}
         hitSlop={12}
       >
         <Txt tone="accent">{t('backToRecents')}</Txt>
       </Pressable>
-      {id && !SETTLED.has(status) && <EndCall id={id} onEnded={() => router.replace('/')} />}
+      {id && !SETTLED.has(status) && <EndCall id={id} onEnded={() => router.replace('/calls')} />}
     </ScrollView>
   );
 }

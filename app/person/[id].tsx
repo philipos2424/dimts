@@ -74,6 +74,8 @@ export default function PersonScreen() {
           ) : null}
           <View style={{ flexDirection: 'row', gap: space.sm, marginTop: space.sm }}>
             <Button compact label="Call" onPress={() => router.push(`/dialer?number=${encodeURIComponent(person.contact.phone)}`)} />
+            <Button compact variant="quiet" label="Ask about them"
+              onPress={() => router.push(`/?draft=${encodeURIComponent(`What did ${person.contact.display_name ?? person.contact.phone} and I agree? `)}`)} />
             <Button compact variant="quiet" label="Fix name" onPress={() => setEditing(true)} />
           </View>
         </View>

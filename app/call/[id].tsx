@@ -204,6 +204,8 @@ export default function CallDetailScreen() {
             )}
             <FollowupReview key={call.id} callId={call.id} initial={call.followups} />
             <RecapButton callId={call.id} />
+            <Button compact variant="quiet" label="Ask about this call"
+              onPress={() => router.push(`/?draft=${encodeURIComponent(`${call.contact_name ? `In my call with ${call.contact_name}, ` : 'In this call, '}`)}`)} />
           </Section>
         </View>
       )}

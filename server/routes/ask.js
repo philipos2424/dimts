@@ -12,6 +12,10 @@ askRouter.post('/', async (req, res) => {
   const question = typeof req.body?.question === 'string' ? req.body.question.trim() : '';
   if (question.length < 3 || question.length > 500) throw new HttpError(400, 'invalid_question', 'Ask a question between 3 and 500 characters.');
   await hit(`ask:${user.id}`, 30, 3600);
+  // Up to two earlier turns from this conversation, so follow-ups make sense.
+  const history = (Array.isArray(req.body?.history) ? req.body.history : []).slice(-2)
+    .filter(t => typeof t?.question === 'string' && typeof t?.answer === 'string')
+    .map(t => ({ question: t.question.slice(0, 500), answer: t.answer.slice(0, 1000) }));
   // "What should I do this week?" is answered from stored promises and
   // agreements, not by searching transcripts for those words.
   if (isPlanningQuestion(question)) {
@@ -20,5 +24,5 @@ askRouter.post('/', async (req, res) => {
       .map(m => ({ call_id: m.call_id, contact_name: m.contact_name, created_at: m.created_at, line: m.line, quote: m.quote, start: m.start }));
     return res.json({ answer: briefingAnswer(briefing, user.language), grounded: true, citations });
   }
-  res.json(await answerQuestion(user.id, question));
+  res.json(await answerQuestion(user.id, question, history));
 });

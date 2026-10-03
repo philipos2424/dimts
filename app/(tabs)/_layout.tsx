@@ -48,9 +48,10 @@ export default function TabsLayout() {
         tabBarLabelStyle: { fontFamily: font.medium, fontSize: 12 },
       }}
     >
-      <Tabs.Screen name="index" options={{ title: 'Today', tabBarIcon: ({ focused }) => <Icon glyph="◎" focused={focused} /> }} />
+      <Tabs.Screen name="index" options={{ title: 'Ask', tabBarIcon: ({ focused }) => <Icon glyph="✦" focused={focused} /> }} />
+      <Tabs.Screen name="calls" options={{ title: 'Calls', tabBarIcon: ({ focused }) => <Icon glyph="◎" focused={focused} /> }} />
       <Tabs.Screen name="dialer" options={{ title: 'Call', tabBarIcon: ({ focused }) => <Icon glyph="✆" focused={focused} /> }} />
-      <Tabs.Screen name="ask" options={{ title: 'Ask', tabBarIcon: ({ focused }) => <Icon glyph="✦" focused={focused} /> }} />
+      <Tabs.Screen name="ask" options={{ href: null }} />
     </Tabs>
   );
 }

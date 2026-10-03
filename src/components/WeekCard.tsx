@@ -40,7 +40,7 @@ export function WeekCard({ briefing }: { briefing: Briefing | null }) {
           <Txt tone="warn">⚠ {who(item.contact_name)}: {item.note}</Txt>
         </Pressable>
       ))}
-      <Pressable accessibilityRole="button" onPress={() => router.push(`/ask?q=${encodeURIComponent('What should I do this week?')}`)}
+      <Pressable accessibilityRole="button" onPress={() => router.push(`/?q=${encodeURIComponent('What should I do this week?')}`)}
         style={{ minHeight: 44, justifyContent: 'center' }}>
         <Txt style={{ color: c.brand }} weight="bold">What should I do this week? →</Txt>
       </Pressable>
