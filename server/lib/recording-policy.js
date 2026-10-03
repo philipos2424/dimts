@@ -1,7 +1,11 @@
-// Every new call records under one rule: the owner accepted the terms once,
-// and the other person hears a notice before the conversation. Historic calls
-// keep the mode they were snapshotted with, so their checks below remain.
-export function recordingPolicy(_env = process.env) {
+import { requiresExplicitConsent } from './destinations.js';
+
+// New calls record under one rule: the owner accepted the terms once, and the
+// other person hears a notice before the conversation. Where a notice is not
+// enough (Gulf numbers on either side), both people press 1 instead. Historic
+// calls keep the mode they were snapshotted with, so their checks below remain.
+export function recordingPolicy(_env = process.env, phones = []) {
+  if (phones.some(requiresExplicitConsent)) return { mode: 'all_parties', scope: null };
   return { mode: 'notice', scope: null };
 }
 

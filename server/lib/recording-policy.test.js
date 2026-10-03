@@ -12,6 +12,12 @@ test('every new call uses the single notice policy regardless of legacy environm
   assert.throws(() => validateDeployment({ RECORDING_CONSENT_MODE:'owner_only' }), /DATABASE_MODE/);
 });
 
+test('a Gulf number on either side needs every person to press 1', () => {
+  assert.deepEqual(recordingPolicy({}, ['+14155550000', '+971501234567']), { mode: 'all_parties', scope: null });
+  assert.deepEqual(recordingPolicy({}, ['+966501234567', '+447911123456']), { mode: 'all_parties', scope: null });
+  assert.deepEqual(recordingPolicy({}, ['+14155550000', '+251911234567']), { mode: 'notice', scope: null });
+});
+
 test('atomic SQL and UI authorization agree for every combination of direction, policy, choices, notice and scope', async () => {
   const db = new PGlite();
   try {

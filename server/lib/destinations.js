@@ -61,3 +61,11 @@ export const canCall = number => permitted(number, CALLS);
 
 /** Calling code of an allowed signup number, for per-country send limits. */
 export const signupCountryCode = number => (canSignUp(number) ? countryCode(number, SIGNUP) : null);
+
+/**
+ * Whether recording a call with this number needs every person's explicit
+ * consent rather than a notice. UAE and Saudi law are described as requiring
+ * prior consent from all parties, with criminal penalties; the other Gulf
+ * states are treated the same until counsel says otherwise.
+ */
+export const requiresExplicitConsent = number => isE164(number) && GULF.some(code => number.slice(1).startsWith(code));

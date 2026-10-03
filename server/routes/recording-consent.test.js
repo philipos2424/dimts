@@ -96,6 +96,17 @@ test('both acceptances start once; concurrent replay and a wrong child SID canno
   await post(id, '/webhooks/recording-ready', { CallSid: parent, RecordingStatus: 'completed', RecordingSid: recording, RecordingUrl: 'expected' });
   assert.equal((await row(id)).recording_url, 'expected');
 });
+test('inbound all-parties (Gulf): caller agrees, owner is asked on their leg, recording starts once both agree', async () => {
+  const id = await seed('inbound'), before = starts;
+  const accepted = await post(id, '/twiml/accept', { CallSid: parent, Digits: '1' });
+  assert.match(accepted.xml, /<Dial/); assert.match(accepted.xml, /15555550100/);
+  const prompt = await post(id, '/twiml/party-consent', { CallSid: child });
+  assert.match(prompt.xml, /<Gather/); assert.match(prompt.xml, /choice=1/);
+  assert.equal(starts, before, 'nothing records on the caller agreeing alone');
+  await post(id, '/twiml/party-consent', { CallSid: child, Digits: '1' }, true);
+  assert.equal(starts, before + 1);
+  assert.ok(hasRecordingAuthorization(await row(id)));
+});
 test('known recording refusal connects unrecorded; uncertain startup never retries and accepts a later receipt', async () => {
   for (const known of [true, false]) {
     const id = await seed(); await post(id, '/twiml/accept', { CallSid: parent, Digits: '1' });

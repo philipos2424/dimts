@@ -110,6 +110,14 @@ test('an unrecorded call (owner has not accepted terms) connects without a notic
   assert.match(xml, /<Dial/);
 });
 
+test('a Gulf caller must press 1 before the owner is rung, and hears no notice-only connection', async () => {
+  reserved = { ...reserved, consent_mode: 'all_parties', child_consent_at: null };
+  const { xml } = await incoming({ ...CALL, From: '+971501234567' });
+  assert.match(xml, /<Gather[^>]*action="https:\/\/agent\.example\.com\/twiml\/accept\?callId=call-1"/);
+  assert.match(xml, /only if both people agree/);
+  assert.doesNotMatch(xml, /<Dial|Dimts AI\./);
+});
+
 test('records the call as inbound and links the contact', async () => {
   await incoming(CALL);
 

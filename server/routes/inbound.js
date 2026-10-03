@@ -4,8 +4,9 @@ import { findUserByAgentNumber } from '../db/agent-numbers.js';
 import { findOrCreateContact } from '../db/contacts.js';
 import { reserveCall } from '../db/reserve-call.js';
 import { verifyTwilioSignature } from '../lib/twilio-signature.js';
-import { dialCall, issueRecordingNotice } from '../lib/recording-consent.js';
+import { askRecordingConsent, dialCall, issueRecordingNotice } from '../lib/recording-consent.js';
 import { queryOne } from '../db/pool.js';
+import { config } from '../config.js';
 import { sendIncomingNotification } from '../services/notifications.js';
 import { defer } from '../lib/defer.js';
 
@@ -68,6 +69,9 @@ inboundRouter.post('/', async (req, res) => {
         WHERE id=$1 AND twilio_call_sid=$2 AND duration_sec IS NULL RETURNING *`, [call.id, CallSid]);
       if (!announced) twiml.hangup();
       else { issueRecordingNotice(twiml); dialCall(twiml, announced); }
+    } else if (call.record_enabled !== false && call.consent_mode === 'all_parties') {
+      // The caller agrees first; the owner is asked on their own leg before recording starts.
+      askRecordingConsent(twiml, `${config.publicBaseUrl}/twiml/accept?callId=${call.id}`);
     } else dialCall(twiml, call);
   }
   else twiml.hangup();
