@@ -171,8 +171,8 @@ export function authHeaders(userPhone: string): Record<string, string> {
   return sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {};
 }
 
-export function sendLoginCode(phone: string) {
-  return request('/api/auth/start', '', { method: 'POST', body: JSON.stringify({ phone }) });
+export function sendLoginCode(phone: string, channel: 'sms' | 'call' = 'sms') {
+  return request('/api/auth/start', '', { method: 'POST', body: JSON.stringify({ phone, channel }) });
 }
 export function verifyLoginCode(phone: string, code: string) {
   return request<{ token: string; phone: string }>('/api/auth/verify', '', {

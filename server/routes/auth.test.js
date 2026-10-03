@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 let approved = true;
 const writes = [];
 const sent = [];
+const channels = [];
 const sessions = new Map();
 const counts = new Map();
 const users = new Map();
@@ -33,7 +34,7 @@ mock.module('../db/pool.js', { namedExports: {
   getPool: () => ({}),
 } });
 mock.module('../services/verify-phone.js', { namedExports: {
-  sendPhoneCode: async (phone) => sent.push(phone),
+  sendPhoneCode: async (phone, channel) => { sent.push(phone); channels.push(channel); },
   checkPhoneCode: async () => approved,
 } });
 const { createApp } = await import('../create-app.js');
@@ -50,7 +51,7 @@ async function request(path, body, token, headers = {}) {
   } finally { server.close(); }
 }
 test.beforeEach(() => {
-  approved = true; writes.length = 0; sent.length = 0; sessions.clear(); counts.clear(); users.clear();
+  approved = true; writes.length = 0; sent.length = 0; channels.length = 0; sessions.clear(); counts.clear(); users.clear();
 });
 test('rejects the old spoofable phone header', async () => {
   const response = await request('/api/me', undefined, null, { 'x-user-phone': '+14754053943' });
@@ -110,6 +111,12 @@ test('caps codes per country so rotating numbers cannot pump SMS', async () => {
   counts.set(createHash('sha256').update('send-country:44').digest('hex'), 300);
   assert.equal((await request('/api/auth/start', { phone: '+447911123456' })).status, 429);
   assert.equal(sent.length, 0);
+});
+test('the code can be read out by a voice call; other channels are refused', async () => {
+  assert.equal((await request('/api/auth/start', { phone: '+14754053943', channel: 'call' })).status, 202);
+  assert.equal((await request('/api/auth/start', { phone: '+14754053943' })).status, 202);
+  assert.deepEqual(channels, ['call', 'sms']);
+  assert.equal((await request('/api/auth/start', { phone: '+14754053943', channel: 'whatsapp' })).status, 400);
 });
 test('rejects malformed phone numbers before sending SMS', async () => {
   assert.equal((await request('/api/auth/start', { phone: '475' })).status, 400);

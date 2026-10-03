@@ -7,8 +7,10 @@ function service() {
     .verify.v2.services(config.twilioVerifyServiceSid);
 }
 
-export async function sendPhoneCode(phone) {
-  try { await service().verifications.create({ to: phone, channel: 'sms' }); }
+// Some carriers (Ethio Telecom among them) filter international SMS codes; a
+// voice call reading the code out is the fallback.
+export async function sendPhoneCode(phone, channel = 'sms') {
+  try { await service().verifications.create({ to: phone, channel }); }
   catch (err) {
     if (err.code === 21608) throw new HttpError(403, 'verification_trial_number_required',
       'This pilot uses a Twilio trial account. Verify this mobile number in Twilio first, or use a verified test number.');

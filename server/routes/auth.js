@@ -23,8 +23,9 @@ async function signInException(phone) {
 }
 
 authRouter.post('/start', async (req, res) => {
-  const { phone } = req.body ?? {};
+  const { phone, channel = 'sms' } = req.body ?? {};
   if (!isE164(phone)) throw new HttpError(400, 'invalid_phone');
+  if (!['sms', 'call'].includes(channel)) throw new HttpError(400, 'invalid_channel');
   if (phone === process.env.TWILIO_NUMBER) throw new HttpError(400, 'handset_required', 'Use your mobile number, not the Twilio number.');
   // SMS pumping sends codes to expensive ranges; refuse them before paying for one.
   // Existing accounts and invited numbers may still sign in from anywhere we can call.
@@ -35,7 +36,7 @@ authRouter.post('/start', async (req, res) => {
   // Ceilings that rotating numbers and addresses cannot escape.
   await limit(`send-country:${country}`, 300);
   await limit('send-all', 1000);
-  await sendPhoneCode(phone);
+  await sendPhoneCode(phone, channel);
   res.status(202).json({ status: 'code_sent' });
 });
 
