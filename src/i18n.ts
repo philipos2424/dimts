@@ -13,8 +13,8 @@ const en = {
   onboardingTitle: 'Your phone number',
   onboardingBody:
     'Dimts rings this phone first, then connects you to the person you are calling.',
-  phonePlaceholder: '+251911234567',
-  invalidPhone: 'Enter a number with a country code, like +251911234567.',
+  phonePlaceholder: '+12025550123',
+  invalidPhone: 'Enter a number with a country code, like +12025550123.',
 
   // Recents
 
@@ -74,8 +74,8 @@ const am: Record<Key, string> = {
 
   onboardingTitle: 'የስልክ ቁጥርዎ',
   onboardingBody: 'ድምፅ መጀመሪያ ይህን ስልክ ይደውላል፣ ከዚያ ከሚደውሉለት ሰው ጋር ያገናኝዎታል።',
-  phonePlaceholder: '+251911234567',
-  invalidPhone: 'እንደ +251911234567 ያለ የአገር ኮድ ያለው ቁጥር ያስገቡ።',
+  phonePlaceholder: '+12025550123',
+  invalidPhone: 'እንደ +12025550123 ያለ የአገር ኮድ ያለው ቁጥር ያስገቡ።',
 
 
   statusInitiating: 'በመጀመር ላይ',

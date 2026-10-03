@@ -20,6 +20,7 @@ mock.module('../db/pool.js', { namedExports: {
       users.set(user.id, user);
       return user;
     }
+    if (sql.includes('FROM users WHERE phone')) return [...users.values()].find(u => u.phone === params[0]) ? { found: 1 } : undefined;
     if (sql.includes('FROM sessions')) return users.get(sessions.get(params[0]));
     if (sql.includes('FROM users WHERE id')) return users.get(params[0]);
   },
@@ -91,6 +92,19 @@ test('refuses sign-in codes outside launch countries and to premium ranges', asy
     assert.equal(result.body.error, 'country_not_supported');
   }
   assert.equal(sent.length, 0);
+});
+test('an existing account outside the signup countries can still sign in; a new one cannot', async () => {
+  assert.equal((await request('/api/auth/start', { phone: '+251911143200' })).status, 403);
+  users.set('owner-et', { id: 'owner-et', phone: '+251911143200', tier: 'free' });
+  assert.equal((await request('/api/auth/start', { phone: '+251911143200' })).status, 202);
+  assert.deepEqual(sent, ['+251911143200']);
+});
+test('invited numbers may sign up, but never in countries Dimts cannot call', async () => {
+  process.env.SIGNUP_ALLOWED_NUMBERS = '+251922000000, +2348012345678';
+  try {
+    assert.equal((await request('/api/auth/start', { phone: '+251922000000' })).status, 202);
+    assert.equal((await request('/api/auth/start', { phone: '+2348012345678' })).status, 403);
+  } finally { delete process.env.SIGNUP_ALLOWED_NUMBERS; }
 });
 test('caps codes per country so rotating numbers cannot pump SMS', async () => {
   counts.set(createHash('sha256').update('send-country:44').digest('hex'), 300);
