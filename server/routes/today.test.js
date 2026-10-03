@@ -75,6 +75,22 @@ test('call detail includes agreements, conflicts and the contact id', async () =
     conflicts: [{ new_index: 0, previous_call_id: 'x', previous_index: 0, note: 'n' }] });
   const call = await (await fetch(`${origin}/calls/${id}`)).json();
   assert.deepEqual(call.agreements.map(a => a.value), ['450 birr']);
-  assert.equal(call.conflicts.length, 1);
+  assert.deepEqual(call.conflicts, [], 'an unresolvable earlier call is not shown');
   assert.equal(call.contact_id, contact);
+});
+
+test('call detail resolves each conflict into both moments and reports capture', async () => {
+  const before = await seed({ status: 'ready', recording_url: 'r', agreements: [agreement('unit price', '500 birr')] });
+  const id = await seed({ status: 'ready', recording_url: 'r', agreements: [agreement('unit price', '450 birr')],
+    conflicts: [{ new_index: 0, previous_call_id: before, previous_index: 0, note: 'Price changed.' },
+      { new_index: 0, previous_call_id: '00000000-0000-4000-8000-000000000000', previous_index: 0, note: 'Gone.' }] });
+  const call = await (await fetch(`${origin}/calls/${id}`)).json();
+  assert.equal(call.capture, 'both');
+  assert.equal(call.conflicts.length, 1, 'a conflict whose earlier call no longer exists is not shown');
+  const [conflict] = call.conflicts;
+  assert.equal(conflict.note, 'Price changed.');
+  assert.equal(conflict.now.value, '450 birr');
+  assert.equal(conflict.before.value, '500 birr');
+  assert.equal(conflict.before.call_id, before);
+  assert.ok(conflict.before.created_at);
 });

@@ -144,8 +144,10 @@ export type CallDetail = CallSummary & {
   key_points: string[] | null;
   error: string | null;
   followups: Followups | null;
-  conflicts?: Conflict[] | null;
+  conflicts?: ResolvedConflict[];
+  capture?: Capture;
 };
+export type ResolvedConflict = { note: string; now: Agreement; before: Agreement & { call_id: string; created_at: string } };
 
 export type Usage = { month: string; tier: string; minutes_used: number };
 

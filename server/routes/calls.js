@@ -15,7 +15,7 @@ import { hasRecordingAuthorization } from '../lib/recording-policy.js';
 import { reconcileCall } from '../services/end-call.js';
 import { checkCallDestination } from '../services/call-preflight.js';
 import { getAudio } from '../services/audio-store.js';
-import { todayCard } from '../lib/today.js';
+import { captureState, todayCard } from '../lib/today.js';
 import { scheduleArchiveRetries } from '../services/archive-audio.js';
 import { audit } from '../lib/audit.js';
 
@@ -139,6 +139,24 @@ callsRouter.get('/', async (req, res, next) => {
   }
 });
 
+// Pair each flagged difference with the earlier agreement it differs from.
+// Earlier calls that were deleted or belong to someone else drop out.
+async function resolveConflicts(userId, call) {
+  const conflicts = Array.isArray(call.conflicts) ? call.conflicts : [];
+  const agreements = Array.isArray(call.agreements) ? call.agreements : [];
+  const ids = [...new Set(conflicts.map(item => item?.previous_call_id).filter(id => /^[0-9a-f-]{36}$/i.test(id ?? '')))];
+  if (!ids.length) return [];
+  const { rows } = await query(`SELECT id, created_at, agreements FROM calls
+    WHERE user_id=$1 AND id = ANY($2::uuid[]) AND deleted_at IS NULL`, [userId, ids]);
+  const earlier = new Map(rows.map(row => [row.id, row]));
+  return conflicts.flatMap(item => {
+    const now = agreements[item.new_index], previous = earlier.get(item.previous_call_id);
+    const before = Array.isArray(previous?.agreements) ? previous.agreements[item.previous_index] : null;
+    if (!now || !before) return [];
+    return [{ note: item.note, now, before: { ...before, call_id: previous.id, created_at: previous.created_at } }];
+  });
+}
+
 callsRouter.get('/:id', async (req, res, next) => {
   try {
     const user = await resolveUser(req);
@@ -151,7 +169,7 @@ callsRouter.get('/:id', async (req, res, next) => {
               c.record_enabled, c.parent_consent_at, c.child_consent_at, c.recording_start_status,
               c.consent_mode, c.consent_scope, c.other_party_notice_issued_at,
               c.deleted_at,c.provider_deletion_status,c.provider_deletion_error,c.provider_deleted_at,
-              c.agreements, c.conflicts, c.contact_id,
+              c.agreements, c.conflicts, c.contact_id, c.audio_object_key,
               k.display_name AS contact_name, k.company
          FROM calls c
          LEFT JOIN contacts k ON k.id = c.contact_id
@@ -161,7 +179,9 @@ callsRouter.get('/:id', async (req, res, next) => {
 
     if (!call) throw new HttpError(404, 'call_not_found');
 
-    const { transcript_data, transcript_recording_url, consent_scope, ...detail } = call;
+    const { transcript_data, transcript_recording_url, consent_scope, audio_object_key, ...detail } = call;
+    detail.capture = captureState({ ...call, has_audio: !!(call.recording_url || audio_object_key) });
+    detail.conflicts = await resolveConflicts(user.id, call);
     res.set('Cache-Control','private, no-store').json({
       ...detail,
       recording_authorized: hasRecordingAuthorization(call),
