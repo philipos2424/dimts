@@ -61,6 +61,19 @@ test('a retried HTTP request cannot originate twice; invalid requests never call
   assert.equal(providerCalls, 1);
 });
 
+test('unserved countries and premium numbers are refused before any reservation, preflight or provider call', async () => {
+  const before = (await db.query('SELECT count(*)::int AS count FROM calls')).rows[0].count;
+  const checks = preflights, dialled = providerCalls;
+  for (const [key, destination] of [['request-nigeria', '+2348012345678'], ['request-jamaica', '+18765551234'], ['request-premium', '+19005551234']]) {
+    const result = await post(key, destination);
+    assert.equal(result.status, 403, destination);
+    assert.equal(result.data.error, 'destination_not_supported');
+  }
+  assert.equal((await db.query('SELECT count(*)::int AS count FROM calls')).rows[0].count, before);
+  assert.equal(preflights, checks);
+  assert.equal(providerCalls, dialled);
+});
+
 test('unverified trial destinations create no call reservation or provider call', async () => {
   rejectPreflight = true;
   const before = (await db.query('SELECT count(*)::int AS count FROM calls')).rows[0].count;

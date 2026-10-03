@@ -14,6 +14,7 @@ import { transcriptTurns } from '../lib/transcript-turns.js';
 import { hasRecordingAuthorization } from '../lib/recording-policy.js';
 import { reconcileCall } from '../services/end-call.js';
 import { checkCallDestination } from '../services/call-preflight.js';
+import { canCall } from '../lib/destinations.js';
 import { getAudio } from '../services/audio-store.js';
 import { captureState, todayCard } from '../lib/today.js';
 import { scheduleArchiveRetries } from '../services/archive-audio.js';
@@ -67,6 +68,13 @@ callsRouter.post('/', async (req, res, next) => {
         'invalid_destination',
         'destination must be an E.164 number, e.g. +251911234567'
       );
+    }
+    // Toll fraud dials premium and unserved countries; both legs are billed to us.
+    if (!canCall(destination)) {
+      throw new HttpError(403, 'destination_not_supported', 'Dimts cannot call numbers in this country or premium-rate numbers.');
+    }
+    if (!canCall(user.phone)) {
+      throw new HttpError(403, 'handset_not_supported', 'Dimts cannot ring your phone number in this country.');
     }
 
     // Validate callback configuration before reserving or spending anything.

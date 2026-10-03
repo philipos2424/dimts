@@ -2,6 +2,7 @@ import express from 'express';
 import { randomBytes } from 'node:crypto';
 import { query, queryOne } from '../db/pool.js';
 import { isE164 } from '../lib/phone.js';
+import { signupCountryCode } from '../lib/destinations.js';
 import { hashToken, HttpError, resolveUser } from '../lib/users.js';
 import { checkPhoneCode, sendPhoneCode } from '../services/verify-phone.js';
 import { audit } from '../lib/audit.js';
@@ -17,8 +18,14 @@ authRouter.post('/start', async (req, res) => {
   const { phone } = req.body ?? {};
   if (!isE164(phone)) throw new HttpError(400, 'invalid_phone');
   if (phone === process.env.TWILIO_NUMBER) throw new HttpError(400, 'handset_required', 'Use your mobile number, not the Twilio number.');
+  // SMS pumping sends codes to expensive ranges; refuse them before paying for one.
+  const country = signupCountryCode(phone);
+  if (!country) throw new HttpError(403, 'country_not_supported', 'Dimts is not available for phone numbers in this country yet.');
   await limit(`send-phone:${phone}`, 5);
   await limit(`send-ip:${req.ip}`, 20);
+  // Ceilings that rotating numbers and addresses cannot escape.
+  await limit(`send-country:${country}`, 300);
+  await limit('send-all', 1000);
   await sendPhoneCode(phone);
   res.status(202).json({ status: 'code_sent' });
 });
