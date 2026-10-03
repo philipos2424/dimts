@@ -1,13 +1,15 @@
-import { twilioClient } from '../lib/twilio-client.js';
+import { providerRest } from '../lib/carrier.js';
 import { config } from '../config.js';
 import { HttpError } from '../lib/users.js';
 
 // Trial restrictions apply to both dial-through legs. Check before reserving
 // minutes or ringing the owner, rather than discovering rejection in <Dial>.
 export async function checkCallDestination(userPhone, destination) {
+  // Trial restrictions are a Twilio concept; Telnyx enforces its own outbound profile.
+  if (config.carrier === 'telnyx') return;
   let account, verified;
   try {
-    const client = twilioClient({ timeout: 5000, autoRetry: false });
+    const client = providerRest({ timeout: 5000, autoRetry: false });
     account = await client.api.v2010.accounts(config.twilioAccountSid).fetch();
     if (account.status !== 'active' || !['Trial', 'Full'].includes(account.type)) {
       throw new Error('Provider account not ready');

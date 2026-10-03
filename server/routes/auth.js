@@ -1,6 +1,7 @@
 import express from 'express';
 import { randomBytes } from 'node:crypto';
 import { query, queryOne } from '../db/pool.js';
+import { config } from '../config.js';
 import { isE164 } from '../lib/phone.js';
 import { canCall, signupCountryCode } from '../lib/destinations.js';
 import { hashToken, HttpError, resolveUser } from '../lib/users.js';
@@ -26,7 +27,7 @@ authRouter.post('/start', async (req, res) => {
   const { phone, channel = 'sms' } = req.body ?? {};
   if (!isE164(phone)) throw new HttpError(400, 'invalid_phone');
   if (!['sms', 'call'].includes(channel)) throw new HttpError(400, 'invalid_channel');
-  if (phone === process.env.TWILIO_NUMBER) throw new HttpError(400, 'handset_required', 'Use your mobile number, not the Twilio number.');
+  if (phone === config.carrierNumber) throw new HttpError(400, 'handset_required', 'Use your mobile number, not the Dimts number.');
   // SMS pumping sends codes to expensive ranges; refuse them before paying for one.
   // Existing accounts and invited numbers may still sign in from anywhere we can call.
   const country = signupCountryCode(phone) ?? (await signInException(phone) ? 'exception' : null);

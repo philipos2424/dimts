@@ -1,3 +1,4 @@
+import { createPublicKey, verify } from 'node:crypto';
 import twilio from 'twilio';
 import { config } from '../config.js';
 
@@ -12,6 +13,25 @@ import { config } from '../config.js';
  */
 export function signedUrlFor(req) {
   return config.publicBaseUrl + req.originalUrl;
+}
+
+// DER prefix that turns a raw 32-byte Ed25519 public key into SPKI.
+const ED25519_SPKI = Buffer.from('302a300506032b6570032100', 'hex');
+const MAX_SKEW_SECONDS = 300;
+
+/** Telnyx: Ed25519 over `${timestamp}|${raw body}`, with a replay window. */
+export function isValidTelnyxRequest(req, now = Date.now()) {
+  const signature = req.get('telnyx-signature-ed25519');
+  const timestamp = req.get('telnyx-timestamp');
+  if (!signature || !/^\d{9,11}$/.test(timestamp ?? '')) return false;
+  if (Math.abs(now / 1000 - Number(timestamp)) > MAX_SKEW_SECONDS) return false;
+  try {
+    const raw = Buffer.from(config.telnyxPublicKey, 'base64');
+    if (raw.length !== 32) return false;
+    const key = createPublicKey({ key: Buffer.concat([ED25519_SPKI, raw]), format: 'der', type: 'spki' });
+    const payload = Buffer.concat([Buffer.from(`${timestamp}|`), req.rawBody ?? Buffer.alloc(0)]);
+    return verify(null, payload, key, Buffer.from(signature, 'base64'));
+  } catch { return false; }
 }
 
 export function isValidTwilioRequest(req) {
@@ -38,9 +58,10 @@ export function verifyTwilioSignature(req, res, next) {
   }
   if (config.skipTwilioSignatureCheck) console.error('[twilio] SKIP_TWILIO_SIGNATURE_CHECK ignored in production');
 
-  if (!isValidTwilioRequest(req)) {
+  const valid = config.carrier === 'telnyx' ? isValidTelnyxRequest(req) : isValidTwilioRequest(req);
+  if (!valid) {
     console.warn('[twilio] rejected unsigned request', req.originalUrl);
-    return res.status(403).type('text/plain').send('Invalid Twilio signature');
+    return res.status(403).type('text/plain').send('Invalid webhook signature');
   }
 
   return next();

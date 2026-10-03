@@ -30,8 +30,10 @@ export function createApp({ webRoot = fileURLToPath(new URL('../dist/', import.m
   app.set('trust proxy', 1);
   app.use(securityHeaders);
 
-  app.use(express.json());
-  app.use(express.urlencoded({ extended: false })); // Twilio posts form-encoded
+  // Telnyx signs the exact request bytes, so keep them alongside the parsed body.
+  const keepRawBody = (req, _res, buf) => { req.rawBody = buf; };
+  app.use(express.json({ verify: keepRawBody }));
+  app.use(express.urlencoded({ extended: false, verify: keepRawBody })); // carriers post form-encoded
 
   app.get('/health', (_req, res) => res.json({ ok: true }));
   app.use('/api', (_req, res, next) => {

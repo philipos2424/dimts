@@ -7,11 +7,12 @@ import { verifyTwilioSignature } from '../lib/twilio-signature.js';
 import { currentMonth } from '../lib/users.js';
 import { finishCall } from '../db/finish-call.js';
 import { processRecording } from '../services/process-recording.js';
-import { askRecordingConsent, dialCall, issueRecordingNotice, offerVoicemail } from '../lib/recording-consent.js';
+import { askRecordingConsent, dialCall, issueRecordingNotice, offerVoicemail, recordsThroughDial, RECORDING_NOTICE } from '../lib/recording-consent.js';
 import { hasRecordingAuthorization, recordingAuthorizationSql } from '../lib/recording-policy.js';
 import { beginAgreedRecording } from '../db/start-recording.js';
 import { processDeletion } from '../services/process-deletion.js';
 import { reconcileCall } from '../services/end-call.js';
+import { isCallSid, isRecordingSid } from '../lib/carrier.js';
 
 const { VoiceResponse } = twilio.twiml;
 
@@ -47,9 +48,19 @@ async function resolveCall({ callId, callSid }) {
   return undefined;
 }
 
+/**
+ * Telnyx may not return the call SID when a call is created; the first webhook
+ * for a call we started (it carries our ?callId=) supplies it instead.
+ */
+async function adoptCallSid(callId, callSid) {
+  if (!callId || !isCallSid(callSid)) return;
+  await query(`UPDATE calls SET twilio_call_sid=$2 WHERE id=$1 AND twilio_call_sid IS NULL AND direction='outbound'`, [callId, callSid]);
+}
+
 /** TwiML fetched when the user answers leg A: dial the destination, record both. */
 twimlRouter.post('/bridge', async (req, res) => {
   const callId = req.query.callId ?? req.body?.callId;
+  await adoptCallSid(callId, req.body?.CallSid);
   const call = await resolveCall({ callId, callSid: req.body?.CallSid });
   const destination = call?.direction === 'outbound' ? call.destination : null;
   const base = config.publicBaseUrl;
@@ -100,6 +111,11 @@ twimlRouter.post('/party-consent', async (req, res) => {
       await queryOne(`UPDATE calls SET other_party_notice_issued_at=COALESCE(other_party_notice_issued_at,now())
         WHERE id=$1 AND child_call_sid=$2 AND duration_sec IS NULL RETURNING id`, [call.id, req.body.CallSid]);
       if (call.recording_start_status) return res.type('text/xml').send(twiml.toString());
+      if (recordsThroughDial(call)) {
+        // Only <Gather>/<Hangup> are allowed here on Telnyx; <Dial> records once bridged.
+        twiml.gather({ input: 'dtmf', numDigits: 1, timeout: 1 }).say(RECORDING_NOTICE);
+        return res.type('text/xml').send(twiml.toString());
+      }
       issueRecordingNotice(twiml);
       // Same empty-Gather technique as owner-only: wait out the notice, then record.
       twiml.gather({ input:'dtmf',numDigits:1,timeout:1,method:'POST',actionOnEmptyResult:true,
@@ -109,7 +125,7 @@ twimlRouter.post('/party-consent', async (req, res) => {
   else if (call.consent_mode === 'notice' && call.direction === 'inbound') {
     // The caller heard the notice before the owner's phone rang.
     if (!call.other_party_notice_issued_at || !call.child_consent_at) twiml.hangup();
-    else await beginAgreedRecording(call.id, req.body.CallSid);
+    else if (!recordsThroughDial(call)) await beginAgreedRecording(call.id, req.body.CallSid);
   }
   else if (call.consent_mode === 'owner_only' && !call.consent_scope?.trim()) twiml.hangup();
   else if (call.consent_mode === 'owner_only' && call.direction === 'outbound') {
@@ -161,6 +177,7 @@ twimlRouter.post('/record-after-notice', async (req, res) => {
 /** Leg A lifecycle. Drives the status badge in Recents. */
 webhooksRouter.post('/call-status', async (req, res) => {
   const { CallStatus, CallSid } = req.body ?? {};
+  await adoptCallSid(req.query.callId, CallSid);
   const call = await resolveCall({ callId: req.query.callId, callSid: CallSid });
 
   if (call) {
@@ -228,7 +245,7 @@ webhooksRouter.post('/recording-ready', async (req, res) => {
   const { RecordingUrl, RecordingStatus, CallSid } = req.body ?? {};
   const call = await resolveCall({ callId: req.query.callId, callSid: CallSid });
 
-  if (call?.deleted_at && RecordingStatus === 'completed' && /^RE[a-f0-9]{32}$/i.test(req.body.RecordingSid ?? '')) {
+  if (call?.deleted_at && RecordingStatus === 'completed' && isRecordingSid(req.body.RecordingSid)) {
     const pending = await queryOne(`UPDATE calls SET recording_sid=COALESCE(recording_sid,$2),
         provider_deletion_status='pending',provider_deleted_at=NULL,provider_deletion_error=NULL,
         provider_deletion_token=CASE WHEN recording_sid IS NULL THEN NULL ELSE provider_deletion_token END,
@@ -242,7 +259,7 @@ webhooksRouter.post('/recording-ready', async (req, res) => {
   }
 
   if (call && hasRecordingAuthorization(call) && RecordingStatus === 'completed' && RecordingUrl) {
-    if (call.recording_start_status && (!/^RE[a-f0-9]{32}$/i.test(req.body.RecordingSid ?? '') ||
+    if (call.recording_start_status && (!isRecordingSid(req.body.RecordingSid) ||
       (call.recording_sid && call.recording_sid !== req.body.RecordingSid))) return res.status(204).end();
     const accepted = await queryOne(
       `UPDATE calls SET recording_url = $2, status = 'processing', error=NULL,processing_requested_at=now(),
