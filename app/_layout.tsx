@@ -52,7 +52,7 @@ function Gate() {
         name="in-call"
         options={{ presentation: 'fullScreenModal', headerShown: false }}
       />
-      <Stack.Screen name="settings" />
+      <Stack.Screen name="settings" options={{ title: 'Settings' }} />
       <Stack.Screen name="first-call" options={{ title: 'Test your first call' }} />
       <Stack.Screen name="call/[id]" options={{ title: '' }} />
       <Stack.Screen name="person/[id]" options={{ title: '' }} />

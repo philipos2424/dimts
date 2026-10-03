@@ -1,4 +1,4 @@
-import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useApp } from '../../src/AppContext';
@@ -25,7 +25,6 @@ export default function CallDetailScreen() {
   const { c } = useTheme();
   const { t } = useApp();
   const { userPhone } = useApp();
-  const navigation = useNavigation();
   const { id, t: startAt, focus } = useLocalSearchParams<{ id: string; t?: string; focus?: string }>();
   const router = useRouter();
   const focused = useRef(false);
@@ -94,10 +93,6 @@ export default function CallDetailScreen() {
     return () => { loadSequence.current++; };
   }, [load]);
 
-  useEffect(() => {
-    const title = call?.contact_name ?? call?.destination;
-    if (title) navigation.setOptions({ title });
-  }, [call?.contact_name, call?.destination, navigation]);
 
   // Opened from Ask or a conflict: jump to the cited second once audio exists.
   const seeded = useRef(false);
@@ -152,7 +147,7 @@ export default function CallDetailScreen() {
           <CapturePill capture={call.capture ?? 'none'} />
         </View>
         <Txt size="caption" tone="muted">
-          {call.direction === 'inbound' ? t('incoming') : t('outgoing')} · {new Date(call.created_at).toLocaleString()}
+          {call.direction === 'inbound' ? t('incoming') : t('outgoing')} · {new Date(call.created_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
         </Txt>
         {call.audio_url && <CallPlayer callId={call.id} seekRequest={seekRequest} />}
       </View>

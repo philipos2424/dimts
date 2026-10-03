@@ -17,7 +17,7 @@ export function Moment({ quote, start, onPlay, label }: { quote: string; start: 
       style={{ flexDirection: 'row', gap: space.sm, alignItems: 'flex-start' }}>
       <View style={{ width: 3, alignSelf: 'stretch', borderRadius: radius.sm, backgroundColor: c.gold }} />
       <View style={{ flex: 1, gap: 2 }}>
-        <Txt size="caption" tone="muted" style={{ fontStyle: 'italic' }}>{quote}</Txt>
+        <Txt size="caption" tone="muted" style={{ fontStyle: 'italic' }}>“{quote.replace(/^(?:User|Caller):\s*/, '')}”</Txt>
         {(label || start != null) && (
           <Txt size="caption" weight="bold" tone={playable ? 'brand' : 'faint'}>
             {playable ? `▶ ${label ? `${label} · ` : ''}${clock(start!)}` : label}

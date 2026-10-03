@@ -1,7 +1,8 @@
-import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { TextInput, View } from 'react-native';
 import { deleteContact, getPerson, renameContact, type Person } from '../../src/api';
+import { useApp } from '../../src/AppContext';
 import { Button } from '../../src/components/Button';
 import { Card } from '../../src/components/Card';
 import { PromisesStrip } from '../../src/components/PromisesStrip';
@@ -13,7 +14,7 @@ import { font, radius, space, type, useTheme } from '../../src/theme';
 export default function PersonScreen() {
   const { c } = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const navigation = useNavigation();
+  const { userPhone } = useApp();
   const router = useRouter();
   const [person, setPerson] = useState<Person | null>(null);
   const [error, setError] = useState('');
@@ -23,14 +24,14 @@ export default function PersonScreen() {
   const [confirming, setConfirming] = useState(false), [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
-    if (!id) return;
+    // Wait for the restored session before asking the server.
+    if (!id || !userPhone) return;
     try {
       const result = await getPerson(id);
       setPerson(result); setName(result.contact.display_name ?? ''); setCompany(result.contact.company ?? ''); setError('');
     } catch (err) { setError(err instanceof Error ? err.message : 'Unable to load this person.'); }
-  }, [id]);
+  }, [id, userPhone]);
   useEffect(() => { load(); }, [load]);
-  useEffect(() => { navigation.setOptions({ title: person?.contact.display_name ?? person?.contact.phone ?? '' }); }, [navigation, person]);
 
   async function save() {
     if (!person || !name.trim()) return;
@@ -92,7 +93,7 @@ export default function PersonScreen() {
         <Txt size="subhead" serif>Calls</Txt>
         {person.calls.map(call => (
           <Card key={call.id} onPress={() => router.push(`/call/${call.id}`)}>
-            <Txt size="caption" tone="muted">{new Date(call.created_at).toLocaleString()} · {call.direction === 'inbound' ? 'Incoming' : 'Outgoing'}</Txt>
+            <Txt size="caption" tone="muted">{new Date(call.created_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })} · {call.direction === 'inbound' ? 'Incoming' : 'Outgoing'}</Txt>
             {call.summary ? <Txt numberOfLines={2}>{call.summary}</Txt> : <Txt tone="faint">No notes</Txt>}
           </Card>
         ))}

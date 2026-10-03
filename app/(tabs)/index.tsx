@@ -17,11 +17,14 @@ const NONE: Promises = { you_owe: [], waiting_on: [] };
 /** Today: every call reported back as a short card with one next step. */
 export default function Today() {
   const { c } = useTheme();
-  const { t } = useApp();
+  const { t, userPhone } = useApp();
   const router = useRouter();
   const { calls, loading, errorKey, refresh, clearError } = useCalls();
   const [promises, setPromises] = useState<Promises>(NONE);
-  const loadPromises = useCallback(() => { getPromises().then(setPromises).catch(() => {}); }, []);
+  // Wait for the restored session; a request before it would fail silently.
+  const loadPromises = useCallback(() => {
+    if (userPhone) getPromises().then(setPromises).catch(() => {});
+  }, [userPhone]);
   useFocusEffect(loadPromises);
 
   const header = (
