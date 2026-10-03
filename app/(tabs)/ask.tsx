@@ -1,5 +1,5 @@
-import { useRouter } from 'expo-router';
-import { useRef, useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { ApiError, askQuestion, type AskAnswer } from '../../src/api';
 import { clock } from '../../src/components/Moment';
@@ -7,7 +7,7 @@ import { Txt } from '../../src/components/Txt';
 import { font, radius, space, type, useTheme } from '../../src/theme';
 
 type Turn = { question: string; reply: AskAnswer | null; error?: string };
-const SUGGESTIONS = ['Who am I waiting on?', 'What did we agree last week?', 'Prices mentioned this month'];
+const SUGGESTIONS = ['What should I do this week?', 'Who am I waiting on?', 'What did we agree last week?', 'Prices mentioned this month'];
 const NOT_FOUND = 'I couldn’t find this in your calls.';
 
 /** Ask your calls. Answers only count when they point at a real moment. */
@@ -18,6 +18,9 @@ export default function Ask() {
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
   const scroll = useRef<ScrollView>(null);
+  // Today's "This week" card links here with ?q= to ask straight away.
+  const { q: linked } = useLocalSearchParams<{ q?: string }>();
+  const asked = useRef<string | null>(null);
 
   async function send(question: string) {
     const q = question.trim();
@@ -35,6 +38,10 @@ export default function Ask() {
       setTimeout(() => scroll.current?.scrollToEnd({ animated: true }), 50);
     }
   }
+
+  useEffect(() => {
+    if (typeof linked === 'string' && linked && asked.current !== linked) { asked.current = linked; void send(linked); }
+  }, [linked]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, backgroundColor: c.bg }}>

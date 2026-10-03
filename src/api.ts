@@ -38,6 +38,17 @@ export type Person = {
   promises: Promises;
 };
 export function getPromises() { return request<Promises>('/api/promises', ''); }
+type BriefingPromise = PromiseItem & { age_days: number; money: boolean };
+export type Briefing = {
+  since: string; calls_this_week: number; minutes_this_week: number;
+  money: { call_id: string; created_at: string; contact_id: string | null; contact_name: string | null; kind: string;
+    subject: string; value: string; quote: string | null; line: number | null; start: number | null }[];
+  you_owe: BriefingPromise[]; waiting_on: BriefingPromise[];
+  conflicts: { call_id: string; created_at: string; contact_name: string | null; count: number; note: string | null }[];
+  next_moves: { call_id: string; created_at: string; contact_name: string | null; move: string }[];
+  totals: { you_owe: number; waiting_on: number; money: number; conflicts: number };
+};
+export function getBriefing() { return request<Briefing>('/api/briefing', ''); }
 export function setPromise(callId: string, index: number, status: 'open' | 'done' | 'dismissed') {
   return request<{ status: string }>(`/api/promises/${encodeURIComponent(callId)}/${index}`, '', { method: 'POST', body: JSON.stringify({ status }) });
 }
