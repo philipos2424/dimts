@@ -5,7 +5,7 @@ import twilio from 'twilio';
 process.env.TWILIO_AUTH_TOKEN = 'test-auth-token';
 process.env.PUBLIC_BASE_URL = 'https://dimts.ngrok-free.app';
 
-const { isValidTwilioRequest, signedUrlFor } = await import('./twilio-signature.js');
+const { isValidTwilioRequest, signedUrlFor, verifyTwilioSignature } = await import('./twilio-signature.js');
 
 const AUTH_TOKEN = 'test-auth-token';
 const PUBLIC_URL = 'https://dimts.ngrok-free.app/webhooks/recording-ready?callId=abc';
@@ -62,4 +62,19 @@ test('rejects a tampered body', () => {
   const req = fakeReq(signature);
   req.body = { ...BODY, RecordingStatus: 'absent' };
   assert.equal(isValidTwilioRequest(req), false);
+});
+
+test('Vercel production ignores SKIP_TWILIO_SIGNATURE_CHECK and still rejects unsigned webhooks', () => {
+  process.env.SKIP_TWILIO_SIGNATURE_CHECK = 'true';
+  process.env.VERCEL_ENV = 'production';
+  try {
+    let passed = false, status;
+    const res = { status(code) { status = code; return this; }, type() { return this; }, send() { return this; }, end() { return this; }, json() { return this; } };
+    verifyTwilioSignature(fakeReq(undefined), res, () => { passed = true; });
+    assert.equal(passed, false);
+    assert.equal(status, 403);
+    process.env.VERCEL_ENV = 'preview';
+    verifyTwilioSignature(fakeReq(undefined), res, () => { passed = true; });
+    assert.equal(passed, true, 'previews may still skip for testing');
+  } finally { delete process.env.SKIP_TWILIO_SIGNATURE_CHECK; delete process.env.VERCEL_ENV; }
 });

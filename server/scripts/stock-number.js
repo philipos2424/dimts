@@ -1,6 +1,6 @@
 // Import an already-owned, already-routed number. Never buys or reroutes one.
 // node --env-file=.env server/scripts/stock-number.js +14754053943
-import twilio from 'twilio';
+import { twilioClient } from '../lib/twilio-client.js';
 import { config } from '../config.js';
 import { isE164 } from '../lib/phone.js';
 import { query, closeDatabase } from '../db/pool.js';
@@ -10,7 +10,7 @@ try {
   if (!isE164(phone)) throw new Error('Usage: stock-number.js <owned-number-e164>');
   const voiceUrl = `${config.publicBaseUrl}/twiml/incoming`;
   if (new URL(voiceUrl).protocol !== 'https:') throw new Error('PUBLIC_BASE_URL requires HTTPS');
-  const client = twilio(config.twilioAccountSid, config.twilioAuthToken, { timeout: 15_000 });
+  const client = twilioClient({ timeout: 15_000 });
   const numbers = await client.incomingPhoneNumbers.list({ phoneNumber: phone, limit: 1 });
   const number = numbers[0];
   if (!number || number.phoneNumber !== phone || !number.capabilities?.voice) throw new Error('Number is not voice-capable and owned by this Twilio account');

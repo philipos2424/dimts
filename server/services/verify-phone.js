@@ -1,9 +1,9 @@
-import twilio from 'twilio';
+import { twilioClient } from '../lib/twilio-client.js';
 import { config } from '../config.js';
 import { HttpError } from '../lib/users.js';
 
 function service() {
-  return twilio(config.twilioAccountSid, config.twilioAuthToken, { timeout: 15_000 })
+  return twilioClient({ timeout: 15_000 })
     .verify.v2.services(config.twilioVerifyServiceSid);
 }
 

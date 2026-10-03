@@ -5,6 +5,7 @@ import { query, queryOne } from '../db/pool.js';
 import { HttpError, currentMonth, resolveUser } from '../lib/users.js';
 import { defer } from '../lib/defer.js';
 import { fetchRecording, isE164, originateCall } from '../services/originate.js';
+import { recordingChannels } from '../lib/recording-channels.js';
 import { processRecording } from '../services/process-recording.js';
 import { reserveCall } from '../db/reserve-call.js';
 import { expireRecordingWait } from '../db/expire-recording-wait.js';
@@ -14,6 +15,7 @@ import { transcriptTurns } from '../lib/transcript-turns.js';
 import { hasRecordingAuthorization } from '../lib/recording-policy.js';
 import { reconcileCall } from '../services/end-call.js';
 import { checkCallDestination } from '../services/call-preflight.js';
+import { canCall } from '../lib/destinations.js';
 import { getAudio } from '../services/audio-store.js';
 import { captureState, todayCard } from '../lib/today.js';
 import { scheduleArchiveRetries } from '../services/archive-audio.js';
@@ -24,7 +26,7 @@ export const callsRouter = express.Router();
 const LIST_COLUMNS = `
   c.id, c.destination, c.status, c.duration_sec, c.direction, c.summary,
   c.created_at, k.display_name AS contact_name, k.company, c.contact_id,
-  c.followups, c.next_moves, c.error, c.agreements, c.conflicts,
+  c.followups, c.next_moves, c.error, c.agreements, c.conflicts, c.voicemail,
   (c.recording_url IS NOT NULL OR c.audio_object_key IS NOT NULL) AS has_audio
 `;
 
@@ -67,6 +69,13 @@ callsRouter.post('/', async (req, res, next) => {
         'invalid_destination',
         'destination must be an E.164 number, e.g. +251911234567'
       );
+    }
+    // Toll fraud dials premium and unserved countries; both legs are billed to us.
+    if (!canCall(destination)) {
+      throw new HttpError(403, 'destination_not_supported', 'Dimts cannot call numbers in this country or premium-rate numbers.');
+    }
+    if (!canCall(user.phone)) {
+      throw new HttpError(403, 'handset_not_supported', 'Dimts cannot ring your phone number in this country.');
     }
 
     // Validate callback configuration before reserving or spending anything.
@@ -163,7 +172,7 @@ callsRouter.get('/:id', async (req, res, next) => {
     await expireRecordingWait(user.id);
     await expireProcessing(user.id);
     const call = await queryOne(
-      `SELECT c.id, c.destination, c.status, c.duration_sec, c.direction,
+      `SELECT c.id, c.destination, c.status, c.duration_sec, c.direction, c.voicemail,
               c.recording_url, c.transcript, c.transcript_data, c.transcript_recording_url, c.summary, c.next_moves,
               c.action_items, c.key_points, c.followups, c.error, c.created_at,
               c.record_enabled, c.parent_consent_at, c.child_consent_at, c.recording_start_status,
@@ -235,7 +244,7 @@ callsRouter.get('/:id/audio', async (req, res, next) => {
   try {
     const user = await resolveUser(req);
     const call = await queryOne(
-      'SELECT id, recording_url, audio_object_key FROM calls WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL',
+      'SELECT id, recording_url, audio_object_key, voicemail FROM calls WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL',
       [req.params.id, user.id]
     );
 
@@ -248,7 +257,7 @@ callsRouter.get('/:id/audio', async (req, res, next) => {
     // Archived audio lives in EU storage; older calls still stream from Twilio.
     const upstream = call.audio_object_key
       ? await getAudio(call.audio_object_key, { range })
-      : await fetchRecording(call.recording_url, { range });
+      : await fetchRecording(call.recording_url, { range, channels: recordingChannels(call) });
     const recent = await queryOne(`SELECT 1 AS seen FROM audit_events WHERE user_id=$1 AND action='audio_played'
       AND target_id=$2 AND created_at > now()-interval '1 hour' LIMIT 1`, [user.id, call.id]);
     if (!recent) await audit({ userId: user.id, action: 'audio_played', targetType: 'call', targetId: call.id, req });

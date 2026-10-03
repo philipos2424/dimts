@@ -97,6 +97,12 @@ test('the caller hears the Dimts notice and is connected to the owner with no ke
   assert.deepEqual(notified, ['call-1']);
 });
 
+test('the owner sees the real caller number, not the Dimts number', async () => {
+  reserved = { ...reserved, destination: CALL.From };
+  const { xml } = await incoming(CALL);
+  assert.match(xml, /callerId="\+14155552671"/);
+});
+
 test('the legacy announcement flag cannot switch the notice off', async () => {
   process.env.ANNOUNCE_RECORDING = 'false';
   const { xml } = await incoming(CALL);
@@ -108,6 +114,14 @@ test('an unrecorded call (owner has not accepted terms) connects without a notic
   const { xml } = await incoming(CALL);
   assert.doesNotMatch(xml, /Dimts AI|<Gather|<Hangup/);
   assert.match(xml, /<Dial/);
+});
+
+test('a Gulf caller must press 1 before the owner is rung, and hears no notice-only connection', async () => {
+  reserved = { ...reserved, consent_mode: 'all_parties', child_consent_at: null };
+  const { xml } = await incoming({ ...CALL, From: '+971501234567' });
+  assert.match(xml, /<Gather[^>]*action="https:\/\/agent\.example\.com\/twiml\/accept\?callId=call-1"/);
+  assert.match(xml, /only if both people agree/);
+  assert.doesNotMatch(xml, /<Dial|Dimts AI\./);
 });
 
 test('records the call as inbound and links the contact', async () => {

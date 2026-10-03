@@ -12,3 +12,9 @@ export function recordingQualityError(raw) {
   }
   return null;
 }
+
+// A voicemail is one person on one channel by design; only silence is a failure.
+export function voicemailQualityError(raw) {
+  if (raw?.audio_quality?.status === 'silent') return 'The message contains no detectable audio signal. Play the saved audio to check it.';
+  return null;
+}

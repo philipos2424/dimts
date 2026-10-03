@@ -26,6 +26,10 @@ const en = {
   statusReady: 'Ready',
   statusFailed: 'Failed',
 
+  // In call
+  answerYourPhone: 'Answer your phone. Dimts rings you first, then connects the other person.',
+  pressOneToRecord: 'Recording with this number needs both of you to press 1 to agree.',
+
   // Dialer
   enterNumber: 'Enter a number',
   call: 'Call',
@@ -78,6 +82,8 @@ const am: Record<Key, string> = {
   statusRinging: 'እየደወለ ነው',
   'statusIn-progress': 'በጥሪ ላይ',
   statusProcessing: 'ማስታወሻ በመጻፍ ላይ',
+  answerYourPhone: 'ስልክዎን ያንሱ። ድምፅ መጀመሪያ እርስዎን ይደውላል፣ ከዚያ ሌላውን ሰው ያገናኛል።',
+  pressOneToRecord: 'ከዚህ ቁጥር ጋር ጥሪ ለመቅዳት ሁለታችሁም ለመስማማት 1 መጫን አለባችሁ።',
   statusReady: 'ዝግጁ',
   statusFailed: 'አልተሳካም',
 

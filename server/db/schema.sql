@@ -272,3 +272,5 @@ CREATE TABLE IF NOT EXISTS promise_states (
 );
 CREATE INDEX IF NOT EXISTS calls_search_idx ON calls
   USING gin (to_tsvector('simple', coalesce(summary,'') || ' ' || coalesce(transcript,'')));
+-- A message left after a missed incoming call: one mono channel, the caller only.
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS voicemail BOOLEAN NOT NULL DEFAULT false;

@@ -51,7 +51,7 @@ export async function reserveCallInTransaction(db, user, destination, record, re
   if (!isTwilioAccount(account)) throw new Error('Invalid TWILIO_ACCOUNT_SID');
   const contactId = options.contactId !== undefined ? options.contactId : (await db.query(`INSERT INTO contacts(user_id,phone) VALUES($1,$2)
     ON CONFLICT(user_id,phone) DO UPDATE SET phone=EXCLUDED.phone RETURNING id`, [user.id, destination])).rows[0].id;
-  const policy = recordingPolicy();
+  const policy = recordingPolicy(process.env, [user.phone, destination]);
   // Notice calls carry the owner's account-level consent on the owner's own leg.
   const call = (await db.query(`INSERT INTO calls(user_id,user_phone,destination,contact_id,record_enabled,request_key,max_duration_sec,status,direction,twilio_call_sid,agent_number,twilio_account_sid,consent_mode,consent_scope,
       parent_consent_at,child_consent_at)

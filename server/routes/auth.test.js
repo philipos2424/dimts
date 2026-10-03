@@ -84,6 +84,19 @@ test('bounds SMS attempts before calling the paid provider again', async () => {
   assert.equal((await request('/api/auth/start', { phone: '+14754053943' })).status, 429);
   assert.equal(sent.length, 5);
 });
+test('refuses sign-in codes outside launch countries and to premium ranges', async () => {
+  for (const phone of ['+2348012345678', '+251911234567', '+18765551234', '+449098790000']) {
+    const result = await request('/api/auth/start', { phone });
+    assert.equal(result.status, 403, phone);
+    assert.equal(result.body.error, 'country_not_supported');
+  }
+  assert.equal(sent.length, 0);
+});
+test('caps codes per country so rotating numbers cannot pump SMS', async () => {
+  counts.set(createHash('sha256').update('send-country:44').digest('hex'), 300);
+  assert.equal((await request('/api/auth/start', { phone: '+447911123456' })).status, 429);
+  assert.equal(sent.length, 0);
+});
 test('rejects malformed phone numbers before sending SMS', async () => {
   assert.equal((await request('/api/auth/start', { phone: '475' })).status, 400);
   assert.equal(sent.length, 0);

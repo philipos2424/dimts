@@ -1,4 +1,4 @@
-import twilio from 'twilio';
+import { twilioBasicAuth, twilioClient } from '../lib/twilio-client.js';
 import { config } from '../config.js';
 
 // Single source of truth lives in lib/phone.js; re-exported so existing
@@ -8,7 +8,7 @@ export { isE164 } from '../lib/phone.js';
 let client;
 function getClient() {
   if (!client) {
-    client = twilio(config.twilioAccountSid, config.twilioAuthToken, { timeout: 15_000, autoRetry: false });
+    client = twilioClient({ timeout: 15_000, autoRetry: false });
   }
   return client;
 }
@@ -54,10 +54,6 @@ export async function fetchRecording(recordingUrl, { channels = 2, range, signal
   if (range && (range.length > 64 || !/^bytes=(?:\d+-\d*|-\d+)$/.test(range))) throw new Error('Invalid audio range');
   url.pathname = `${url.pathname.replace(/\.(mp3|wav)$/, '')}.mp3`;
   url.search = new URLSearchParams({ RequestedChannels: String(channels) }).toString();
-  const auth = Buffer.from(
-    `${config.twilioAccountSid}:${config.twilioAuthToken}`
-  ).toString('base64');
-
-  return fetch(url, { headers: { Authorization: `Basic ${auth}`, ...(range ? { Range: range } : {}) },
+  return fetch(url, { headers: { Authorization: twilioBasicAuth(), ...(range ? { Range: range } : {}) },
     redirect: 'error', signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(30_000)]) : AbortSignal.timeout(30_000) });
 }

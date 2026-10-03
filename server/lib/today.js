@@ -7,6 +7,7 @@ const ONE_VOICE = ['single_channel', 'missing_channel_signal']
 
 /** What the Today card shows about the recording itself. */
 export function captureState(call) {
+  if (call.voicemail && call.status === 'ready') return 'voicemail';
   if (call.status === 'ready') return 'both';
   if (call.status === 'processing') return 'pending';
   if (!call.has_audio) return 'none';

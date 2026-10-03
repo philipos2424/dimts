@@ -96,6 +96,47 @@ test('both acceptances start once; concurrent replay and a wrong child SID canno
   await post(id, '/webhooks/recording-ready', { CallSid: parent, RecordingStatus: 'completed', RecordingSid: recording, RecordingUrl: 'expected' });
   assert.equal((await row(id)).recording_url, 'expected');
 });
+test('inbound all-parties (Gulf): caller agrees, owner is asked on their leg, recording starts once both agree', async () => {
+  const id = await seed('inbound'), before = starts;
+  const accepted = await post(id, '/twiml/accept', { CallSid: parent, Digits: '1' });
+  assert.match(accepted.xml, /<Dial/); assert.match(accepted.xml, /15555550100/);
+  const prompt = await post(id, '/twiml/party-consent', { CallSid: child });
+  assert.match(prompt.xml, /<Gather/); assert.match(prompt.xml, /choice=1/);
+  assert.equal(starts, before, 'nothing records on the caller agreeing alone');
+  await post(id, '/twiml/party-consent', { CallSid: child, Digits: '1' }, true);
+  assert.equal(starts, before + 1);
+  assert.ok(hasRecordingAuthorization(await row(id)));
+});
+test('a missed incoming call the caller agreed to record offers voicemail once, then processes it as one channel', async () => {
+  const id = (await db.query(`INSERT INTO calls(user_id,user_phone,destination,direction,twilio_call_sid,status,record_enabled,
+      consent_mode,child_consent_at,other_party_notice_issued_at)
+    VALUES($1,'+15555550100','+15555550101','inbound',$2,'ringing',true,'notice',now(),now()) RETURNING id`, [user.id, parent])).rows[0].id;
+  const missed = await post(id, '/twiml/dial-done', { CallSid: parent, DialCallStatus: 'no-answer', DialCallDuration: '0' });
+  assert.match(missed.xml, /<Record[^>]*maxLength="120"/);
+  assert.match(missed.xml, /recording-ready\?callId=/);
+  assert.equal((await row(id)).voicemail, true);
+  assert.match((await post(id, '/twiml/dial-done', { CallSid: parent, DialCallStatus: 'no-answer' })).xml, /<Hangup\/>/);
+  assert.doesNotMatch((await post(id, '/twiml/dial-done', { CallSid: parent, DialCallStatus: 'no-answer' })).xml, /<Record/);
+  const before = processed;
+  await post(id, '/webhooks/recording-ready', { CallSid: parent, RecordingStatus: 'completed', RecordingSid: 'RE' + 'f'.repeat(32), RecordingUrl: 'voicemail-url', RecordingDuration: '42' });
+  const saved = await row(id);
+  assert.equal(saved.recording_url, 'voicemail-url'); assert.equal(saved.duration_sec, 42); assert.equal(saved.status, 'processing');
+  await new Promise(resolve => setTimeout(resolve, 20));
+  assert.equal(processed, before + 1);
+});
+
+test('no voicemail for outbound calls, caller hang-ups, or callers who have not agreed to recording', async () => {
+  const outbound = await seed('outbound');
+  assert.doesNotMatch((await post(outbound, '/twiml/dial-done', { CallSid: parent, DialCallStatus: 'no-answer' })).xml, /<Record/);
+  const gulf = await seed('inbound'); // all_parties with nobody's consent yet
+  assert.doesNotMatch((await post(gulf, '/twiml/dial-done', { CallSid: parent, DialCallStatus: 'no-answer' })).xml, /<Record/);
+  const hungUp = (await db.query(`INSERT INTO calls(user_id,user_phone,destination,direction,twilio_call_sid,status,record_enabled,
+      consent_mode,child_consent_at,other_party_notice_issued_at)
+    VALUES($1,'+15555550100','+15555550101','inbound',$2,'ringing',true,'notice',now(),now()) RETURNING id`, [user.id, parent])).rows[0].id;
+  assert.doesNotMatch((await post(hungUp, '/twiml/dial-done', { CallSid: parent, DialCallStatus: 'canceled' })).xml, /<Record/);
+  assert.equal((await row(hungUp)).voicemail, false);
+});
+
 test('known recording refusal connects unrecorded; uncertain startup never retries and accepts a later receipt', async () => {
   for (const known of [true, false]) {
     const id = await seed(); await post(id, '/twiml/accept', { CallSid: parent, Digits: '1' });

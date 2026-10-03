@@ -1,9 +1,9 @@
-import twilio from 'twilio';
+import { twilioClient } from '../lib/twilio-client.js';
 import { config } from '../config.js';
 let client;
 export async function startCallRecording(call) {
   if (!/^CA[a-f0-9]{32}$/i.test(call.twilio_call_sid ?? '')) throw Object.assign(new Error('Invalid parent call'), { status: 400 });
-  client ??= twilio(config.twilioAccountSid, config.twilioAuthToken, { timeout: 5000, autoRetry: false });
+  client ??= twilioClient({ timeout: 5000, autoRetry: false });
   const recording = await client.calls(call.twilio_call_sid).recordings.create({
     recordingChannels: 'dual', recordingTrack: 'both',
     recordingStatusCallback: `${config.publicBaseUrl}/webhooks/recording-ready?callId=${call.id}`,

@@ -77,7 +77,7 @@ export const config = {
    * Skipping signature checks makes every webhook forgeable. Only ever set
    * this for local replay of captured payloads.
    */
-  skipTwilioSignatureCheck: process.env.SKIP_TWILIO_SIGNATURE_CHECK === 'true',
+  get skipTwilioSignatureCheck() { return process.env.SKIP_TWILIO_SIGNATURE_CHECK === 'true'; },
 
   /** Rows stuck before answer longer than this are reaped as failed. */
   staleCallMinutes: 10,

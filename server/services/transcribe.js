@@ -53,7 +53,13 @@ export function sequentialTranscript(transcripts, labels = ['User', 'Caller']) {
  * Multichannel returns `transcripts[]`; single-channel returns the same fields
  * at the top level. Callers should not have to care which one came back.
  */
-export function normalizeScribeResponse(data, { direction = 'outbound' } = {}) {
+export function normalizeScribeResponse(data, { direction = 'outbound', voicemail = false } = {}) {
+  if (voicemail) {
+    const single = Array.isArray(data?.transcripts) ? data.transcripts[0] : data;
+    const text = (single?.text ?? '').trim();
+    return { text: text ? `Caller: ${text}` : '', language: single?.language_code ?? null,
+      languageProbability: single?.language_probability ?? null, raw: data };
+  }
   if (Array.isArray(data?.transcripts) && data.transcripts.length > 0) {
     const primary = data.transcripts[0];
     return {
@@ -113,9 +119,9 @@ export async function transcribe(audioBlob, options = {}) {
     return normalizeScribeResponse(await response.json(), options);
   }
   if (config.transcribeProvider !== 'elevenlabs') throw new Error('Unsupported TRANSCRIBE_PROVIDER');
-  let response = await callScribe(audioBlob, { use_multi_channel: true }, options.signal);
+  let response = await callScribe(audioBlob, options.voicemail ? {} : { use_multi_channel: true }, options.signal);
 
-  if (response.status === 400) {
+  if (response.status === 400 && !options.voicemail) {
     await response.body?.cancel();
     console.warn('[scribe] multichannel rejected (HTTP 400), retrying with diarize');
     response = await callScribe(audioBlob, { diarize: true }, options.signal);

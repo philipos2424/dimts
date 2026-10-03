@@ -23,7 +23,7 @@ export type CallSummary = {
   next_step?: { kind: 'meeting' | 'email' | 'move'; text: string } | null;
 };
 
-export type Capture = 'both' | 'one_voice' | 'no_audio' | 'pending' | 'none' | 'unknown';
+export type Capture = 'both' | 'voicemail' | 'one_voice' | 'no_audio' | 'pending' | 'none' | 'unknown';
 export type Agreement = { kind: string; subject: string; value: string; said_by: 'User' | 'Caller' | null;
   quote: string; line: number; start: number | null };
 export type Conflict = { new_index: number; previous_call_id: string; previous_index: number; note: string };
@@ -245,6 +245,9 @@ function publicErrorMessage(status: number, body: string): string {
     verification_country_disabled: 'Verification messages are not enabled for this country. The operator needs to check Twilio Verify geographic permissions.',
     destination_trial_number_required: 'The other phone must be verified in this Twilio trial account. Add it under Verified Caller IDs, then try again. No call was started.',
     handset_trial_number_required: 'Your answering phone must be verified in the connected Twilio trial account before this call can start.',
+    country_not_supported: 'Dimts is not available for phone numbers in this country yet.',
+    destination_not_supported: 'Dimts cannot call numbers in this country or premium-rate numbers. No call was started.',
+    handset_not_supported: 'Dimts cannot ring your phone number in this country. No call was started.',
     authentication_required: 'Please sign in to continue.',
     session_expired: 'Your session expired. Please sign in again.',
     call_in_progress: 'Finish your current call before starting another.',

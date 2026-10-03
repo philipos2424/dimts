@@ -7,7 +7,7 @@ import { verifyTwilioSignature } from '../lib/twilio-signature.js';
 import { currentMonth } from '../lib/users.js';
 import { finishCall } from '../db/finish-call.js';
 import { processRecording } from '../services/process-recording.js';
-import { askRecordingConsent, dialCall, issueRecordingNotice } from '../lib/recording-consent.js';
+import { askRecordingConsent, dialCall, issueRecordingNotice, offerVoicemail } from '../lib/recording-consent.js';
 import { hasRecordingAuthorization, recordingAuthorizationSql } from '../lib/recording-policy.js';
 import { beginAgreedRecording } from '../db/start-recording.js';
 import { processDeletion } from '../services/process-deletion.js';
@@ -202,6 +202,20 @@ twimlRouter.post('/dial-done', async (req, res) => {
   }
 
   const twiml = new VoiceResponse();
+  // The owner did not pick up and the caller is still on the line. Only callers
+  // whose recording is already authorized (they heard the notice) are offered it.
+  const voicemail = call && call.direction === 'inbound' && ['no-answer', 'busy', 'failed'].includes(DialCallStatus) &&
+    hasRecordingAuthorization(call) && await queryOne(`UPDATE calls SET voicemail=true
+      WHERE id=$1 AND deleted_at IS NULL AND recording_url IS NULL AND NOT voicemail AND ${recordingAuthorizationSql}
+      RETURNING id`, [call.id]);
+  if (voicemail) offerVoicemail(twiml, call);
+  else twiml.hangup();
+  res.type('text/xml').send(twiml.toString());
+});
+
+twimlRouter.post('/voicemail-done', (_req, res) => {
+  const twiml = new VoiceResponse();
+  twiml.say('Thank you. Goodbye.');
   twiml.hangup();
   res.type('text/xml').send(twiml.toString());
 });
@@ -232,12 +246,14 @@ webhooksRouter.post('/recording-ready', async (req, res) => {
       (call.recording_sid && call.recording_sid !== req.body.RecordingSid))) return res.status(204).end();
     const accepted = await queryOne(
       `UPDATE calls SET recording_url = $2, status = 'processing', error=NULL,processing_requested_at=now(),
-        recording_sid=COALESCE(recording_sid,$3),recording_start_status='started'
+        recording_sid=COALESCE(recording_sid,$3),recording_start_status='started',
+        duration_sec=CASE WHEN voicemail THEN COALESCE($4::int, duration_sec) ELSE duration_sec END
        WHERE id = $1 AND recording_url IS NULL AND status <> 'ready'
          AND ${recordingAuthorizationSql}
          AND (recording_sid IS NULL OR recording_sid=$3)
        RETURNING id`,
-      [call.id, RecordingUrl, req.body.RecordingSid ?? null]
+      [call.id, RecordingUrl, req.body.RecordingSid ?? null,
+        /^\d{1,5}$/.test(req.body.RecordingDuration ?? '') ? Number(req.body.RecordingDuration) : null]
     );
     if (accepted) defer(processRecording(call.id), `process:${call.id}`);
   }
