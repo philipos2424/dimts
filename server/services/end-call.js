@@ -1,4 +1,4 @@
-import { twilioClient } from '../lib/twilio-client.js';
+import { isCallSid, providerRest } from '../lib/carrier.js';
 import { config } from '../config.js';
 import { finishCall } from '../db/finish-call.js';
 import { currentMonth } from '../lib/users.js';
@@ -6,9 +6,18 @@ import { currentMonth } from '../lib/users.js';
 const TERMINAL = new Set(['completed', 'failed', 'busy', 'no-answer', 'canceled']);
 const ACTIVE = new Set(['queued', 'ringing', 'in-progress']);
 function clientFor(call) {
-  if (!/^CA[a-f0-9]{32}$/i.test(call.twilio_call_sid ?? '') ||
-      call.twilio_account_sid !== config.twilioAccountSid) throw new Error('Invalid provider call ownership');
-  return twilioClient({ timeout: 5000, autoRetry: false });
+  if (!isCallSid(call.twilio_call_sid) ||
+      call.twilio_account_sid !== config.providerAccountSid) throw new Error('Invalid provider call ownership');
+  return providerRest({ timeout: 5000, autoRetry: false });
+}
+
+// Telnyx cannot list calls by parent, so the dialled leg is the one Dimts
+// recorded when that leg fetched its consent instructions.
+async function dialledLegs(client, call) {
+  if (config.carrier !== 'telnyx') return client.calls.list({ parentCallSid: call.twilio_call_sid, limit: 2 });
+  if (!isCallSid(call.child_call_sid)) return [];
+  const child = await client.calls(call.child_call_sid).fetch();
+  return [{ ...child, parentCallSid: call.twilio_call_sid }];
 }
 
 export async function reconcileCall(call, { stop = false } = {}) {
@@ -27,13 +36,13 @@ export async function reconcileCall(call, { stop = false } = {}) {
     parent = await client.calls(sid).fetch();
   }
   if (!TERMINAL.has(parent.status)) return { ended: false };
-  let children = await client.calls.list({ parentCallSid: sid, limit: 2 });
+  let children = await dialledLegs(client, call);
   if (children.length > 1 || children.some(child => child.parentCallSid !== sid)) throw new Error('Ambiguous provider call legs');
   if (stop) {
     for (const child of children) {
       if (ACTIVE.has(child.status)) await client.calls(child.sid).update({ status: child.status === 'in-progress' ? 'completed' : 'canceled' });
     }
-    children = await client.calls.list({ parentCallSid: sid, limit: 2 });
+    children = await dialledLegs(client, call);
   }
   if (children.length > 1 || children.some(child => child.parentCallSid !== sid)) throw new Error('Ambiguous provider call legs');
   if (children.some(child => !TERMINAL.has(child.status))) return { ended: false };

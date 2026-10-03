@@ -1,19 +1,18 @@
-import { twilioClient } from '../lib/twilio-client.js';
+import { isAccountSid, isCallSid, isRecordingSid, providerRest } from '../lib/carrier.js';
 import { config } from '../config.js';
-import { isTwilioAccount } from '../lib/recording-account.js';
 
 // Only delete a verified recording belonging to this account and parent call.
 // A timeout is uncertain; callers retain the job so a later retry can check
 // absence before attempting deletion again. Never accept provider URLs as input.
 export async function deleteProviderRecording(call) {
-  const account = config.twilioAccountSid;
-  if (!/^AC[a-f0-9]{32}$/i.test(account) || !/^CA[a-f0-9]{32}$/i.test(call.twilio_call_sid ?? '') ||
-      (call.recording_sid && !/^RE[a-f0-9]{32}$/i.test(call.recording_sid))) return { status: 'unknown', error: 'invalid_reference' };
-  if (!isTwilioAccount(call.twilio_account_sid)) return { status: 'unknown', error: 'account_unverified' };
+  const account = config.providerAccountSid;
+  if (!isAccountSid(account) || !isCallSid(call.twilio_call_sid) ||
+      (call.recording_sid && !isRecordingSid(call.recording_sid))) return { status: 'unknown', error: 'invalid_reference' };
+  if (!isAccountSid(call.twilio_account_sid)) return { status: 'unknown', error: 'account_unverified' };
   if (call.twilio_account_sid !== account) return { status: 'unknown', error: 'account_changed' };
   // Capture both current credentials for this operation; a cached client could
   // silently retain the old account or token after configuration changes.
-  const client = twilioClient({ timeout: 10_000, autoRetry: false }, account);
+  const client = providerRest({ timeout: 10_000, autoRetry: false }, account);
   let recording;
   try {
     if (call.recording_sid) {
@@ -26,7 +25,7 @@ export async function deleteProviderRecording(call) {
       recording = recordings[0];
     }
     if (recording.accountSid !== account || recording.callSid !== call.twilio_call_sid ||
-        !/^RE[a-f0-9]{32}$/i.test(recording.sid ?? '') || (call.recording_sid && recording.sid !== call.recording_sid)) {
+        !isRecordingSid(recording.sid) || (call.recording_sid && recording.sid !== call.recording_sid)) {
       return { status: 'unknown', error: 'owner_mismatch' };
     }
     if (recording.status === 'deleted') return { status: 'confirmed' };

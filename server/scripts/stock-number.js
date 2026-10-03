@@ -1,6 +1,7 @@
 // Import an already-owned, already-routed number. Never buys or reroutes one.
 // node --env-file=.env server/scripts/stock-number.js +14754053943
 import { twilioClient } from '../lib/twilio-client.js';
+import { telnyxRequest } from '../lib/telnyx-rest.js';
 import { config } from '../config.js';
 import { isE164 } from '../lib/phone.js';
 import { query, closeDatabase } from '../db/pool.js';
@@ -10,12 +11,22 @@ try {
   if (!isE164(phone)) throw new Error('Usage: stock-number.js <owned-number-e164>');
   const voiceUrl = `${config.publicBaseUrl}/twiml/incoming`;
   if (new URL(voiceUrl).protocol !== 'https:') throw new Error('PUBLIC_BASE_URL requires HTTPS');
-  const client = twilioClient({ timeout: 15_000 });
-  const numbers = await client.incomingPhoneNumbers.list({ phoneNumber: phone, limit: 1 });
-  const number = numbers[0];
-  if (!number || number.phoneNumber !== phone || !number.capabilities?.voice) throw new Error('Number is not voice-capable and owned by this Twilio account');
-  if (number.voiceApplicationSid || number.voiceUrl !== voiceUrl || number.voiceMethod !== 'POST') {
-    throw new Error('Configure this number to POST directly to the current /twiml/incoming URL before stocking it');
+  let number;
+  if (config.carrier === 'telnyx') {
+    // Telnyx routes a number through its TeXML application, whose voice URL is /twiml/incoming.
+    const found = await telnyxRequest('GET', `/phone_numbers?filter[phone_number]=${encodeURIComponent(phone)}`, { timeout: 15_000 });
+    number = (Array.isArray(found) ? found : [])[0];
+    if (!number || number.phoneNumber !== phone) throw new Error('Number is not owned by this Telnyx account');
+    if (number.connectionId !== config.telnyxTexmlAppId) throw new Error('Assign this number to the Dimts TeXML application before stocking it');
+    number = { sid: number.id };
+  } else {
+    const client = twilioClient({ timeout: 15_000 });
+    const numbers = await client.incomingPhoneNumbers.list({ phoneNumber: phone, limit: 1 });
+    number = numbers[0];
+    if (!number || number.phoneNumber !== phone || !number.capabilities?.voice) throw new Error('Number is not voice-capable and owned by this Twilio account');
+    if (number.voiceApplicationSid || number.voiceUrl !== voiceUrl || number.voiceMethod !== 'POST') {
+      throw new Error('Configure this number to POST directly to the current /twiml/incoming URL before stocking it');
+    }
   }
   await query(`INSERT INTO agent_number_pool(phone,provider_sid,voice_url) VALUES($1,$2,$3)
     ON CONFLICT(phone) DO UPDATE SET provider_sid=EXCLUDED.provider_sid,

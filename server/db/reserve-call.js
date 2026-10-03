@@ -1,7 +1,7 @@
 import * as database from './pool.js';
 import { HttpError } from '../lib/users.js';
 import { config } from '../config.js';
-import { isTwilioAccount } from '../lib/recording-account.js';
+import { isAccountSid } from '../lib/carrier.js';
 import { recordingPolicy } from '../lib/recording-policy.js';
 import { hasAcceptedTerms } from '../lib/terms.js';
 
@@ -47,8 +47,8 @@ export async function reserveCallInTransaction(db, user, destination, record, re
   const remaining = Math.min(limit('CALL_MINUTES_PER_MONTH', 120) * 60 - usage.owner_seconds,
     limit('GLOBAL_CALL_MINUTES_PER_MONTH', 300) * 60 - usage.global_seconds, 1800);
   if (remaining < 60) throw new HttpError(429, 'call_minutes_limit', 'Call minute limit reached.');
-  const account = config.twilioAccountSid;
-  if (!isTwilioAccount(account)) throw new Error('Invalid TWILIO_ACCOUNT_SID');
+  const account = config.providerAccountSid;
+  if (!isAccountSid(account)) throw new Error(`Invalid ${config.carrier === 'telnyx' ? 'TELNYX' : 'TWILIO'}_ACCOUNT_SID`);
   const contactId = options.contactId !== undefined ? options.contactId : (await db.query(`INSERT INTO contacts(user_id,phone) VALUES($1,$2)
     ON CONFLICT(user_id,phone) DO UPDATE SET phone=EXCLUDED.phone RETURNING id`, [user.id, destination])).rows[0].id;
   const policy = recordingPolicy(process.env, [user.phone, destination]);

@@ -1,3 +1,5 @@
+import { isAccountSid } from './carrier.js';
+
 export function isTwilioAccount(value) {
   return typeof value === 'string' && /^AC[a-f0-9]{32}$/i.test(value);
 }
@@ -5,7 +7,8 @@ export function isTwilioAccount(value) {
 // Legacy calls may predate account stamping. Extract only from a canonical
 // provider reference before deleting that URL; never assume today's account.
 export function recordingAccount(call) {
-  if (call.twilio_account_sid != null && !isTwilioAccount(call.twilio_account_sid)) return null;
+  // Telnyx calls are always stamped with their account when reserved.
+  if (call.twilio_account_sid != null && !isTwilioAccount(call.twilio_account_sid)) return isAccountSid(call.twilio_account_sid) ? call.twilio_account_sid : null;
   let fromUrl;
   try {
     const url = new URL(call.recording_url);

@@ -17,6 +17,30 @@ function requireEnv(name) {
 }
 
 export const config = {
+  /** Voice and verification provider: 'twilio' (default) or 'telnyx'. */
+  get carrier() {
+    return process.env.CARRIER === 'telnyx' ? 'telnyx' : 'twilio';
+  },
+  /** The account that owns calls and recordings at the active carrier. */
+  get providerAccountSid() {
+    return this.carrier === 'telnyx' ? requireEnv('TELNYX_ACCOUNT_SID') : requireEnv('TWILIO_ACCOUNT_SID');
+  },
+  /** The carrier number Dimts calls from; null when unset (comparisons only). */
+  get carrierNumber() {
+    return process.env[this.carrier === 'telnyx' ? 'TELNYX_NUMBER' : 'TWILIO_NUMBER'] || null;
+  },
+  get telnyxApiKey() {
+    return requireEnv('TELNYX_API_KEY');
+  },
+  get telnyxTexmlAppId() {
+    return requireEnv('TELNYX_TEXML_APP_ID');
+  },
+  get telnyxVerifyProfileId() {
+    return requireEnv('TELNYX_VERIFY_PROFILE_ID');
+  },
+  get telnyxPublicKey() {
+    return requireEnv('TELNYX_PUBLIC_KEY');
+  },
   get twilioAccountSid() {
     return requireEnv('TWILIO_ACCOUNT_SID');
   },
@@ -24,7 +48,7 @@ export const config = {
     return requireEnv('TWILIO_AUTH_TOKEN');
   },
   get twilioNumber() {
-    return requireEnv('TWILIO_NUMBER');
+    return requireEnv(this.carrier === 'telnyx' ? 'TELNYX_NUMBER' : 'TWILIO_NUMBER');
   },
   get twilioVerifyServiceSid() {
     return requireEnv('TWILIO_VERIFY_SERVICE_SID');

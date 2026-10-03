@@ -47,7 +47,7 @@ export async function removeArchivedFromProvider(callId) {
 }
 
 async function retryUpload(call) {
-  const response = await fetchRecording(call.recording_url, { channels: recordingChannels(call) });
+  const response = await fetchRecording(call.recording_url, { channels: recordingChannels(call), recordingSid: call.recording_sid });
   if (!response.ok) return 'upload_failed';
   return archiveAudio(call, new Uint8Array(await response.arrayBuffer()));
 }
@@ -63,7 +63,7 @@ export async function scheduleArchiveRetries(userId) {
     AND (provider_archive_attempted_at IS NULL OR provider_archive_attempted_at < now()-interval '1 minute')
     ORDER BY created_at LIMIT 3`, [userId]);
   for (const { id } of removals) defer(removeArchivedFromProvider(id), `archive-remove:${id}`);
-  const { rows: uploads } = await query(`SELECT id,user_id,recording_url,voicemail FROM calls WHERE user_id=$1 AND deleted_at IS NULL
+  const { rows: uploads } = await query(`SELECT id,user_id,recording_url,recording_sid,voicemail FROM calls WHERE user_id=$1 AND deleted_at IS NULL
     AND audio_object_key IS NULL AND recording_url IS NOT NULL AND provider_archive_status='upload_failed'
     AND status IN ('ready','failed') ORDER BY created_at LIMIT 1`, [userId]);
   for (const call of uploads) defer(retryUpload(call), `archive-retry:${call.id}`);

@@ -59,7 +59,7 @@ callsRouter.post('/', async (req, res, next) => {
     const requestKey = req.get('Idempotency-Key');
     if (!requestKey || !/^[a-zA-Z0-9_-]{8,120}$/.test(requestKey)) throw new HttpError(400, 'request_key_required', 'A valid Idempotency-Key is required.');
     if (typeof record !== 'boolean') throw new HttpError(400, 'invalid_recording_option');
-    if ([user.phone, user.agent_number, process.env.TWILIO_NUMBER].includes(destination)) {
+    if ([user.phone, user.agent_number, config.carrierNumber].includes(destination)) {
       throw new HttpError(400, 'call_loop', 'Choose a different destination from your own handset and Twilio number.');
     }
 
@@ -244,7 +244,7 @@ callsRouter.get('/:id/audio', async (req, res, next) => {
   try {
     const user = await resolveUser(req);
     const call = await queryOne(
-      'SELECT id, recording_url, audio_object_key, voicemail FROM calls WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL',
+      'SELECT id, recording_url, recording_sid, audio_object_key, voicemail FROM calls WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL',
       [req.params.id, user.id]
     );
 
@@ -257,7 +257,7 @@ callsRouter.get('/:id/audio', async (req, res, next) => {
     // Archived audio lives in EU storage; older calls still stream from Twilio.
     const upstream = call.audio_object_key
       ? await getAudio(call.audio_object_key, { range })
-      : await fetchRecording(call.recording_url, { range, channels: recordingChannels(call) });
+      : await fetchRecording(call.recording_url, { range, channels: recordingChannels(call), recordingSid: call.recording_sid });
     const recent = await queryOne(`SELECT 1 AS seen FROM audit_events WHERE user_id=$1 AND action='audio_played'
       AND target_id=$2 AND created_at > now()-interval '1 hour' LIMIT 1`, [user.id, call.id]);
     if (!recent) await audit({ userId: user.id, action: 'audio_played', targetType: 'call', targetId: call.id, req });

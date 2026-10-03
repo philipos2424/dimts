@@ -24,12 +24,12 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
  * Twilio occasionally 404s the media for a second or two after the
  * recording-ready webhook fires, before the file is durably stored.
  */
-async function downloadRecording(recordingUrl, signal, channels) {
+async function downloadRecording(recordingUrl, signal, channels, recordingSid) {
   let lastStatus;
 
   for (let attempt = 1; attempt <= DOWNLOAD_ATTEMPTS; attempt += 1) {
     signal.throwIfAborted();
-    const response = await fetchRecording(recordingUrl, { signal, channels });
+    const response = await fetchRecording(recordingUrl, { signal, channels, recordingSid });
     if (response.ok) return response.blob();
 
     lastStatus = response.status;
@@ -51,7 +51,7 @@ async function loadAudio(call, signal) {
     if (!response.ok) throw new Error(`Could not read archived recording (HTTP ${response.status})`);
     return response.blob();
   }
-  const downloaded = await downloadRecording(call.recording_url, signal, recordingChannels(call));
+  const downloaded = await downloadRecording(call.recording_url, signal, recordingChannels(call), call.recording_sid);
   const bytes = new Uint8Array(await downloaded.arrayBuffer());
   await archiveAudio(call, bytes);
   return new Blob([bytes], { type: 'audio/mpeg' });
@@ -107,7 +107,7 @@ export async function processRecording(callId, { force = false, signal: callerSi
          AND (processing_until IS NULL OR processing_until < now())
        RETURNING *
      )
-     SELECT c.id, c.user_id, c.recording_url, c.audio_object_key, c.contact_id, c.direction,c.voicemail,c.transcript,c.transcript_data,
+     SELECT c.id, c.user_id, c.recording_url, c.recording_sid, c.audio_object_key, c.contact_id, c.direction,c.voicemail,c.transcript,c.transcript_data,
             c.transcript_recording_url,c.language,c.language_probability,c.duration_sec,
             (SELECT u.language FROM users u WHERE u.id = c.user_id) AS owner_language,
             k.display_name  AS contact_display_name,

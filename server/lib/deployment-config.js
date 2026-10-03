@@ -18,10 +18,17 @@ export function validateDeployment(env = process.env) {
   const origin = url('PUBLIC_BASE_URL',['https:']);
   if (origin.pathname !== '/' || origin.search || /^(localhost|127\.|0\.|\[::1\])/i.test(origin.hostname)) throw new Error('Invalid PUBLIC_BASE_URL');
   if (env.SKIP_TWILIO_SIGNATURE_CHECK === 'true') throw new Error('Production requires Twilio signature checks');
-  match('TWILIO_ACCOUNT_SID',/^AC[a-f0-9]{32}$/i);
-  match('TWILIO_AUTH_TOKEN',/^[a-f0-9]{32}$/i);
-  match('TWILIO_VERIFY_SERVICE_SID',/^VA[a-f0-9]{32}$/i);
-  if (!isE164(required('TWILIO_NUMBER'))) throw new Error('Invalid TWILIO_NUMBER');
+  if (env.CARRIER === 'telnyx') {
+    match('TELNYX_ACCOUNT_SID',/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+    required('TELNYX_API_KEY'); required('TELNYX_TEXML_APP_ID'); required('TELNYX_VERIFY_PROFILE_ID');
+    if (Buffer.from(required('TELNYX_PUBLIC_KEY'), 'base64').length !== 32) throw new Error('Invalid TELNYX_PUBLIC_KEY');
+    if (!isE164(required('TELNYX_NUMBER'))) throw new Error('Invalid TELNYX_NUMBER');
+  } else {
+    match('TWILIO_ACCOUNT_SID',/^AC[a-f0-9]{32}$/i);
+    match('TWILIO_AUTH_TOKEN',/^[a-f0-9]{32}$/i);
+    match('TWILIO_VERIFY_SERVICE_SID',/^VA[a-f0-9]{32}$/i);
+    if (!isE164(required('TWILIO_NUMBER'))) throw new Error('Invalid TWILIO_NUMBER');
+  }
   const llm = env.LLM_PROVIDER || 'ollama';
   if (llm === 'ollama') {
     const ollama = url('OLLAMA_BASE_URL',['http:','https:']);
