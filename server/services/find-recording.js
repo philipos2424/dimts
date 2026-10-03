@@ -1,4 +1,4 @@
-import twilio from 'twilio';
+import { twilioClient } from '../lib/twilio-client.js';
 import { config } from '../config.js';
 let client;
 
@@ -8,7 +8,7 @@ export async function findCompletedRecording(call) {
   const account = config.twilioAccountSid;
   if (!/^AC[a-f0-9]{32}$/i.test(account) || !/^CA[a-f0-9]{32}$/i.test(call.twilio_call_sid ?? '') ||
     (call.recording_sid && !/^RE[a-f0-9]{32}$/i.test(call.recording_sid))) throw new Error('Invalid recording reference');
-  client ??= twilio(account, config.twilioAuthToken, { timeout: 10_000, autoRetry: false });
+  client ??= twilioClient({ timeout: 10_000, autoRetry: false }, account);
   let recordings;
   if (call.recording_sid) {
     try { recordings = [await client.recordings(call.recording_sid).fetch()]; }

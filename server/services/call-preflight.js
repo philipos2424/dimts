@@ -1,4 +1,4 @@
-import twilio from 'twilio';
+import { twilioClient } from '../lib/twilio-client.js';
 import { config } from '../config.js';
 import { HttpError } from '../lib/users.js';
 
@@ -7,7 +7,7 @@ import { HttpError } from '../lib/users.js';
 export async function checkCallDestination(userPhone, destination) {
   let account, verified;
   try {
-    const client = twilio(config.twilioAccountSid, config.twilioAuthToken, { timeout: 5000, autoRetry: false });
+    const client = twilioClient({ timeout: 5000, autoRetry: false });
     account = await client.api.v2010.accounts(config.twilioAccountSid).fetch();
     if (account.status !== 'active' || !['Trial', 'Full'].includes(account.type)) {
       throw new Error('Provider account not ready');

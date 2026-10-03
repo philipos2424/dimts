@@ -1,4 +1,4 @@
-import twilio from 'twilio';
+import { twilioClient } from '../lib/twilio-client.js';
 import { config } from '../config.js';
 import { isTwilioAccount } from '../lib/recording-account.js';
 
@@ -13,7 +13,7 @@ export async function deleteProviderRecording(call) {
   if (call.twilio_account_sid !== account) return { status: 'unknown', error: 'account_changed' };
   // Capture both current credentials for this operation; a cached client could
   // silently retain the old account or token after configuration changes.
-  const client = twilio(account, config.twilioAuthToken, { timeout: 10_000, autoRetry: false });
+  const client = twilioClient({ timeout: 10_000, autoRetry: false }, account);
   let recording;
   try {
     if (call.recording_sid) {

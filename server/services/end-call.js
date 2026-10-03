@@ -1,4 +1,4 @@
-import twilio from 'twilio';
+import { twilioClient } from '../lib/twilio-client.js';
 import { config } from '../config.js';
 import { finishCall } from '../db/finish-call.js';
 import { currentMonth } from '../lib/users.js';
@@ -8,7 +8,7 @@ const ACTIVE = new Set(['queued', 'ringing', 'in-progress']);
 function clientFor(call) {
   if (!/^CA[a-f0-9]{32}$/i.test(call.twilio_call_sid ?? '') ||
       call.twilio_account_sid !== config.twilioAccountSid) throw new Error('Invalid provider call ownership');
-  return twilio(config.twilioAccountSid, config.twilioAuthToken, { timeout: 5000, autoRetry: false });
+  return twilioClient({ timeout: 5000, autoRetry: false });
 }
 
 export async function reconcileCall(call, { stop = false } = {}) {

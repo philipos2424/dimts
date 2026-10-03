@@ -30,7 +30,9 @@ Fill in `.env`, which Git ignores. Never put credentials in `EXPO_PUBLIC_`
 variables; those are embedded in the client bundle.
 
 - `TWILIO_ACCOUNT_SID`: your AC account identifier.
-- `TWILIO_AUTH_TOKEN`: account token for API access and webhook validation.
+- `TWILIO_AUTH_TOKEN`: account token for webhook validation (and API access if no key is set).
+- `TWILIO_API_KEY_SID`, `TWILIO_API_KEY_SECRET`: recommended Standard API key for API
+  access. It can be revoked alone; rotating the auth token breaks everything at once.
 - `TWILIO_NUMBER`: a voice-enabled Twilio number, separate from your handset.
 - `TWILIO_VERIFY_SERVICE_SID`: a Twilio Verify service for SMS signup/sign-in.
 - `DATABASE_MODE=local`: persistent embedded PostgreSQL in ignored `.data/`.
