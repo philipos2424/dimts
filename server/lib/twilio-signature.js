@@ -31,10 +31,12 @@ export function isValidTwilioRequest(req) {
  * paid API calls, so they are not safe to leave open.
  */
 export function verifyTwilioSignature(req, res, next) {
-  if (config.skipTwilioSignatureCheck) {
+  // Vercel production never runs validateDeployment, so the refusal lives here too.
+  if (config.skipTwilioSignatureCheck && process.env.VERCEL_ENV !== 'production') {
     console.warn('[twilio] signature check disabled');
     return next();
   }
+  if (config.skipTwilioSignatureCheck) console.error('[twilio] SKIP_TWILIO_SIGNATURE_CHECK ignored in production');
 
   if (!isValidTwilioRequest(req)) {
     console.warn('[twilio] rejected unsigned request', req.originalUrl);
