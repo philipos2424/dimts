@@ -13,7 +13,9 @@ Use only the call excerpts given. Each call starts with a label like C1 and
 each transcript line has its number in brackets. Answer in one to three short
 sentences in the language of the question. Every fact must be cited.
 Return JSON: {"answer": "...", "citations": [{"call": "C1", "line": 12}]}.
-If the excerpts do not contain the answer, return {"answer": "", "citations": []}.`;
+If the excerpts do not contain the answer, return {"answer": "", "citations": []}.
+Earlier turns, when given, only explain what a follow-up question refers to;
+they are not evidence. Cite the excerpts.`;
 
 async function retrieve(userId, question) {
   const picked = new Map();
@@ -42,11 +44,16 @@ function excerpt(call, question) {
   return { lines, sent: [...chosen].sort((a, b) => a - b) };
 }
 
-export async function answerQuestion(userId, question) {
-  const calls = await retrieve(userId, question);
+export async function answerQuestion(userId, question, history = []) {
+  // A follow-up ("and the delivery date?") is searched together with the
+  // question it follows, so the same calls come back.
+  const searchText = [history.at(-1)?.question, question].filter(Boolean).join(' ');
+  const calls = await retrieve(userId, searchText);
   if (!calls.length) return { answer: null, grounded: false, citations: [] };
-  const sections = calls.map((call, i) => ({ label: `C${i + 1}`, call, ...excerpt(call, question) }));
-  const input = [`Question: ${question}`, '', ...sections.flatMap(s => [
+  const sections = calls.map((call, i) => ({ label: `C${i + 1}`, call, ...excerpt(call, searchText) }));
+  const earlier = history.flatMap(t => [`Q: ${t.question}`, `A: ${t.answer}`]);
+  const input = [...(earlier.length ? ['Earlier in this conversation:', ...earlier, ''] : []),
+    `Question: ${question}`, '', ...sections.flatMap(s => [
     `${s.label} | ${s.call.contact_name ?? 'Unknown caller'} | ${new Date(s.call.created_at).toISOString().slice(0, 10)} | ${s.call.direction}`,
     ...s.sent.map(i => `[${i + 1}] ${s.lines[i]}`), '',
   ])].join('\n');

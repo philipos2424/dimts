@@ -26,7 +26,7 @@
       "handle": "filesystem"
     },
     {
-      "src": "/(?:onboarding|first-call|settings|dialer|ask|in-call|privacy|terms|privacy-request|terms-accept)",
+      "src": "/(?:onboarding|first-call|settings|dialer|ask|calls|in-call|privacy|terms|privacy-request|terms-accept)",
       "dest": "/index.html"
     },
     {

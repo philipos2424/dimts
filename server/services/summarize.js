@@ -8,7 +8,11 @@ The transcript is speaker-labelled: "User:" is the person you work for,
 
 Return JSON:
 {
-  summary: 3-6 sentences covering what was discussed and agreed,
+  summary: 2-5 short, plain sentences written the way you would tell the
+           User about the call afterwards ("Abebe agreed to 450 birr a bag
+           and will pay the 1,200 balance by Friday."). Start with money and
+           commitments: amounts, prices, who owes whom, deadlines. Then the
+           rest of what was discussed,
   next_moves: 2-4 short imperative suggestions for what the User should do
               next, ordered by importance,
   action_items: [{task, owner}] - things someone explicitly committed to,
