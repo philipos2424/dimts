@@ -5,9 +5,10 @@ import { useApp } from '../src/AppContext';
 import { PrimaryButton } from '../src/components/PrimaryButton';
 import { Txt } from '../src/components/Txt';
 import { RECORDING_NOTICE } from '../src/legal';
-import { color, radius, space } from '../src/theme';
+import { radius, space, useTheme } from '../src/theme';
 
 export default function TermsAccept() {
+  const { c } = useTheme();
   const { acceptTerms } = useApp();
   const [busy, setBusy] = useState(false), [error, setError] = useState('');
 
@@ -22,7 +23,7 @@ export default function TermsAccept() {
     <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: space.xl, gap: space.lg }}>
       <Txt size="screen" weight="bold" accessibilityRole="header">Before your first call</Txt>
       <Txt tone="muted">Dimts records your calls so its AI can tell you what was agreed and draft the next step. Every recorded call starts with a short notice to the other person:</Txt>
-      <View style={{ backgroundColor: color.surface, borderRadius: radius.md, padding: space.md }}>
+      <View style={{ backgroundColor: c.card, borderRadius: radius.md, padding: space.md }}>
         <Txt weight="bold">“{RECORDING_NOTICE}”</Txt>
       </View>
       <Txt tone="muted">Your calls are stored in Europe and kept until you delete them. You can download or delete everything at any time in Settings.</Txt>

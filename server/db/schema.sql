@@ -257,3 +257,18 @@ CREATE TABLE IF NOT EXISTS privacy_request_targets (
   resolved_at TIMESTAMPTZ,
   PRIMARY KEY (request_id, user_id)
 );
+
+-- Release 2: verified agreements, contradictions, recaps and the owner's language.
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS agreements JSONB;
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS conflicts JSONB;
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS recap TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS language TEXT NOT NULL DEFAULT 'en' CHECK (language IN ('en','am'));
+CREATE TABLE IF NOT EXISTS promise_states (
+  call_id UUID NOT NULL REFERENCES calls(id) ON DELETE CASCADE,
+  item_index INT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('open','done','dismissed')),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (call_id, item_index)
+);
+CREATE INDEX IF NOT EXISTS calls_search_idx ON calls
+  USING gin (to_tsvector('simple', coalesce(summary,'') || ' ' || coalesce(transcript,'')));

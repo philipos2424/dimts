@@ -1,9 +1,15 @@
-import { useLocalSearchParams, useNavigation } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useApp } from '../../src/AppContext';
 import { ApiError, captureSessionGuard, type CallDetail, getCall, reprocessCall, recoverCallRecording } from '../../src/api';
-import { ActionList } from '../../src/components/ActionList';
+import { AgreementList } from '../../src/components/AgreementList';
+import { Button } from '../../src/components/Button';
+import { CallPromises } from '../../src/components/CallPromises';
+import { Card } from '../../src/components/Card';
+import { ConflictList } from '../../src/components/ConflictList';
+import { CapturePill } from '../../src/components/Pill';
+import { RecapButton } from '../../src/components/RecapButton';
 import { Banner } from '../../src/components/Banner';
 import { audioClock, CallPlayer, type SeekRequest } from '../../src/components/CallPlayer';
 import { FollowupReview } from '../../src/components/FollowupReview';
@@ -11,15 +17,18 @@ import { Section } from '../../src/components/Section';
 import { Txt } from '../../src/components/Txt';
 import { EndCall } from '../../src/components/EndCall';
 import { type Key, statusKey } from '../../src/i18n';
-import { color, space } from '../../src/theme';
+import { space, useTheme } from '../../src/theme';
 import { exportCall } from '../../src/exportCall';
 import { DeleteCallControl, DeletionStatus } from '../../src/components/CallDeletion';
 
 export default function CallDetailScreen() {
+  const { c } = useTheme();
   const { t } = useApp();
   const { userPhone } = useApp();
-  const navigation = useNavigation();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, t: startAt, focus } = useLocalSearchParams<{ id: string; t?: string; focus?: string }>();
+  const router = useRouter();
+  const focused = useRef(false);
+  const [showTranscript, setShowTranscript] = useState(false);
 
   const [call, setCall] = useState<CallDetail | null>(null);
   const [callOwner, setCallOwner] = useState<string | null>(null);
@@ -84,10 +93,15 @@ export default function CallDetailScreen() {
     return () => { loadSequence.current++; };
   }, [load]);
 
+
+  // Opened from Ask or a conflict: jump to the cited second once audio exists.
+  const seeded = useRef(false);
   useEffect(() => {
-    const title = call?.contact_name ?? call?.destination;
-    if (title) navigation.setOptions({ title });
-  }, [call?.contact_name, call?.destination, navigation]);
+    const seconds = Number(startAt);
+    if (seeded.current || !call?.audio_url || !Number.isFinite(seconds) || seconds < 0) return;
+    seeded.current = true;
+    setSeekRequest({ callId: call.id, sequence: 1, seconds });
+  }, [call?.audio_url, call?.id, startAt]);
 
   // Keep polling while the pipeline is still running.
   useEffect(() => {
@@ -110,31 +124,37 @@ export default function CallDetailScreen() {
     <DeletionStatus record={call} refresh={load} />
   </ScrollView>;
 
+  const contactName = call.contact_name ?? 'Them';
+  const play = (seconds: number) => {
+    setSeekRequest(previous => ({ callId: call.id, sequence: (previous?.sequence ?? 0) + 1, seconds }));
+    scroll.current?.scrollTo({ y: 0, animated: true });
+  };
+  const agreements = call.agreements ?? [];
+  const conflicts = call.conflicts ?? [];
+
   return (
-    <ScrollView ref={scroll} contentContainerStyle={{ padding: space.md, gap: space.lg }}>
+    <ScrollView ref={scroll} style={{ backgroundColor: c.bg }}
+      contentContainerStyle={{ padding: space.md, gap: space.lg, width: '100%', maxWidth: 720, alignSelf: 'center' }}>
       {['initiating', 'ringing', 'in-progress'].includes(call.status) && <EndCall id={call.id} onEnded={() => { void load(); }} />}
       {errorKey && <Banner message={t(errorKey)} onDismiss={() => setErrorKey(null)} />}
 
-      <Txt size="caption" tone="muted" selectable>Call ID: {call.id}</Txt>
-      {call.audio_url && <CallPlayer callId={call.id} seekRequest={seekRequest} />}
       <View style={{ gap: space.sm }}>
-        <Txt tone="muted" size="caption">Keep your own copy of this call.</Txt>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.lg }}>
-          <Pressable accessibilityRole="button" disabled={!!exporting} onPress={() => saveCopy('notes')} style={{ minHeight: 44, justifyContent: 'center' }}>
-            <Txt tone="accent">{exporting === 'notes' ? 'Preparing notes…' : 'Export call notes'}</Txt>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: space.sm }}>
+          <Pressable accessibilityRole="link" disabled={!call.contact_id} onPress={() => call.contact_id && router.push(`/person/${call.contact_id}`)} style={{ flexShrink: 1 }}>
+            <Txt size="screen" serif>{call.contact_name ?? call.destination}</Txt>
+            {call.company ? <Txt tone="muted">{call.company}</Txt> : null}
           </Pressable>
-          {call.audio_url && <Pressable accessibilityRole="button" disabled={!!exporting} onPress={() => saveCopy('audio')} style={{ minHeight: 44, justifyContent: 'center' }}>
-            <Txt tone="accent">{exporting === 'audio' ? 'Preparing recording…' : 'Export recording'}</Txt>
-          </Pressable>}
+          <CapturePill capture={call.capture ?? 'none'} />
         </View>
-        {exportError ? <Txt tone="muted" accessibilityRole="alert">{exportError}</Txt> : null}
+        <Txt size="caption" tone="muted">
+          {call.direction === 'inbound' ? t('incoming') : t('outgoing')} · {new Date(call.created_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
+        </Txt>
+        {call.audio_url && <CallPlayer callId={call.id} seekRequest={seekRequest} />}
       </View>
 
       {notReady && (
-        <View style={{ gap: space.sm }}>
-          <Txt size="subhead" weight="bold">
-            {t(statusKey(call.status))}
-          </Txt>
+        <Card>
+          <Txt size="subhead" weight="bold">{t(statusKey(call.status))}</Txt>
           <Txt tone="muted">
             {call.status === 'failed' ? call.error ?? t('errorGeneric') :
               call.status === 'completed' ? 'Recording was off for this call.' :
@@ -143,93 +163,100 @@ export default function CallDetailScreen() {
           </Txt>
           {call.status === 'failed' && !call.audio_url && call.duration_sec != null && (
             <View style={{ gap: space.sm }}>
-              <Pressable accessibilityRole="button" onPress={load} style={{ paddingVertical: space.sm }}>
-                <Txt tone="accent" weight="bold">Check for delayed recording</Txt>
-              </Pressable>
-              {call.recording_authorized && <Pressable
-                accessibilityRole="button" disabled={checkingRecording} onPress={checkRecording} style={{ minHeight: 44, justifyContent: 'center' }}>
-                <Txt tone="accent">{checkingRecording ? 'Checking recording provider…' : 'Recover recording from provider'}</Txt>
-              </Pressable>}
+              <Button compact variant="quiet" label="Check for delayed recording" onPress={() => { void load(); }} />
+              {call.recording_authorized && <Button compact variant="quiet" busy={checkingRecording}
+                label="Recover recording from provider" onPress={checkRecording} />}
               {recoveryMessage ? <Txt tone="muted" accessibilityRole="alert">{recoveryMessage}</Txt> : null}
             </View>
           )}
           {call.status === 'failed' && call.recording_url && (
-            <Pressable
-              accessibilityRole="button"
-              disabled={retryingProcessing}
-              onPress={retryProcessing}
-              style={{ paddingVertical: space.sm }}
-            >
-              <Txt tone="accent" weight="bold">
-                {retryingProcessing ? 'Restarting processing…' : t('retry')}
-              </Txt>
-            </Pressable>
+            <Button compact label={t('retry')} busy={retryingProcessing} onPress={retryProcessing} />
           )}
           {retryError ? <Txt tone="muted" accessibilityRole="alert">{retryError}</Txt> : null}
+        </Card>
+      )}
+
+      {agreements.length > 0 && (
+        <Section title="What was agreed">
+          <AgreementList agreements={agreements} onPlay={play} contactName={contactName} />
+        </Section>
+      )}
+
+      {conflicts.length > 0 && (
+        <Section title="Differs from before">
+          <ConflictList conflicts={conflicts} onPlay={play} />
+        </Section>
+      )}
+
+      {call.status === 'ready' && call.transcript && (
+        <View onLayout={event => { if (focus === 'next' && !focused.current) { focused.current = true; scroll.current?.scrollTo({ y: event.nativeEvent.layout.y, animated: true }); } }}
+          style={{ gap: space.md }}>
+          <Section title="Next steps">
+            {call.next_moves && call.next_moves.length > 0 && (
+              <View style={{ gap: space.xs }}>
+                {call.next_moves.map((move, i) => (
+                  <View key={i} style={{ flexDirection: 'row', gap: space.sm }}>
+                    <Txt tone="brand">→</Txt>
+                    <Txt style={{ flex: 1 }}>{move}</Txt>
+                  </View>
+                ))}
+              </View>
+            )}
+            <FollowupReview key={call.id} callId={call.id} initial={call.followups} />
+            <RecapButton callId={call.id} />
+          </Section>
         </View>
+      )}
+
+      {call.action_items && call.action_items.length > 0 && (
+        <Section title="Promises">
+          <CallPromises callId={call.id} items={call.action_items} contactName={contactName} />
+        </Section>
       )}
 
       {call.summary && (
         <Section title={t('summary')}>
-          <Txt style={{ lineHeight: 26 }}>{call.summary}</Txt>
+          <Txt style={{ lineHeight: 24 }}>{call.summary}</Txt>
+          {call.key_points && call.key_points.length > 0 && call.key_points.map((point, i) => (
+            <View key={i} style={{ flexDirection: 'row', gap: space.sm }}>
+              <Txt tone="faint">—</Txt>
+              <Txt style={{ flex: 1 }}>{point}</Txt>
+            </View>
+          ))}
         </Section>
       )}
-
-      {call.next_moves && call.next_moves.length > 0 && (
-        <Section title={t('nextMoves')}>
-          <View style={{ gap: space.xs }}>
-            {call.next_moves.map((move, i) => (
-              <View key={i} style={{ flexDirection: 'row', gap: space.sm }}>
-                <Txt tone="accent">→</Txt>
-                <Txt style={{ flex: 1 }}>{move}</Txt>
-              </View>
-            ))}
-          </View>
-        </Section>
-      )}
-
-      {call.action_items && call.action_items.length > 0 && (
-        <Section title={t('actionItems')}>
-          <ActionList items={call.action_items} />
-        </Section>
-      )}
-
-      {call.key_points && call.key_points.length > 0 && (
-        <Section title={t('keyPoints')}>
-          <View style={{ gap: space.xs }}>
-            {call.key_points.map((point, i) => (
-              <View key={i} style={{ flexDirection: 'row', gap: space.sm }}>
-                <Txt tone="faint">—</Txt>
-                <Txt style={{ flex: 1 }}>{point}</Txt>
-              </View>
-            ))}
-          </View>
-        </Section>
-      )}
-
-      {call.status === 'ready' && call.transcript && <FollowupReview key={call.id} callId={call.id} initial={call.followups} />}
 
       {call.transcript && (
         <Section title={t('transcript')}>
-          {call.transcript_turns?.length ? <View style={{ gap: space.sm }}>
-            <Txt tone="muted" size="caption">Times are approximate and start at the beginning of the recording. Choose a time, then press Play to check what was said.</Txt>
+          <Pressable accessibilityRole="button" accessibilityState={{ expanded: showTranscript }} onPress={() => setShowTranscript(!showTranscript)}>
+            <Txt tone="brand">{showTranscript ? 'Hide transcript' : 'Show transcript'}</Txt>
+          </Pressable>
+          {showTranscript && (call.transcript_turns?.length ? <View style={{ gap: space.sm }}>
+            <Txt tone="muted" size="caption">Times are approximate and start at the beginning of the recording.</Txt>
             {call.transcript_turns.map((turn, index) => <View key={index} style={{ gap: space.xs }}>
               <Pressable accessibilityRole="button" accessibilityLabel={`Go to ${audioClock(turn.start)}, ${turn.speaker}`}
-                disabled={!call.audio_url} style={{ minHeight: 44, justifyContent: 'center' }}
-                onPress={() => {
-                  setSeekRequest(previous => ({ callId: call.id, sequence: (previous?.sequence ?? 0) + 1, seconds: turn.start }));
-                  scroll.current?.scrollTo({ y: 0, animated: true });
-                }}>
-                <Txt tone="accent">{audioClock(turn.start)} · {turn.speaker}</Txt>
+                disabled={!call.audio_url} style={{ minHeight: 44, justifyContent: 'center' }} onPress={() => play(turn.start)}>
+                <Txt tone="brand">{audioClock(turn.start)} · {turn.speaker === 'User' ? 'You' : turn.speaker === 'Caller' ? contactName : turn.speaker}</Txt>
               </Pressable>
-              <Txt selectable style={{ lineHeight: 26 }}>{turn.text}</Txt>
+              <Txt selectable style={{ lineHeight: 24 }}>{turn.text}</Txt>
             </View>)}
-          </View> : <Txt tone="muted" style={{ lineHeight: 26, color: color.parchment }}>
-            {call.transcript}
-          </Txt>}
+          </View> : <Txt tone="muted" selectable style={{ lineHeight: 24 }}>{call.transcript}</Txt>)}
         </Section>
       )}
-      {!['initiating','ringing','in-progress'].includes(call.status) && <DeleteCallControl callId={call.id} onDeleted={load} />}
+
+      <View style={{ gap: space.sm, borderTopWidth: 1, borderTopColor: c.line, paddingTop: space.md }}>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.lg }}>
+          <Pressable accessibilityRole="button" disabled={!!exporting} onPress={() => saveCopy('notes')} style={{ minHeight: 44, justifyContent: 'center' }}>
+            <Txt tone="brand">{exporting === 'notes' ? 'Preparing notes…' : 'Export notes'}</Txt>
+          </Pressable>
+          {call.audio_url && <Pressable accessibilityRole="button" disabled={!!exporting} onPress={() => saveCopy('audio')} style={{ minHeight: 44, justifyContent: 'center' }}>
+            <Txt tone="brand">{exporting === 'audio' ? 'Preparing recording…' : 'Export recording'}</Txt>
+          </Pressable>}
+        </View>
+        {exportError ? <Txt tone="muted" accessibilityRole="alert">{exportError}</Txt> : null}
+        {!['initiating','ringing','in-progress'].includes(call.status) && <DeleteCallControl callId={call.id} onDeleted={load} />}
+        <Txt size="caption" tone="faint" selectable>Call ID: {call.id}</Txt>
+      </View>
     </ScrollView>
   );
 }

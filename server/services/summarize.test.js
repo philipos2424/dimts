@@ -84,3 +84,17 @@ test('drops blank next_moves entries', () => {
   );
   assert.deepEqual(result.next_moves, ['Send pricing']);
 });
+
+test('agreements come back as an array, empty when the model omits them', () => {
+  assert.deepEqual(parseSummary(JSON.stringify({ summary: 'Short call.' })).agreements, []);
+  const raw = [{ kind: 'price', subject: 'unit price', value: '450 birr', said_by: 'Caller', source_lines: [3] }];
+  assert.deepEqual(parseSummary(JSON.stringify({ summary: 'Priced.', agreements: raw })).agreements, raw);
+});
+
+test('the summary prompt asks for the user\'s language and keeps spoken values as spoken', async () => {
+  const { summaryPrompt } = await import('./summarize.js');
+  assert.match(summaryPrompt('am'), /in Amharic/);
+  assert.match(summaryPrompt('en'), /in English/);
+  assert.match(summaryPrompt('am'), /exactly as spoken/);
+  assert.match(summaryPrompt('fr'), /in English/, 'unknown languages fall back to English');
+});

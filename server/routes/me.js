@@ -31,6 +31,7 @@ meRouter.get('/', async (req, res, next) => {
       tier: user.tier,
       agent_number: user.agent_number ?? null,
       terms_required: !hasAcceptedTerms(user),
+      language: user.language ?? 'en',
     });
   } catch (err) { next(err); }
 });
@@ -72,5 +73,15 @@ meRouter.delete('/', async (req, res, next) => {
     const result = await deleteAccount(user.id);
     await audit({ userId: user.id, action: 'account_deleted', req });
     res.status(202).json(result);
+  } catch (err) { next(err); }
+});
+
+meRouter.patch('/', async (req, res, next) => {
+  try {
+    const user = await resolveUser(req);
+    const { language } = req.body ?? {};
+    if (!['en', 'am'].includes(language)) throw new HttpError(400, 'invalid_language');
+    await query('UPDATE users SET language=$2 WHERE id=$1', [user.id, language]);
+    res.json({ language });
   } catch (err) { next(err); }
 });

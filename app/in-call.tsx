@@ -7,11 +7,12 @@ import { getCall } from '../src/api';
 import { Txt } from '../src/components/Txt';
 import { EndCall } from '../src/components/EndCall';
 import { statusKey } from '../src/i18n';
-import { color, radius, space } from '../src/theme';
+import { radius, space, useTheme } from '../src/theme';
 
 const SETTLED = new Set(['processing', 'ready', 'failed', 'missed', 'completed']);
 
 export default function InCall() {
+  const { c } = useTheme();
   const { t } = useApp();
   const { userPhone } = useApp();
   const router = useRouter();
@@ -84,10 +85,10 @@ export default function InCall() {
 
   return (
     <ScrollView
-      style={{ flex: 1, backgroundColor: color.ink }}
+      style={{ flex: 1, backgroundColor: c.bg }}
       contentContainerStyle={{
         flexGrow: 1,
-        backgroundColor: color.ink,
+        backgroundColor: c.bg,
         alignItems: 'center',
         justifyContent: 'center',
         padding: space.xl,
@@ -118,7 +119,7 @@ export default function InCall() {
               width: 10,
               height: 10,
               borderRadius: radius.pill,
-              backgroundColor: color.madder,
+              backgroundColor: c.danger,
               opacity: pulse,
             }}
           />

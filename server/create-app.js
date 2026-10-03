@@ -13,6 +13,9 @@ import { callDeletionRouter, deletionsRouter } from './routes/call-deletion.js';
 import { notificationsRouter } from './routes/notifications.js';
 import { callsRouter, usageRouter } from './routes/calls.js';
 import { meRouter } from './routes/me.js';
+import { promisesRouter } from './routes/promises.js';
+import { recapRouter } from './routes/recap.js';
+import { askRouter } from './routes/ask.js';
 import { myPrivacyRequestsRouter, privacyRequestsRouter } from './routes/privacy-requests.js';
 import { inboundRouter } from './routes/inbound.js';
 import { twimlRouter, webhooksRouter } from './routes/webhooks.js';
@@ -50,7 +53,10 @@ export function createApp({ webRoot = fileURLToPath(new URL('../dist/', import.m
   app.use('/api/calls', calendarActionsRouter);
   app.use('/api/calls', emailActionsRouter);
   app.use('/api/calls', followupsRouter);
+  app.use('/api/calls', recapRouter);
   app.use('/api/usage', usageRouter);
+  app.use('/api/promises', promisesRouter);
+  app.use('/api/ask', askRouter);
   app.use('/api/me/privacy-requests', myPrivacyRequestsRouter);
   app.use('/api/me', meRouter);
   app.use('/api/privacy-requests', privacyRequestsRouter);
@@ -63,7 +69,7 @@ export function createApp({ webRoot = fileURLToPath(new URL('../dist/', import.m
       setHeaders: (res, file) => { if (file.endsWith('.html')) res.set('Content-Security-Policy', WEB_SHELL_CSP); } }));
     // Expo's single-page export needs the app shell on browser refresh/deep
     // links. Whitelist app routes so missing APIs/webhooks/assets stay errors.
-    app.get(['/', '/onboarding', '/settings', '/first-call', '/dialer', '/contacts', '/notes', '/in-call', '/call/:id',
+    app.get(['/', '/onboarding', '/settings', '/first-call', '/dialer', '/ask', '/in-call', '/call/:id', '/person/:id',
       '/privacy', '/terms', '/privacy-request', '/terms-accept'],
       (req,res,next) => {
         if (!req.accepts('html') || (req.params.id && !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(req.params.id))) return next();

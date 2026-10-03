@@ -6,7 +6,7 @@ import { exportAllData } from '../exportData';
 import { PrimaryButton } from './PrimaryButton';
 import { Section } from './Section';
 import { Txt } from './Txt';
-import { color, font, radius, space, type } from '../theme';
+import { font, radius, space, type, useTheme } from '../theme';
 
 const ACTION_LABELS: Record<string, string> = {
   signed_in: 'Signed in', signed_out: 'Signed out', terms_accepted: 'Accepted the terms', audio_played: 'Played a recording',
@@ -15,6 +15,7 @@ const ACTION_LABELS: Record<string, string> = {
 };
 
 export function DataControls() {
+  const { c } = useTheme();
   const { signedOut } = useApp();
   const [activity, setActivity] = useState<ActivityEvent[] | null>(null);
   const [requests, setRequests] = useState<PrivacyRequest[]>([]);
@@ -50,7 +51,7 @@ export function DataControls() {
   return (
     <Section title="Your data">
       {requests.length > 0 && (
-        <View accessibilityRole="alert" style={{ backgroundColor: color.raised, borderRadius: radius.md, padding: space.md, gap: space.xs }}>
+        <View accessibilityRole="alert" style={{ backgroundColor: c.raised, borderRadius: radius.md, padding: space.md, gap: space.xs }}>
           <Txt weight="bold">{requests.length === 1 ? 'Someone asked' : `${requests.length} people asked`} for their call data to be deleted</Txt>
           <Txt tone="muted">Open their contact and choose Delete. Due by {new Date(requests[0].due_at).toLocaleDateString()}.</Txt>
         </View>
@@ -72,13 +73,13 @@ export function DataControls() {
 
       {!confirming ? (
         <Pressable accessibilityRole="button" onPress={() => setConfirming(true)} style={{ minHeight: 44, justifyContent: 'center' }}>
-          <Txt style={{ color: color.madder }}>Delete my account</Txt>
+          <Txt style={{ color: c.danger }}>Delete my account</Txt>
         </Pressable>
       ) : (
         <View style={{ gap: space.sm }}>
           <Txt>This permanently deletes every call, recording, note and contact, and releases your business number. Type DELETE to confirm.</Txt>
           <TextInput value={typed} onChangeText={setTyped} autoCapitalize="characters" accessibilityLabel="Type DELETE to confirm"
-            style={{ fontFamily: font.regular, fontSize: type.body, color: color.parchment, backgroundColor: color.surface,
+            style={{ fontFamily: font.regular, fontSize: type.body, color: c.ink, backgroundColor: c.card,
               borderRadius: radius.md, paddingHorizontal: space.md, paddingVertical: space.sm }} />
           <PrimaryButton label="Delete everything" danger onPress={removeAccount} busy={deleting} disabled={typed !== 'DELETE'} />
           <Pressable accessibilityRole="button" onPress={() => { setConfirming(false); setTyped(''); }} style={{ minHeight: 44, justifyContent: 'center' }}>

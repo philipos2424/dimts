@@ -13,7 +13,15 @@ Return JSON:
               next, ordered by importance,
   action_items: [{task, owner}] - things someone explicitly committed to,
   key_points: [strings] - facts worth remembering, such as figures, names,
-              dates and constraints
+              dates and constraints,
+  agreements: [{kind, subject, value, said_by, source_lines}] - specific
+              facts both people settled on or one person stated as a
+              commitment: prices, quantities, dates, times, amounts and
+              deliverables. kind is one of price, quantity, date, time,
+              amount, deliverable, other. subject says what the value is
+              about; value is the figure or date as spoken. said_by is
+              "User" or "Caller". source_lines are the 1-based numbers of
+              the transcript lines where it was said. At most 12.
 }
 
 Never invent facts. Keep names, companies and numbers exactly as transcribed.
@@ -26,6 +34,17 @@ Do not add AM or PM, a timezone, a date, a recipient address or a duration
 when the speakers did not specify them. Preserve ambiguous times as ambiguous.
 If the call was too short or unclear to summarize, say so in summary and
 return empty arrays.`;
+
+const LANGUAGES = { en: 'English', am: 'Amharic' };
+
+/** The owner reads notes in their own language, whatever language was spoken. */
+export function summaryPrompt(language) {
+  const name = LANGUAGES[language] ?? LANGUAGES.en;
+  return `${SYSTEM_PROMPT}
+Write summary, next_moves, key_points, action_items.task and agreements.subject in ${name}.
+Keep agreements.value, names and numbers exactly as spoken.
+The transcript lines are numbered like "[3] Caller: ..."; source_lines refer to those numbers.`;
+}
 
 /**
  * Coerce the model's JSON into the shape the database and app expect.
@@ -52,6 +71,7 @@ export function parseSummary(content) {
   const actionItems = Array.isArray(data.action_items) ? data.action_items : [];
 
   return {
+    agreements: Array.isArray(data.agreements) ? data.agreements : [],
     summary: data.summary.trim(),
     next_moves: (Array.isArray(data.next_moves) ? data.next_moves : [])
       .map((move) => (typeof move === 'string' ? move.trim() : ''))
@@ -74,11 +94,14 @@ export function preserveTimeAmbiguity(summary, transcript) {
   const clean = value => value.replace(/\b(\d{1,2}(?::\d{2})?)\s*[ap]\.?m\.?\b/gi, '$1 (AM/PM not specified)');
   return { ...summary, summary: clean(summary.summary),
     next_moves: summary.next_moves.map(clean), key_points: summary.key_points.map(clean),
-    action_items: summary.action_items.map(item => ({ ...item, task: clean(item.task) })) };
+    action_items: summary.action_items.map(item => ({ ...item, task: clean(item.task) })),
+    agreements: (summary.agreements ?? []).map(item => (item && typeof item === 'object' && typeof item.value === 'string'
+      ? { ...item, value: clean(item.value) } : item)) };
 }
 
-export async function summarize(transcript, options = {}) {
-  const result = parseSummary(await completeJson(SYSTEM_PROMPT, transcript, {
+export async function summarize(transcript, { language, ...options } = {}) {
+  const numbered = transcript.split('\n').map((line, i) => `[${i + 1}] ${line}`).join('\n');
+  const result = parseSummary(await completeJson(summaryPrompt(language), numbered, {
     type: 'object', additionalProperties: false,
     properties: {
       summary: { type: 'string' },
@@ -87,7 +110,11 @@ export async function summarize(transcript, options = {}) {
         properties: { task: { type: 'string' }, owner: { type: ['string', 'null'], enum: ['User', 'Caller', null] } },
         required: ['task', 'owner'], additionalProperties: false } },
       key_points: { type: 'array', items: { type: 'string' } },
-    }, required: ['summary', 'next_moves', 'action_items', 'key_points'],
+      agreements: { type: 'array', items: { type: 'object', additionalProperties: false,
+        properties: { kind: { type: 'string' }, subject: { type: 'string' }, value: { type: 'string' },
+          said_by: { type: ['string', 'null'] }, source_lines: { type: 'array', items: { type: 'integer' } } },
+        required: ['kind', 'subject', 'value', 'said_by', 'source_lines'] } },
+    }, required: ['summary', 'next_moves', 'action_items', 'key_points', 'agreements'],
   }, options));
   return preserveTimeAmbiguity(result, transcript);
 }

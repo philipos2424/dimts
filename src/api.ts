@@ -16,13 +16,50 @@ export type CallSummary = {
   duration_sec: number | null;
   summary: string | null;
   created_at: string;
+  contact_id?: string | null;
+  capture?: Capture;
+  agreements?: Agreement[];
+  conflict_count?: number;
+  next_step?: { kind: 'meeting' | 'email' | 'move'; text: string } | null;
 };
+
+export type Capture = 'both' | 'one_voice' | 'no_audio' | 'pending' | 'none' | 'unknown';
+export type Agreement = { kind: string; subject: string; value: string; said_by: 'User' | 'Caller' | null;
+  quote: string; line: number; start: number | null };
+export type Conflict = { new_index: number; previous_call_id: string; previous_index: number; note: string };
+export type PromiseItem = { call_id: string; index: number; task: string; contact_id: string | null;
+  contact_name: string | null; phone: string; created_at: string };
+export type Promises = { you_owe: PromiseItem[]; waiting_on: PromiseItem[] };
+export type Citation = { call_id: string; contact_name: string | null; created_at: string; line: number; quote: string; start: number | null };
+export type AskAnswer = { answer: string | null; grounded: boolean; citations: Citation[] };
+export type Person = {
+  contact: { id: string; phone: string; display_name: string | null; company: string | null; notes: string | null; name_source: string };
+  calls: { id: string; created_at: string; direction: string; status: string; duration_sec: number | null; summary: string | null; agreements: Agreement[] | null }[];
+  promises: Promises;
+};
+export function getPromises() { return request<Promises>('/api/promises', ''); }
+export function setPromise(callId: string, index: number, status: 'open' | 'done' | 'dismissed') {
+  return request<{ status: string }>(`/api/promises/${encodeURIComponent(callId)}/${index}`, '', { method: 'POST', body: JSON.stringify({ status }) });
+}
+export function getRecap(callId: string, refresh = false) {
+  return request<{ text: string }>(`/api/calls/${encodeURIComponent(callId)}/recap${refresh ? '?refresh=1' : ''}`, '', { method: 'POST' });
+}
+export function askQuestion(question: string) {
+  return request<AskAnswer>('/api/ask', '', { method: 'POST', body: JSON.stringify({ question }) });
+}
+export function getPerson(id: string) { return request<Person>(`/api/contacts/${encodeURIComponent(id)}`, ''); }
+export function renameContact(id: string, display_name: string, company: string, notes: string) {
+  return request(`/api/contacts/${encodeURIComponent(id)}`, '', { method: 'PATCH', body: JSON.stringify({ display_name, company, notes }) });
+}
+export function patchLanguage(language: 'en' | 'am') {
+  return request<{ language: string }>('/api/me', '', { method: 'PATCH', body: JSON.stringify({ language }) });
+}
 
 export type ActionItem = { task: string; owner: string | null };
 export type ContactContext = {
   contact: { id: string; phone: string; display_name: string | null; company: string | null; notes: string | null } | null;
   previous_calls: { id: string; created_at: string; direction: string; summary: string;
-    key_points: string[] | null; action_items: ActionItem[] | null; next_moves: string[] | null }[];
+    key_points: string[] | null; action_items: ActionItem[] | null; next_moves: string[] | null; agreements?: Agreement[] | null }[];
 };
 export function getCallContext(id: string) {
   return request<ContactContext>(`/api/calls/${id}/context`, '');
@@ -107,7 +144,10 @@ export type CallDetail = CallSummary & {
   key_points: string[] | null;
   error: string | null;
   followups: Followups | null;
+  conflicts?: ResolvedConflict[];
+  capture?: Capture;
 };
+export type ResolvedConflict = { note: string; now: Agreement; before: Agreement & { call_id: string; created_at: string } };
 
 export type Usage = { month: string; tier: string; minutes_used: number };
 
@@ -140,7 +180,7 @@ export function verifyLoginCode(phone: string, code: string) {
   });
 }
 export function getMe() {
-  return request<{ phone: string; tier: string; agent_number: string | null; terms_required: boolean }>('/api/me', '');
+  return request<{ phone: string; tier: string; agent_number: string | null; terms_required: boolean; language: 'en' | 'am' }>('/api/me', '');
 }
 export function acceptTerms(version: string) {
   return request<{ accepted_at: string }>('/api/me/terms', '', { method: 'POST', body: JSON.stringify({ version }) });
@@ -220,6 +260,10 @@ function publicErrorMessage(status: number, body: string): string {
     call_not_finished: 'Wait until the call has finished, then try again.',
     external_action_unresolved: 'Check the pending calendar or Gmail action first, then try again.',
     too_many_requests: 'Too many requests. Please wait a moment and try again.',
+    recap_failed: 'Couldn’t write a recap. Try again.',
+    call_not_ready: 'The notes for this call are not ready yet.',
+    invalid_question: 'Ask a question between 3 and 500 characters.',
+    promise_not_found: 'This promise is no longer available. Refresh and try again.',
   };
   if (typeof code === 'string' && Object.prototype.hasOwnProperty.call(messages, code)) return messages[code];
   if (status === 401) return 'Please sign in again to continue.';

@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, View } from 'react-native';
 import { useApp } from '../AppContext';
 import { audioUrlFor, authHeaders } from '../api';
-import { color, radius, space } from '../theme';
+import { radius, space, useTheme } from '../theme';
 import { Txt } from './Txt';
 
 export function audioClock(seconds: number): string {
@@ -13,9 +13,10 @@ export function audioClock(seconds: number): string {
 
 export type SeekRequest = { callId: string; sequence: number; seconds: number };
 export function CallPlayer({ callId, seekRequest }: { callId: string; seekRequest?: SeekRequest | null }) {
+  const { c } = useTheme();
   const { userPhone } = useApp();
   const [attempt, setAttempt] = useState(0);
-  return <View style={{ padding: space.md, gap: space.sm, backgroundColor: color.surface, borderRadius: radius.md }}>
+  return <View style={{ padding: space.md, gap: space.sm, backgroundColor: c.card, borderRadius: radius.md }}>
     <PlayerAttempt key={`${callId}:${userPhone}:${attempt}`} callId={callId} seekRequest={seekRequest?.callId === callId ? seekRequest : null} retry={() => setAttempt(n => n + 1)} />
   </View>;
 }
@@ -64,6 +65,7 @@ function PlayerAttempt({ callId, retry, seekRequest }: { callId: string; retry: 
 }
 
 function Playback({ source, retry, seekRequest }: { source: AudioSource; retry: () => void; seekRequest?: SeekRequest | null }) {
+  const { c } = useTheme();
   const { t } = useApp();
   // Native streams with bearer headers and byte-range support. Web uses a
   // private blob URL released on unmount, never a shared authenticated cache.
@@ -124,8 +126,8 @@ function Playback({ source, retry, seekRequest }: { source: AudioSource; retry: 
     </View>
     <View accessibilityRole="progressbar" accessibilityLabel="Playback position"
       accessibilityValue={{ min: 0, max: 100, now: Math.round(progress * 100) }}
-      style={{ height: 4, backgroundColor: color.line, borderRadius: radius.pill, overflow: 'hidden' }}>
-      <View style={{ width: `${progress * 100}%`, height: '100%', backgroundColor: color.saffron }} />
+      style={{ height: 4, backgroundColor: c.line, borderRadius: radius.pill, overflow: 'hidden' }}>
+      <View style={{ width: `${progress * 100}%`, height: '100%', backgroundColor: c.brand }} />
     </View>
     <Txt size="caption" tone="muted">{!loaded ? 'Loading recording…' :
       status.isBuffering ? 'Buffering…' : `${audioClock(status.currentTime)} / ${audioClock(status.duration)}`}</Txt>

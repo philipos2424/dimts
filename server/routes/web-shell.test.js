@@ -15,7 +15,7 @@ test.after(async()=>{
   await rm(root,{recursive:true,force:true});
 });
 test('known browser routes and UUID call deep links serve the app shell on refresh',async()=>{
-  for(const route of ['/onboarding','/settings','/first-call','/dialer','/contacts','/notes','/in-call',
+  for(const route of ['/onboarding','/settings','/first-call','/dialer','/ask','/in-call','/person/01234567-89ab-cdef-0123-456789abcdef',
     '/call/01234567-89ab-cdef-0123-456789abcdef']) {
     const response=await fetch(base+route,{headers:{Accept:'text/html'}});
     assert.equal(response.status,200,route);assert.match(await response.text(),/Dimts app shell/);
@@ -24,7 +24,7 @@ test('known browser routes and UUID call deep links serve the app shell on refre
   const asset=await fetch(base+'/asset.js');assert.equal(asset.status,200);assert.match(await asset.text(),/public asset/);
 });
 test('missing APIs, assets and malformed call paths never become successful HTML responses',async()=>{
-  for(const route of ['/api/unknown','/missing.js','/call/not-a-uuid','/unrecognized-screen']) {
+  for(const route of ['/api/unknown','/missing.js','/call/not-a-uuid','/person/not-a-uuid','/notes','/unrecognized-screen']) {
     const response=await fetch(base+route,{headers:{Accept:'text/html'}});
     assert.equal(response.status,404,route);assert.match(response.headers.get('content-type'),/application\/json/);
     assert.deepEqual(await response.json(),{error:'not_found'});

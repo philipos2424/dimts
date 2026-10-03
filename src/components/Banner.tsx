@@ -1,6 +1,6 @@
 import { Pressable, View } from 'react-native';
 import { useApp } from '../AppContext';
-import { color, radius, space } from '../theme';
+import { radius, space, useTheme } from '../theme';
 import { Txt } from './Txt';
 
 /**
@@ -15,6 +15,7 @@ export function Banner({
   message: string;
   onDismiss: () => void;
 }) {
+  const { c } = useTheme();
   const { t } = useApp();
 
   return (
@@ -27,9 +28,9 @@ export function Banner({
         margin: space.md,
         padding: space.md,
         borderRadius: radius.md,
-        backgroundColor: color.raised,
+        backgroundColor: c.raised,
         borderLeftWidth: 3,
-        borderLeftColor: color.madder,
+        borderLeftColor: c.danger,
       }}
     >
       <Txt style={{ flex: 1 }}>{message}</Txt>

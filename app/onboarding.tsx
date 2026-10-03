@@ -3,9 +3,10 @@ import { KeyboardAvoidingView, Platform, Pressable, TextInput, View } from 'reac
 import { useApp } from '../src/AppContext';
 import { sendLoginCode, verifyLoginCode } from '../src/api';
 import { Txt } from '../src/components/Txt';
-import { color, font, radius, space, type } from '../src/theme';
+import { font, radius, space, type, useTheme } from '../src/theme';
 
 export default function Onboarding() {
+  const { c } = useTheme();
   const { t, signIn } = useApp();
   const [value, setValue] = useState('+1');
   const [code, setCode] = useState('');
@@ -27,7 +28,7 @@ export default function Onboarding() {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={{ flex: 1, backgroundColor: color.ink }}
+      style={{ flex: 1, backgroundColor: c.bg }}
     >
       <View style={{ flex: 1, justifyContent: 'center', padding: space.xl, gap: space.lg }}>
         <View style={{ gap: space.sm }}>
@@ -53,16 +54,16 @@ export default function Onboarding() {
           autoFocus
           editable={!sent && !busy}
           placeholder={t('phonePlaceholder')}
-          placeholderTextColor={color.faint}
+          placeholderTextColor={c.faint}
           accessibilityLabel={t('onboardingTitle')}
           style={{
             fontFamily: font.regular,
             fontSize: type.title,
-            color: color.parchment,
-            backgroundColor: color.surface,
+            color: c.ink,
+            backgroundColor: c.card,
             borderRadius: radius.md,
             borderWidth: 1,
-            borderColor: touched && !valid ? color.madder : color.line,
+            borderColor: touched && !valid ? c.danger : c.line,
             paddingHorizontal: space.md,
             paddingVertical: space.md,
           }}
@@ -71,8 +72,8 @@ export default function Onboarding() {
         {touched && !valid && <Txt size="caption" tone="muted">{t('invalidPhone')}</Txt>}
         {sent && <TextInput value={code} onChangeText={setCode} keyboardType="number-pad"
           textContentType="oneTimeCode" autoComplete="sms-otp" placeholder="Verification code"
-          placeholderTextColor={color.faint} accessibilityLabel="Verification code"
-          style={{ color: color.parchment, padding: space.md, backgroundColor: color.surface }} />}
+          placeholderTextColor={c.faint} accessibilityLabel="Verification code"
+          style={{ color: c.ink, padding: space.md, backgroundColor: c.card }} />}
         {error ? <Txt tone="muted">{error}</Txt> : null}
 
         <Pressable
@@ -84,13 +85,13 @@ export default function Onboarding() {
             alignItems: 'center',
             paddingVertical: space.md,
             borderRadius: radius.md,
-            backgroundColor: valid ? color.saffron : color.line,
+            backgroundColor: valid ? c.brand : c.line,
           }}
         >
           <Txt
             size="subhead"
             weight="bold"
-            style={{ color: valid ? color.ink : color.faint }}
+            style={{ color: valid ? c.bg : c.faint }}
           >
             {busy ? 'Please wait…' : sent ? 'Verify and continue' : 'Send verification code'}
           </Txt>

@@ -1,54 +1,68 @@
+import { useColorScheme } from 'react-native';
+
 /**
- * Palette drawn from Ge'ez manuscript illumination — ink, parchment, saffron,
- * and a deep madder red — rather than the Ethiopian flag tricolour, which
- * reads as a sticker rather than an identity.
- *
- * The UI is dark because of when it gets used: the diaspora calls home across
- * a 7-10 hour gap, which puts a lot of these calls late at night.
+ * Highland: forest green and coffee-gold on warm white, with a deep
+ * forest-black night mode. Every screen reads colours through useTheme() so
+ * light and dark stay in step.
  */
-export const color = {
-  ink: '#131A2B',
-  surface: '#1C2437',
-  raised: '#263047',
-  line: '#333E58',
-
-  parchment: '#F2EAD9',
-  muted: '#8B93A7',
-  faint: '#5C6684',
-
-  saffron: '#E8A33D',
-  madder: '#B03A2E',
-  verdigris: '#1F8A5B',
+const light = {
+  bg: '#fbfaf6',
+  card: '#ffffff',
+  raised: '#f1f3ec',
+  line: '#e3e6dc',
+  ink: '#13261d',
+  muted: '#5b6b62',
+  faint: '#8a978f',
+  brand: '#13392a',
+  onBrand: '#fbfaf6',
+  gold: '#c8922e',
+  ok: '#2f7a4f',
+  warn: '#b4690e',
+  danger: '#b3261e',
 } as const;
 
-/** Status is encoded by the colour of each row's leading edge. */
-export const statusColor: Record<string, string> = {
-  initiating: color.faint,
-  ringing: color.saffron,
-  'in-progress': color.verdigris,
-  missed: color.madder,
-  processing: color.saffron,
-  ready: color.verdigris,
-  failed: color.madder,
+const dark: Tokens = {
+  bg: '#0f1a15',
+  card: '#16241d',
+  raised: '#1d2e25',
+  line: '#24372d',
+  ink: '#eef2ec',
+  muted: '#9fb0a6',
+  faint: '#6f8277',
+  brand: '#7fc4a0',
+  onBrand: '#0f1a15',
+  gold: '#d9a648',
+  ok: '#7ee0a8',
+  warn: '#f0b45a',
+  danger: '#f2867f',
 };
 
-export const space = {
-  xs: 4,
-  sm: 8,
-  md: 16,
-  lg: 24,
-  xl: 36,
-  xxl: 56,
-} as const;
+export type Tokens = { [K in keyof typeof light]: string };
+export type Tone = 'ink' | 'muted' | 'faint' | 'brand' | 'gold' | 'ok' | 'warn' | 'danger' | 'onBrand';
 
-/**
- * One family across both scripts. Noto Sans Ethiopic carries Latin glyphs, so
- * Amharic and English share a single voice instead of Amharic being bolted on
- * to a Latin-first face.
- */
+export function useTheme() {
+  const dark_ = useColorScheme() === 'dark';
+  const c = dark_ ? dark : light;
+  return { c, dark: dark_, status: statusColors(c) };
+}
+
+/** Status is encoded by the colour of each row's leading edge. */
+function statusColors(c: Tokens): Record<string, string> {
+  return {
+    initiating: c.faint, ringing: c.gold, 'in-progress': c.ok, missed: c.danger,
+    processing: c.gold, ready: c.ok, failed: c.danger,
+  };
+}
+
+export const space = { xs: 4, sm: 8, md: 16, lg: 24, xl: 36, xxl: 56 } as const;
+
 export const font = {
-  regular: 'NotoSansEthiopic',
-  bold: 'NotoSansEthiopic-Bold',
+  regular: 'Inter_400Regular',
+  medium: 'Inter_500Medium',
+  bold: 'Inter_600SemiBold',
+  serif: 'Fraunces_600SemiBold',
+  ethiopic: 'NotoSansEthiopic',
+  ethiopicBold: 'NotoSansEthiopic-Bold',
 } as const;
 
 export const type = {
@@ -61,4 +75,4 @@ export const type = {
   keypad: 30,
 } as const;
 
-export const radius = { sm: 6, md: 12, pill: 999 } as const;
+export const radius = { sm: 6, md: 12, lg: 18, pill: 999 } as const;

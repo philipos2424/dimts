@@ -10,6 +10,9 @@ import { recordingQualityError } from '../lib/recording-quality.js';
 import { getAudio } from './audio-store.js';
 import { archiveAudio, removeArchivedFromProvider } from './archive-audio.js';
 import { defer } from '../lib/defer.js';
+import { resolveAgreements } from '../lib/agreements.js';
+import { transcriptTurns } from '../lib/transcript-turns.js';
+import { checkConsistency } from './consistency.js';
 
 const DOWNLOAD_ATTEMPTS = 3;
 const DOWNLOAD_BACKOFF_MS = 2000;
@@ -104,7 +107,8 @@ export async function processRecording(callId, { force = false, signal: callerSi
        RETURNING *
      )
      SELECT c.id, c.user_id, c.recording_url, c.audio_object_key, c.contact_id, c.direction,c.transcript,c.transcript_data,
-            c.transcript_recording_url,c.language,c.language_probability,
+            c.transcript_recording_url,c.language,c.language_probability,c.duration_sec,
+            (SELECT u.language FROM users u WHERE u.id = c.user_id) AS owner_language,
             k.display_name  AS contact_display_name,
             k.name_source   AS contact_name_source,
             k.name_confidence AS contact_name_confidence
@@ -147,7 +151,11 @@ export async function processRecording(callId, { force = false, signal: callerSi
     }
 
     await renew();
-    const summary = await summarize(result.text, { signal });
+    const summary = await summarize(result.text, { signal, language: call.owner_language });
+    const agreements = resolveAgreements(summary.agreements, result.text, transcriptTurns({
+      transcript: result.text, transcript_data: result.raw, recording_url: call.recording_url,
+      transcript_recording_url: call.recording_url, direction: call.direction, duration_sec: call.duration_sec,
+    }));
 
     const saved = await query(
       `UPDATE calls
@@ -162,6 +170,7 @@ export async function processRecording(callId, { force = false, signal: callerSi
               language_probability = $9,
               processing_token = NULL,
               processing_until = NULL,
+              agreements = $11,
               status = 'ready'
         WHERE id = $1 AND processing_token = $10 RETURNING id`,
       [
@@ -175,12 +184,14 @@ export async function processRecording(callId, { force = false, signal: callerSi
         result.language,
         result.languageProbability,
         lease,
+        JSON.stringify(agreements),
       ]
     );
     // Only the worker that committed the notes may spend on identification or
     // update a contact. A stale worker cannot apply its old result.
     if (saved.rows.length) {
       await nameContact(call, result.text, signal);
+      await checkConsistency(callId, { signal });
       // Notes are safe and the audio is in EU storage: Twilio's copy can go.
       defer(removeArchivedFromProvider(callId), `archive-remove:${callId}`);
     }

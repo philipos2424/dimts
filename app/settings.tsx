@@ -11,7 +11,7 @@ import { NotificationSettings } from '../src/components/NotificationSettings';
 import { FirstCallLink } from '../src/components/FirstCallLink';
 import { DataControls } from '../src/components/DataControls';
 import type { Lang } from '../src/i18n';
-import { color, radius, space } from '../src/theme';
+import { radius, space, useTheme } from '../src/theme';
 
 const LANGUAGES: { code: Lang; label: string }[] = [
   { code: 'en', label: 'English' },
@@ -19,6 +19,7 @@ const LANGUAGES: { code: Lang; label: string }[] = [
 ];
 
 export default function Settings() {
+  const { c } = useTheme();
   const { t, lang, setLang, autoRecord, setAutoRecord, userPhone, setUserPhone } =
     useApp();
   const [usage, setUsage] = useState<Usage | null>(null);
@@ -51,12 +52,12 @@ export default function Settings() {
                   alignItems: 'center',
                   paddingVertical: space.md,
                   borderRadius: radius.md,
-                  backgroundColor: active ? color.saffron : color.surface,
+                  backgroundColor: active ? c.brand : c.card,
                 }}
               >
                 <Txt
                   weight={active ? 'bold' : 'regular'}
-                  style={{ color: active ? color.ink : color.parchment }}
+                  style={{ color: active ? c.bg : c.ink }}
                 >
                   {label}
                 </Txt>
@@ -81,8 +82,8 @@ export default function Settings() {
           <Switch
             value={autoRecord}
             onValueChange={setAutoRecord}
-            trackColor={{ false: color.line, true: color.verdigris }}
-            thumbColor={color.parchment}
+            trackColor={{ false: c.line, true: c.ok }}
+            thumbColor={c.ink}
           />
         </View>
       </Section>
