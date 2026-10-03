@@ -16,6 +16,7 @@ import { meRouter } from './routes/me.js';
 import { promisesRouter } from './routes/promises.js';
 import { recapRouter } from './routes/recap.js';
 import { askRouter } from './routes/ask.js';
+import { briefingRouter, cronRouter } from './routes/briefing.js';
 import { myPrivacyRequestsRouter, privacyRequestsRouter } from './routes/privacy-requests.js';
 import { inboundRouter } from './routes/inbound.js';
 import { twimlRouter, webhooksRouter } from './routes/webhooks.js';
@@ -59,6 +60,8 @@ export function createApp({ webRoot = fileURLToPath(new URL('../dist/', import.m
   app.use('/api/usage', usageRouter);
   app.use('/api/promises', promisesRouter);
   app.use('/api/ask', askRouter);
+  app.use('/api/briefing', briefingRouter);
+  app.use('/api/cron', cronRouter);
   app.use('/api/me/privacy-requests', myPrivacyRequestsRouter);
   app.use('/api/me', meRouter);
   app.use('/api/privacy-requests', privacyRequestsRouter);

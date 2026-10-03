@@ -2,12 +2,13 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { FlatList, RefreshControl, View } from 'react-native';
 import { useApp } from '../../src/AppContext';
-import { getPromises, type Promises } from '../../src/api';
+import { getBriefing, getPromises, type Briefing, type Promises } from '../../src/api';
 import { Banner } from '../../src/components/Banner';
 import { BusinessNumber } from '../../src/components/BusinessNumber';
 import { Button } from '../../src/components/Button';
 import { CallCard } from '../../src/components/CallCard';
 import { PromisesStrip } from '../../src/components/PromisesStrip';
+import { WeekCard } from '../../src/components/WeekCard';
 import { Txt } from '../../src/components/Txt';
 import { space, useTheme } from '../../src/theme';
 import { useCalls } from '../../src/useCalls';
@@ -21,15 +22,19 @@ export default function Today() {
   const router = useRouter();
   const { calls, loading, errorKey, refresh, clearError } = useCalls();
   const [promises, setPromises] = useState<Promises>(NONE);
+  const [briefing, setBriefing] = useState<Briefing | null>(null);
   // Wait for the restored session; a request before it would fail silently.
   const loadPromises = useCallback(() => {
-    if (userPhone) getPromises().then(setPromises).catch(() => {});
+    if (!userPhone) return;
+    getPromises().then(setPromises).catch(() => {});
+    getBriefing().then(setBriefing).catch(() => {});
   }, [userPhone]);
   useFocusEffect(loadPromises);
 
   const header = (
     <View style={{ gap: space.md }}>
       {errorKey && <Banner message={t(errorKey)} onDismiss={clearError} />}
+      <WeekCard briefing={briefing} />
       <PromisesStrip promises={promises} onChange={loadPromises} />
     </View>
   );
