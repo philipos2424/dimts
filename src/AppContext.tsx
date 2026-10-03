@@ -8,7 +8,7 @@ import React, {
   useState,
 } from 'react';
 import { type Key, type Lang, translate } from './i18n';
-import { acceptTerms as acceptTermsApi, getMe, logout, setApiSession } from './api';
+import { acceptTerms as acceptTermsApi, getMe, logout, patchLanguage, setApiSession } from './api';
 import { TERMS_VERSION } from './legal';
 import { readSession, storeSession } from './session';
 
@@ -54,7 +54,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const token = await readSession();
         if (token) {
           setApiSession(token);
-          try { const me = await getMe(); setPhoneState(me.phone); setTermsRequired(me.terms_required); }
+          try {
+            const me = await getMe(); setPhoneState(me.phone); setTermsRequired(me.terms_required);
+            // The server's language is the account's; the device follows it.
+            if (me.language === 'am' || me.language === 'en') setLangState(me.language);
+          }
           catch { setApiSession(null); await storeSession(null); }
         }
         if (storedAuto[1] !== null) setAutoRecordState(storedAuto[1] === 'true');
@@ -69,6 +73,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const setLang = useCallback((next: Lang) => {
     setLangState(next);
     AsyncStorage.setItem(KEYS.lang, next).catch(() => {});
+    // Notes are written in this language on the server; best-effort when signed out.
+    patchLanguage(next).catch(() => {});
   }, []);
 
   const setUserPhone = useCallback((next: string | null) => {
@@ -86,7 +92,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const signIn = useCallback(async (token: string, phone: string) => {
     await storeSession(token);
     setApiSession(token);
-    try { setTermsRequired((await getMe()).terms_required); } catch { setTermsRequired(true); }
+    try {
+      const me = await getMe();
+      setTermsRequired(me.terms_required);
+      if (me.language === 'am' || me.language === 'en') setLangState(me.language);
+    } catch { setTermsRequired(true); }
     setPhoneState(phone);
   }, []);
 

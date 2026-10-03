@@ -59,7 +59,7 @@ export type ActionItem = { task: string; owner: string | null };
 export type ContactContext = {
   contact: { id: string; phone: string; display_name: string | null; company: string | null; notes: string | null } | null;
   previous_calls: { id: string; created_at: string; direction: string; summary: string;
-    key_points: string[] | null; action_items: ActionItem[] | null; next_moves: string[] | null }[];
+    key_points: string[] | null; action_items: ActionItem[] | null; next_moves: string[] | null; agreements?: Agreement[] | null }[];
 };
 export function getCallContext(id: string) {
   return request<ContactContext>(`/api/calls/${id}/context`, '');
