@@ -1,4 +1,5 @@
 import { config } from '../config.js';
+import { isE164 } from './phone.js';
 
 export function askRecordingConsent(twiml, action, ownerOnly = false) {
   twiml.gather({ input: 'dtmf', numDigits: 1, timeout: 15, method: 'POST', action, actionOnEmptyResult: true })
@@ -24,8 +25,26 @@ export function dialCall(twiml, call) {
     answerOnBridge: true,
     action: `${base}/twiml/dial-done?callId=${call.id}`, method: 'POST', timeout: 30,
     timeLimit: call.max_duration_sec ?? 1800,
-    callerId: call.agent_number || config.twilioNumber,
+    // On incoming calls the owner sees who is calling, not the Dimts number.
+    // Twilio allows passing the original caller's number through when forwarding.
+    callerId: call.direction === 'inbound' && isE164(call.destination) ? call.destination : call.agent_number || config.twilioNumber,
   });
   const target = call.direction === 'inbound' ? call.user_phone : call.destination;
   dial.number({ url: `${base}/twiml/party-consent?callId=${call.id}`, method: 'POST' }, target);
 }
+
+export const VOICEMAIL_MAX_SECONDS = 120;
+
+/** Offered when the owner misses an incoming call the caller agreed could be recorded. */
+export function offerVoicemail(twiml, call) {
+  const base = config.publicBaseUrl;
+  twiml.say('Sorry, they could not answer. Leave a message after the tone, and they will see it in Dimts.');
+  twiml.record({
+    maxLength: VOICEMAIL_MAX_SECONDS, playBeep: true, timeout: 5, trim: 'trim-silence',
+    action: `${base}/twiml/voicemail-done?callId=${call.id}`, method: 'POST',
+    recordingStatusCallback: `${base}/webhooks/recording-ready?callId=${call.id}`,
+    recordingStatusCallbackMethod: 'POST', recordingStatusCallbackEvent: ['completed'],
+  });
+  twiml.hangup();
+}
+

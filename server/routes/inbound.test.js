@@ -97,6 +97,12 @@ test('the caller hears the Dimts notice and is connected to the owner with no ke
   assert.deepEqual(notified, ['call-1']);
 });
 
+test('the owner sees the real caller number, not the Dimts number', async () => {
+  reserved = { ...reserved, destination: CALL.From };
+  const { xml } = await incoming(CALL);
+  assert.match(xml, /callerId="\+14155552671"/);
+});
+
 test('the legacy announcement flag cannot switch the notice off', async () => {
   process.env.ANNOUNCE_RECORDING = 'false';
   const { xml } = await incoming(CALL);

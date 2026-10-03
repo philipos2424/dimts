@@ -23,7 +23,7 @@ export type CallSummary = {
   next_step?: { kind: 'meeting' | 'email' | 'move'; text: string } | null;
 };
 
-export type Capture = 'both' | 'one_voice' | 'no_audio' | 'pending' | 'none' | 'unknown';
+export type Capture = 'both' | 'voicemail' | 'one_voice' | 'no_audio' | 'pending' | 'none' | 'unknown';
 export type Agreement = { kind: string; subject: string; value: string; said_by: 'User' | 'Caller' | null;
   quote: string; line: number; start: number | null };
 export type Conflict = { new_index: number; previous_call_id: string; previous_index: number; note: string };

@@ -24,8 +24,8 @@ export default function FirstCall() {
       <Txt tone="muted">Dimts captures calls started here or routed through your business line. Ordinary handset and WhatsApp calls are outside this recording path. Test calls use your available minutes and may incur your carrier’s charges.</Txt>
     </Section>
     <Section title="2. Start a short outgoing call">
-      <Txt>Open the dialer and enter the other person’s number with its country code. Dimts first rings your signed-in mobile, then connects the other person. Follow the recording prompts on each phone.</Txt>
-      <Txt tone="muted">There is nothing to press. The other person hears: “This call is recorded and summarized by Dimts AI.” Then the conversation starts.</Txt>
+      <Txt>Open the dialer and enter the other person’s number with its country code. Your own phone rings first, from your Dimts number: answer it. That is Dimts connecting you. Then the other person’s phone rings.</Txt>
+      <Txt tone="muted">There is nothing to press. The other person hears: “This call is recorded and summarized by Dimts AI.” Then the conversation starts. Calls with a Gulf number (UAE, Saudi Arabia, Qatar, Bahrain, Kuwait, Oman) are different: both of you press 1 to agree before recording.</Txt>
       {!autoRecord && <Txt tone="muted">Recording is currently off. Enable it in Settings before this recording test.</Txt>}
       <Link label={autoRecord ? 'Open dialer (does not place a call)' : 'Open Settings to enable recording'}
         onPress={() => router.push(autoRecord ? '/dialer' : '/settings')} />
@@ -50,7 +50,7 @@ export default function FirstCall() {
       </View>)}
     </Section>
     <Section title="5. Repeat for incoming calls">
-      <Txt>Get your business line below, then ask the other person to call that number. It should ring your signed-in mobile. Follow the recording prompts and repeat the playback and notes checks.</Txt>
+      <Txt>Get your business line below, then ask the other person to call that number. It should ring your signed-in mobile and show the caller’s own number. Repeat the playback and notes checks. Then let one call ring out without answering: the caller can leave a message, which appears as a Voicemail card.</Txt>
       <BusinessNumber />
       <Txt tone="muted">If no business number is available, the incoming test is not ready. Test with the app open, then backgrounded and locked; enable incoming alerts in Settings for an installed iPhone or Android app.</Txt>
       <Link label="Open notification settings" onPress={() => router.push('/settings')} />

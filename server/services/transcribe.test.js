@@ -114,3 +114,9 @@ test('sequentialTranscript keeps channels whole for scrambled timelines', () => 
     'User: ሰላም ነው\nCaller: እሺ አመሰግናለሁ'
   );
 });
+
+test('a voicemail is one caller on one channel, whatever shape the provider returns', () => {
+  assert.equal(normalizeScribeResponse({ text: ' Please call me back. ', language_code: 'en' }, { voicemail: true }).text, 'Caller: Please call me back.');
+  assert.equal(normalizeScribeResponse({ transcripts: [{ text: 'Selam' }] }, { voicemail: true }).text, 'Caller: Selam');
+  assert.equal(normalizeScribeResponse({ text: '   ' }, { voicemail: true }).text, '');
+});

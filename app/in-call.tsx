@@ -7,6 +7,7 @@ import { getCall } from '../src/api';
 import { Txt } from '../src/components/Txt';
 import { EndCall } from '../src/components/EndCall';
 import { statusKey } from '../src/i18n';
+import { needsPressOne } from '../src/consent';
 import { radius, space, useTheme } from '../src/theme';
 
 const SETTLED = new Set(['processing', 'ready', 'failed', 'missed', 'completed']);
@@ -104,6 +105,13 @@ export default function InCall() {
       <Txt size="subhead" tone="muted">
         {onCall ? clock : t(statusKey(status))}
       </Txt>
+
+      {['initiating', 'ringing'].includes(status) && (
+        <View style={{ gap: space.xs, maxWidth: 360 }}>
+          <Txt style={{ textAlign: 'center' }}>{t('answerYourPhone')}</Txt>
+          {needsPressOne(dest, userPhone) && <Txt style={{ textAlign: 'center' }} tone="muted">{t('pressOneToRecord')}</Txt>}
+        </View>
+      )}
 
       {onCall && recordingAgreed && (
         <View

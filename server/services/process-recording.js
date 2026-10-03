@@ -3,10 +3,11 @@ import { query, queryOne } from '../db/pool.js';
 import { shouldAdoptName } from '../lib/contact-policy.js';
 import { identifyCaller } from './identify.js';
 import { fetchRecording } from './originate.js';
+import { recordingChannels } from '../lib/recording-channels.js';
 import { transcribe } from './transcribe.js';
 import { summarize } from './summarize.js';
 import { randomUUID } from 'node:crypto';
-import { recordingQualityError } from '../lib/recording-quality.js';
+import { recordingQualityError, voicemailQualityError } from '../lib/recording-quality.js';
 import { getAudio } from './audio-store.js';
 import { archiveAudio, removeArchivedFromProvider } from './archive-audio.js';
 import { defer } from '../lib/defer.js';
@@ -23,12 +24,12 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
  * Twilio occasionally 404s the media for a second or two after the
  * recording-ready webhook fires, before the file is durably stored.
  */
-async function downloadRecording(recordingUrl, signal) {
+async function downloadRecording(recordingUrl, signal, channels) {
   let lastStatus;
 
   for (let attempt = 1; attempt <= DOWNLOAD_ATTEMPTS; attempt += 1) {
     signal.throwIfAborted();
-    const response = await fetchRecording(recordingUrl, { signal });
+    const response = await fetchRecording(recordingUrl, { signal, channels });
     if (response.ok) return response.blob();
 
     lastStatus = response.status;
@@ -50,7 +51,7 @@ async function loadAudio(call, signal) {
     if (!response.ok) throw new Error(`Could not read archived recording (HTTP ${response.status})`);
     return response.blob();
   }
-  const downloaded = await downloadRecording(call.recording_url, signal);
+  const downloaded = await downloadRecording(call.recording_url, signal, recordingChannels(call));
   const bytes = new Uint8Array(await downloaded.arrayBuffer());
   await archiveAudio(call, bytes);
   return new Blob([bytes], { type: 'audio/mpeg' });
@@ -106,7 +107,7 @@ export async function processRecording(callId, { force = false, signal: callerSi
          AND (processing_until IS NULL OR processing_until < now())
        RETURNING *
      )
-     SELECT c.id, c.user_id, c.recording_url, c.audio_object_key, c.contact_id, c.direction,c.transcript,c.transcript_data,
+     SELECT c.id, c.user_id, c.recording_url, c.audio_object_key, c.contact_id, c.direction,c.voicemail,c.transcript,c.transcript_data,
             c.transcript_recording_url,c.language,c.language_probability,c.duration_sec,
             (SELECT u.language FROM users u WHERE u.id = c.user_id) AS owner_language,
             k.display_name  AS contact_display_name,
@@ -135,7 +136,7 @@ export async function processRecording(callId, { force = false, signal: callerSi
     } else {
       const audio = await loadAudio(call, signal);
       await renew();
-      result = await transcribe(audio, { direction: call.direction, signal });
+      result = await transcribe(audio, { direction: call.direction, voicemail: call.voicemail, signal });
       const saved = await queryOne(`UPDATE calls SET transcript=$3,transcript_data=$4,
         language=$5,language_probability=$6,transcript_recording_url=$7,
         processing_until=now()+interval '10 minutes'
@@ -144,7 +145,7 @@ export async function processRecording(callId, { force = false, signal: callerSi
       if (!saved) throw new Error('Processing ownership changed');
     }
 
-    const qualityError = recordingQualityError(result.raw);
+    const qualityError = call.voicemail ? voicemailQualityError(result.raw) : recordingQualityError(result.raw);
     if (qualityError) throw new Error(qualityError);
     if (!result.text.trim()) {
       throw new Error('Transcription returned no speech');
