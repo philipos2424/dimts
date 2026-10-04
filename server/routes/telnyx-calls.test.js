@@ -63,6 +63,20 @@ test('outbound notice on Telnyx: the call SID comes from the first webhook, Dial
   assert.equal(processed, 1);
 });
 
+test('when Telnyx sends no dial-done receipt, the recording length becomes the call length and is billed once', async () => {
+  const id = await seed('outbound');
+  await db.query("UPDATE calls SET status='in-progress', other_party_notice_issued_at=now() WHERE id=$1", [id]);
+  await post(id, '/webhooks/recording-ready', { CallSid: parent, RecordingStatus: 'completed', RecordingSid: '45094891-3290-4142-b2c2-b2eda57534cf',
+    RecordingUrl: 'https://s3.example.com/r2.mp3', RecordingDuration: '62' });
+  const saved = await row(id);
+  assert.equal(saved.duration_sec, 62);
+  assert.equal(saved.status, 'processing');
+  const minutes = (await db.query('SELECT minutes_used FROM usage_minutes WHERE user_id=$1', [user.id])).rows[0];
+  assert.ok(Math.abs(Number(minutes.minutes_used) - 62 / 60) < 0.001);
+  await post(id, '/twiml/dial-done', { CallSid: parent, DialCallStatus: 'completed', DialCallDuration: '70' });
+  assert.equal((await row(id)).duration_sec, 62, 'a late receipt does not bill twice');
+});
+
 test('inbound notice on Telnyx: the owner answering does not start a second recorder', async () => {
   const id = await seed('inbound', { notice: true });
   const before = starts;

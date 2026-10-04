@@ -261,6 +261,13 @@ webhooksRouter.post('/recording-ready', async (req, res) => {
   if (call && hasRecordingAuthorization(call) && RecordingStatus === 'completed' && RecordingUrl) {
     if (call.recording_start_status && (!isRecordingSid(req.body.RecordingSid) ||
       (call.recording_sid && call.recording_sid !== req.body.RecordingSid))) return res.status(204).end();
+    // Telnyx skips the <Dial> action when the owner hangs up first, so no
+    // dial-done receipt arrives. The recording covers the connected
+    // conversation; use its length so minutes and history stay right.
+    const recorded = /^\d{1,5}$/.test(req.body.RecordingDuration ?? '') ? Number(req.body.RecordingDuration) : null;
+    if (call.duration_sec == null && !call.voicemail && recorded != null) {
+      await finishCall(call, recorded, 'completed', currentMonth());
+    }
     const accepted = await queryOne(
       `UPDATE calls SET recording_url = $2, status = 'processing', error=NULL,processing_requested_at=now(),
         recording_sid=COALESCE(recording_sid,$3),recording_start_status='started',
