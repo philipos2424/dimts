@@ -18,7 +18,7 @@ export async function resolveUser(req) {
   const token = req.get('authorization')?.match(/^Bearer ([a-f0-9]{64})$/i)?.[1];
   if (!token) throw new HttpError(401, 'authentication_required');
   const user = await queryOne(
-    `SELECT u.id, u.phone, u.tier, u.agent_number, u.terms_version, u.language FROM sessions s
+    `SELECT u.id, u.phone, u.tier, u.agent_number, u.terms_version, u.language, u.retention_months FROM sessions s
        JOIN users u ON u.id = s.user_id
       WHERE s.token_hash = $1 AND s.expires_at > now() AND u.deleted_at IS NULL`,
     [hashToken(token)]

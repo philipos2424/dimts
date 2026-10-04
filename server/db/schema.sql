@@ -274,3 +274,5 @@ CREATE INDEX IF NOT EXISTS calls_search_idx ON calls
   USING gin (to_tsvector('simple', coalesce(summary,'') || ' ' || coalesce(transcript,'')));
 -- A message left after a missed incoming call: one mono channel, the caller only.
 ALTER TABLE calls ADD COLUMN IF NOT EXISTS voicemail BOOLEAN NOT NULL DEFAULT false;
+-- Storage limitation: calls older than this many months are deleted automatically. NULL keeps them until deleted.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS retention_months INT CHECK (retention_months IN (3,6,12,24));

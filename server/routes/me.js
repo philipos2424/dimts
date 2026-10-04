@@ -8,6 +8,7 @@ import { audit } from '../lib/audit.js';
 import { hit } from '../lib/rate-limit.js';
 import { buildExport } from '../services/export-user.js';
 import { deleteAccount } from '../services/delete-account.js';
+import { RETENTION_MONTHS } from '../services/retention.js';
 
 export const meRouter = express.Router();
 
@@ -32,6 +33,7 @@ meRouter.get('/', async (req, res, next) => {
       agent_number: user.agent_number ?? null,
       terms_required: !hasAcceptedTerms(user),
       language: user.language ?? 'en',
+      retention_months: user.retention_months ?? null,
     });
   } catch (err) { next(err); }
 });
@@ -79,9 +81,15 @@ meRouter.delete('/', async (req, res, next) => {
 meRouter.patch('/', async (req, res, next) => {
   try {
     const user = await resolveUser(req);
-    const { language } = req.body ?? {};
-    if (!['en', 'am'].includes(language)) throw new HttpError(400, 'invalid_language');
-    await query('UPDATE users SET language=$2 WHERE id=$1', [user.id, language]);
-    res.json({ language });
+    const body = req.body ?? {};
+    const setLanguage = 'language' in body, setRetention = 'retention_months' in body;
+    if (setLanguage && !['en', 'am'].includes(body.language)) throw new HttpError(400, 'invalid_language');
+    if (setRetention && body.retention_months !== null && !RETENTION_MONTHS.includes(body.retention_months)) throw new HttpError(400, 'invalid_retention');
+    if (!setLanguage && !setRetention) throw new HttpError(400, 'nothing_to_change');
+    const row = await queryOne(`UPDATE users SET language=CASE WHEN $2 THEN $3 ELSE language END,
+      retention_months=CASE WHEN $4 THEN $5::int ELSE retention_months END WHERE id=$1 RETURNING language,retention_months`,
+    [user.id, setLanguage, setLanguage ? body.language : null, setRetention, setRetention ? body.retention_months : null]);
+    if (setRetention) await audit({ userId: user.id, action: 'retention_changed', targetType: 'retention', targetId: body.retention_months ?? 'off', req });
+    res.json(row);
   } catch (err) { next(err); }
 });

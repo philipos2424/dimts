@@ -108,3 +108,32 @@ test('a follow-up finds the same calls through the question before it, and earli
   assert.match(input, /Caller: 450 birr per bag, delivery on Friday\./, 'the call was found through the earlier question');
   assert.match(system, /not evidence/);
 });
+
+test('a request to write something comes back as a cited draft, with the model\'s inline labels removed', async () => {
+  const o = await signedIn('+15555551207');
+  await seed(o.id, 'Kiruben', 'User: I will send our company profile.\nCaller: Good, we can talk about an office in Ethiopia.');
+  reply = { type: 'draft', answer: 'Here is an email to Kiruben (C1 [1], [2]).', citations: [{ call: 'C1', line: 1 }, { call: 'C1', line: 2 }],
+    draft: { subject: 'Our company profile\nand Ethiopia', body: 'Dear Kiruben,\n\nAs promised, our company profile is attached C1 [1]. When suits you for [date]?' } };
+  const { body } = await ask(o.token, 'Draft an email to Kiruben about the office');
+  assert.equal(body.grounded, true);
+  assert.equal(body.answer, 'Here is an email to Kiruben.');
+  assert.equal(body.draft.subject, 'Our company profile and Ethiopia');
+  assert.equal(body.draft.body, 'Dear Kiruben,\n\nAs promised, our company profile is attached. When suits you for [date]?');
+  assert.match(prompts[0].system, /"type": "draft"/);
+});
+
+test('a follow-up searches the calls the last answer cited first, and only the owner\'s', async () => {
+  const o = await signedIn('+15555551208'), stranger = await signedIn('+15555551209');
+  const cited = await seed(o.id, 'Kiruben', 'Caller: Send me the profile so we can plan the Addis office.', { days: 30 });
+  for (let i = 0; i < 4; i++) await seed(o.id, `Other ${i}`, 'Caller: Unrelated chat about the weather.');
+  const foreign = await seed(stranger.id, 'Spy', 'Caller: STRANGER-SECRET plans.');
+  reply = { type: 'draft', answer: 'Drafted.', citations: [{ call: 'C1', line: 1 }], draft: { subject: 'Profile', body: 'Dear Kiruben, ...' } };
+  const body = await fetch(origin + '/api/ask', { method: 'POST',
+    headers: { Authorization: `Bearer ${o.token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ question: 'can you draft an email based on our discussion?', history: [
+      { question: 'What did I promise Kiruben?', answer: 'To send the profile.', call_ids: [foreign, cited, 'not-a-uuid'] },
+    ] }) }).then(r => r.json());
+  assert.equal(body.citations[0].call_id, cited);
+  assert.match(prompts.at(-1).input, /C1 \| Kiruben/);
+  assert.doesNotMatch(prompts.at(-1).input, /STRANGER-SECRET/);
+});

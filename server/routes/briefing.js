@@ -4,6 +4,7 @@ import { resolveUser } from '../lib/users.js';
 import { query } from '../db/pool.js';
 import { weeklyBriefing, briefingIsEmpty } from '../services/briefing.js';
 import { sendBriefingNotification } from '../services/briefing-push.js';
+import { expireOldCalls } from '../services/retention.js';
 
 export const briefingRouter = express.Router();
 
@@ -38,4 +39,10 @@ cronRouter.get('/weekly-briefing', async (req, res) => {
     } catch (err) { console.error('[briefing] failed for a user', err?.message); }
   }
   res.json({ users: rows.length, sent });
+});
+
+// Daily: delete calls past each owner's retention period.
+cronRouter.get('/retention', async (req, res) => {
+  if (!authorizedCron(req)) return res.status(401).json({ error: 'unauthorized' });
+  res.json(await expireOldCalls());
 });
