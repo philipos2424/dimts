@@ -8,8 +8,8 @@ test('launch countries can sign up', () => {
   }
 });
 
-test('Ethiopia can be called but cannot sign up', () => {
-  assert.equal(canSignUp('+251911234567'), false);
+test('Ethiopia can sign up and be called', () => {
+  assert.equal(canSignUp('+251911234567'), true);
   assert.equal(canCall('+251911234567'), true);
 });
 
@@ -45,5 +45,6 @@ test('rejects anything that is not E.164', () => {
 test('reports the calling code for send limits', () => {
   assert.equal(signupCountryCode('+447911123456'), '44');
   assert.equal(signupCountryCode('+971501234567'), '971');
-  assert.equal(signupCountryCode('+251911234567'), null);
+  assert.equal(signupCountryCode('+251911234567'), '251');
+  assert.equal(signupCountryCode('+2348012345678'), null);
 });

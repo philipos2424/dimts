@@ -87,23 +87,23 @@ test('bounds SMS attempts before calling the paid provider again', async () => {
   assert.equal(sent.length, 5);
 });
 test('refuses sign-in codes outside launch countries and to premium ranges', async () => {
-  for (const phone of ['+2348012345678', '+251911234567', '+18765551234', '+449098790000']) {
+  for (const phone of ['+2348012345678', '+79161234567', '+18765551234', '+449098790000']) {
     const result = await request('/api/auth/start', { phone });
     assert.equal(result.status, 403, phone);
     assert.equal(result.body.error, 'country_not_supported');
   }
   assert.equal(sent.length, 0);
 });
-test('an existing account outside the signup countries can still sign in; a new one cannot', async () => {
-  assert.equal((await request('/api/auth/start', { phone: '+251911143200' })).status, 403);
-  users.set('owner-et', { id: 'owner-et', phone: '+251911143200', tier: 'free' });
+test('Ethiopian numbers can sign up; an existing account in a country Dimts cannot call still cannot', async () => {
   assert.equal((await request('/api/auth/start', { phone: '+251911143200' })).status, 202);
   assert.deepEqual(sent, ['+251911143200']);
+  users.set('owner-ng', { id: 'owner-ng', phone: '+2348012345678', tier: 'free' });
+  assert.equal((await request('/api/auth/start', { phone: '+2348012345678' })).status, 403);
 });
 test('invited numbers may sign up, but never in countries Dimts cannot call', async () => {
   process.env.SIGNUP_ALLOWED_NUMBERS = '+251922000000, +2348012345678';
   try {
-    assert.equal((await request('/api/auth/start', { phone: '+251922000000' })).status, 202);
+    assert.equal((await request('/api/auth/start', { phone: '+251922000000' })).status, 202, 'listed and in a callable country');
     assert.equal((await request('/api/auth/start', { phone: '+2348012345678' })).status, 403);
   } finally { delete process.env.SIGNUP_ALLOWED_NUMBERS; }
 });

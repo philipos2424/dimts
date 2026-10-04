@@ -7,7 +7,8 @@
  */
 import { isE164 } from './phone.js';
 
-// Launch countries for signup (roadmap, 2 October 2026).
+// Launch countries for signup. Ethiopia joined on 4 October 2026: Ethiopian
+// businesses are core customers, not only people the diaspora calls.
 const NANP = ['1']; // US and Canada; non-US/CA NANP area codes are excluded below.
 const UK = ['44'];
 const EEA = [
@@ -17,9 +18,10 @@ const EEA = [
 ];
 const GULF = ['971', '966', '974', '973', '965', '968'];
 
-const SIGNUP = [...NANP, ...UK, ...EEA, ...GULF];
-// Ethiopia is a call destination, paid from credits, but not a signup market.
-const CALLS = [...SIGNUP, '251'];
+const ETHIOPIA = ['251'];
+
+const SIGNUP = [...NANP, ...UK, ...EEA, ...GULF, ...ETHIOPIA];
+const CALLS = [...SIGNUP];
 
 // NANP area codes outside the US and Canada. Caribbean numbers dial like
 // domestic ones but bill internationally, which makes them the classic
