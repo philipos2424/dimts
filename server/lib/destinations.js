@@ -64,9 +64,6 @@ export const canCall = number => permitted(number, CALLS);
 /** Calling code of an allowed signup number, for per-country send limits. */
 export const signupCountryCode = number => (canSignUp(number) ? countryCode(number, SIGNUP) : null);
 
-/** Calling code of a callable number, for pricing each call leg; null otherwise. */
-export const callingCode = number => (canCall(number) ? countryCode(number, CALLS) : null);
-
 /**
  * Whether recording a call with this number needs every person's explicit
  * consent rather than a notice. UAE and Saudi law are described as requiring
