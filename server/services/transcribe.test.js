@@ -120,3 +120,13 @@ test('a voicemail is one caller on one channel, whatever shape the provider retu
   assert.equal(normalizeScribeResponse({ transcripts: [{ text: 'Selam' }] }, { voicemail: true }).text, 'Caller: Selam');
   assert.equal(normalizeScribeResponse({ text: '   ' }, { voicemail: true }).text, '');
 });
+
+test('reads the channel count from an MP3 frame header, after an ID3 tag', async () => {
+  const { mp3Channels } = await import('./transcribe.js');
+  const frame = (mode) => [0xff, 0xfb, 0x90, mode << 6];
+  assert.equal(mp3Channels(Uint8Array.from(frame(3))), 1, 'mono');
+  assert.equal(mp3Channels(Uint8Array.from(frame(1))), 2, 'joint stereo');
+  const id3 = [0x49, 0x44, 0x33, 4, 0, 0, 0, 0, 0, 2, 0, 0];
+  assert.equal(mp3Channels(Uint8Array.from([...id3, ...frame(3)])), 1);
+  assert.equal(mp3Channels(Uint8Array.from([1, 2, 3, 4, 5])), null);
+});
