@@ -5,9 +5,10 @@
 
 | Provider | Purpose | Data | Location | Transfer basis |
 |---|---|---|---|---|
-| Supabase | Database and call-audio storage | Account data, notes, transcripts, audio | Switzerland (Zurich, `eu-central-2`) | Swiss adequacy decision |
+| Supabase | Database and call-audio storage | Account data, notes, transcripts, audio | EU (Ireland, `eu-west-1`) | Inside the EU |
 | Vercel | Application hosting | Data in transit through the API | EU (Frankfurt, `fra1`) | Inside the EU |
-| Twilio | Phone numbers, call connection, temporary recording before archiving, SMS codes | Phone numbers, call audio (deleted after archiving) | United States | SCCs, Twilio DPA |
+| Telnyx | Phone numbers, call connection, temporary recording before archiving, sign-in codes | Phone numbers, call audio (deleted after archiving) | United States | SCCs, Telnyx DPA |
+| Twilio | Previous carrier; no new calls, being removed | Recordings of older calls until archived or deleted | United States | SCCs, Twilio DPA |
 | ElevenLabs | Speech-to-text | Call audio | United States | SCCs, ElevenLabs DPA |
 | OpenAI (or Ollama Cloud, whichever is configured) | Summaries, names, next steps | Transcript text | United States | SCCs, provider DPA |
 | Expo | Push notifications | Device push token, notification text with no call content | United States | SCCs, Expo DPA |

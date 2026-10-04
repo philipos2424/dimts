@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
-import { deleteAccount, getActivity, getPrivacyRequests, type ActivityEvent, type PrivacyRequest } from '../api';
+import { deleteAccount, getActivity, getMe, getPrivacyRequests, patchRetention, type ActivityEvent, type PrivacyRequest, type Retention as Months } from '../api';
 import { useApp } from '../AppContext';
 import { exportAllData } from '../exportData';
 import { PrimaryButton } from './PrimaryButton';
@@ -12,6 +12,7 @@ const ACTION_LABELS: Record<string, string> = {
   signed_in: 'Signed in', signed_out: 'Signed out', terms_accepted: 'Accepted the terms', audio_played: 'Played a recording',
   data_exported: 'Downloaded your data', call_deleted: 'Deleted a call', contact_deleted: 'Deleted a contact',
   privacy_request_received: 'Received a privacy request', account_deleted: 'Deleted the account',
+  call_auto_deleted: 'Deleted an old call automatically', retention_changed: 'Changed how long calls are kept',
 };
 
 export function DataControls() {
@@ -56,7 +57,7 @@ export function DataControls() {
           <Txt tone="muted">Open their contact and choose Delete. Due by {new Date(requests[0].due_at).toLocaleDateString()}.</Txt>
         </View>
       )}
-      <Txt tone="muted">Your calls are stored in Europe and kept until you delete them.</Txt>
+      <Retention />
       <PrimaryButton label="Download my data" onPress={download} busy={exporting} />
       {exportError ? <Txt accessibilityRole="alert" tone="muted">{exportError}</Txt> : null}
 
@@ -89,5 +90,46 @@ export function DataControls() {
         </View>
       )}
     </Section>
+  );
+}
+
+const PERIODS: { months: Months; label: string }[] = [
+  { months: null, label: 'Until I delete' }, { months: 3, label: '3 months' }, { months: 6, label: '6 months' },
+  { months: 12, label: '1 year' }, { months: 24, label: '2 years' },
+];
+
+/** How long calls are kept. Older calls are deleted every night. */
+function Retention() {
+  const { c } = useTheme();
+  const [months, setMonths] = useState<Months | undefined>(undefined);
+  const [error, setError] = useState('');
+  useEffect(() => { getMe().then(me => setMonths(me.retention_months ?? null)).catch(() => setMonths(null)); }, []);
+
+  async function choose(next: Months) {
+    const before = months;
+    setMonths(next); setError('');
+    try { await patchRetention(next); }
+    catch { setMonths(before); setError('Couldn’t save. Try again.'); }
+  }
+
+  return (
+    <View style={{ gap: space.sm }}>
+      <Txt tone="muted">Your calls are stored in the EU. Keep them:</Txt>
+      <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
+        {PERIODS.map(p => {
+          const active = months === p.months;
+          return (
+            <Pressable key={String(p.months)} accessibilityRole="radio" accessibilityState={{ selected: active, disabled: months === undefined }}
+              disabled={months === undefined} onPress={() => choose(p.months)}
+              style={{ minHeight: 36, justifyContent: 'center', paddingHorizontal: space.md, borderRadius: radius.pill,
+                borderWidth: 1, borderColor: active ? c.brand : c.line, backgroundColor: active ? c.brand : 'transparent' }}>
+              <Txt size="caption" tone={active ? 'onBrand' : undefined}>{p.label}</Txt>
+            </Pressable>
+          );
+        })}
+      </View>
+      {months != null && <Txt size="caption" tone="muted">Calls older than {PERIODS.find(p => p.months === months)?.label} are deleted automatically each night, with their recordings.</Txt>}
+      {error ? <Txt accessibilityRole="alert" tone="danger">{error}</Txt> : null}
+    </View>
   );
 }

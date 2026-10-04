@@ -4,7 +4,7 @@ import { transcriptTurns } from '../lib/transcript-turns.js';
 // Explicit column lists only: an export must never pick up a token, a hash or
 // a provider URL just because someone added a column later.
 export async function buildExport(userId) {
-  const profile = await queryOne(`SELECT phone,tier,agent_number,created_at,terms_version,terms_accepted_at
+  const profile = await queryOne(`SELECT phone,tier,agent_number,created_at,terms_version,terms_accepted_at,language,retention_months
     FROM users WHERE id=$1`, [userId]);
   const calls = (await query(`SELECT id,created_at,completed_at,direction,destination,contact_id,status,duration_sec,
       language,transcript,summary,key_points,action_items,next_moves,followups,agreements,conflicts,

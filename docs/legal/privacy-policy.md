@@ -33,24 +33,27 @@ controller, and Dimts processes their data on your instructions as your
 - **Your instructions as controller**, for the people you call.
 
 We do not sell your data or use it for advertising. We do not train AI models
-on your calls.
+on your calls. Questions you ask about your calls are answered and then
+discarded; we do not store them.
 
 ## Recording notice
 Every recorded call begins with: *"This call is recorded and summarized by
 Dimts AI."* The other person can end the call if they do not want to be recorded.
 
 ## Where your data lives
-- **EU and Switzerland:** account data, notes and call audio are stored in
-  Supabase (Zurich). The application runs on Vercel in Frankfurt.
-- **United States:** calls are connected by Twilio and transcribed and
+- **EU:** account data, notes and call audio are stored in Supabase
+  (Ireland). The application runs on Vercel in Frankfurt.
+- **United States:** calls are connected by Telnyx and transcribed and
   summarized by AI providers that process data in the US. These transfers
   use Standard Contractual Clauses.
 
 See the [list of subprocessors](subprocessors.md).
 
 ## How long we keep it
-Until you delete it. You can delete a call, a contact or your whole account
-in Settings. Deleted recordings are removed from our storage and from Twilio.
+Until you delete it, or for the period you choose in Settings (3, 6, 12 or
+24 months), after which calls are deleted automatically. You can delete a
+call, a contact or your whole account in Settings. Deleted recordings are
+removed from our storage and from our call provider.
 Activity-log entries are kept for one year and contain no call content.
 
 ## Your rights

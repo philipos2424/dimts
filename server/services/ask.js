@@ -8,18 +8,34 @@ const COLUMNS = `c.id, c.created_at, c.direction, c.duration_sec, c.transcript, 
   c.transcript_recording_url, c.deleted_at, c.agreements, k.display_name AS contact_name`;
 const READY = `c.user_id=$1 AND c.status='ready' AND c.deleted_at IS NULL AND c.transcript IS NOT NULL`;
 
-const PROMPT = `You answer questions about the user's own business phone calls.
+const PROMPT = `You are the user's assistant for their own business phone calls.
 Use only the call excerpts given. Each call starts with a label like C1 and
-each transcript line has its number in brackets. Answer in one to three short
-sentences in the language of the question. Every fact must be cited.
-Return JSON: {"answer": "...", "citations": [{"call": "C1", "line": 12}]}.
-If the excerpts do not contain the answer, return {"answer": "", "citations": []}.
-Earlier turns, when given, only explain what a follow-up question refers to;
+each transcript line has its number in brackets. Work in the language of the request.
+Decide what the user wants:
+- A question about the calls: return {"type": "answer", "answer": "...", "citations": [...]}
+  with one to three short sentences.
+- Something written for them, such as an email, a message or a reply: return
+  {"type": "draft", "answer": "One short sentence on what you drafted.", "draft": {"subject": "...", "body": "..."}, "citations": [...]}.
+  Write it from the User's side, ready to send. Use only facts from the excerpts and
+  put anything they lack in square brackets, like [delivery date], instead of inventing it.
+  Do not promise work the Caller committed to. Use "" as the subject for a message that is not an email.
+Each citation is {"call": "C1", "line": 12} and points at a line the facts come from.
+Never write call labels or line numbers in the answer, subject or body.
+If the excerpts do not support it, return {"type": "answer", "answer": "", "citations": []}.
+Earlier turns, when given, only explain what a follow-up refers to;
 they are not evidence. Cite the excerpts.`;
 
-async function retrieve(userId, question) {
+// The model sometimes repeats its citations inline, e.g. "(C2 [10], [16])".
+const LABELS = /\s*\((?:\s*(?:C\d+|\[\d+\])[\s,;]*)+\)|\s*\bC\d+\s*(?:\[\d+\][\s,]*)+|\s*\[\d+\]/g;
+export const stripLabels = text => text.replace(LABELS, '').trim();
+
+async function retrieve(userId, question, focus) {
   const picked = new Map();
   const add = rows => { for (const row of rows) if (picked.size < MAX_CALLS && !picked.has(row.id)) picked.set(row.id, row); };
+  // Calls the previous answer pointed at come first: "draft an email about
+  // that" has no words of its own to search for.
+  if (focus.length) add((await query(`SELECT ${COLUMNS} FROM calls c LEFT JOIN contacts k ON k.id=c.contact_id
+    WHERE ${READY} AND c.id = ANY($2::uuid[]) ORDER BY c.created_at DESC`, [userId, focus])).rows);
   add((await query(`SELECT ${COLUMNS} FROM calls c LEFT JOIN contacts k ON k.id=c.contact_id
     WHERE ${READY} AND ${SEARCH} @@ websearch_to_tsquery('simple', $2)
     ORDER BY ts_rank(${SEARCH}, websearch_to_tsquery('simple', $2)) DESC, c.created_at DESC LIMIT 6`, [userId, question])).rows);
@@ -44,11 +60,11 @@ function excerpt(call, question) {
   return { lines, sent: [...chosen].sort((a, b) => a - b) };
 }
 
-export async function answerQuestion(userId, question, history = []) {
+export async function answerQuestion(userId, question, history = [], focus = []) {
   // A follow-up ("and the delivery date?") is searched together with the
   // question it follows, so the same calls come back.
   const searchText = [history.at(-1)?.question, question].filter(Boolean).join(' ');
-  const calls = await retrieve(userId, searchText);
+  const calls = await retrieve(userId, searchText, focus);
   if (!calls.length) return { answer: null, grounded: false, citations: [] };
   const sections = calls.map((call, i) => ({ label: `C${i + 1}`, call, ...excerpt(call, searchText) }));
   const earlier = history.flatMap(t => [`Q: ${t.question}`, `A: ${t.answer}`]);
@@ -70,7 +86,11 @@ export async function answerQuestion(userId, question, history = []) {
       created_at: section.call.created_at, line, quote: section.lines[line - 1],
       start: timed && Number.isFinite(turns[line - 1].start) ? turns[line - 1].start : null });
   }
-  const answer = typeof reply?.answer === 'string' ? reply.answer.trim().slice(0, 1000) : '';
+  const answer = typeof reply?.answer === 'string' ? stripLabels(reply.answer).slice(0, 1000) : '';
   if (!citations.length || !answer) return { answer: null, grounded: false, citations: [] };
-  return { answer, grounded: true, citations };
+  const draft = reply?.type === 'draft' && typeof reply.draft?.body === 'string' && reply.draft.body.trim() ? {
+    subject: typeof reply.draft.subject === 'string' ? stripLabels(reply.draft.subject).replace(/[\r\n]+/g, ' ').slice(0, 200) : '',
+    body: stripLabels(reply.draft.body).slice(0, 5000),
+  } : null;
+  return { answer, grounded: true, citations, ...(draft ? { draft } : {}) };
 }

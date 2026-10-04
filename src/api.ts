@@ -31,7 +31,8 @@ export type PromiseItem = { call_id: string; index: number; task: string; contac
   contact_name: string | null; phone: string; created_at: string };
 export type Promises = { you_owe: PromiseItem[]; waiting_on: PromiseItem[] };
 export type Citation = { call_id: string; contact_name: string | null; created_at: string; line: number; quote: string; start: number | null };
-export type AskAnswer = { answer: string | null; grounded: boolean; citations: Citation[] };
+export type AskDraft = { subject: string; body: string };
+export type AskAnswer = { answer: string | null; grounded: boolean; citations: Citation[]; draft?: AskDraft };
 export type Person = {
   contact: { id: string; phone: string; display_name: string | null; company: string | null; notes: string | null; name_source: string };
   calls: { id: string; created_at: string; direction: string; status: string; duration_sec: number | null; summary: string | null; agreements: Agreement[] | null }[];
@@ -55,7 +56,7 @@ export function setPromise(callId: string, index: number, status: 'open' | 'done
 export function getRecap(callId: string, refresh = false) {
   return request<{ text: string }>(`/api/calls/${encodeURIComponent(callId)}/recap${refresh ? '?refresh=1' : ''}`, '', { method: 'POST' });
 }
-export type AskTurn = { question: string; answer: string };
+export type AskTurn = { question: string; answer: string; call_ids?: string[] };
 export function askQuestion(question: string, history: AskTurn[] = []) {
   return request<AskAnswer>('/api/ask', '', { method: 'POST', body: JSON.stringify({ question, history }) });
 }
@@ -65,6 +66,10 @@ export function renameContact(id: string, display_name: string, company: string,
 }
 export function patchLanguage(language: 'en' | 'am') {
   return request<{ language: string }>('/api/me', '', { method: 'PATCH', body: JSON.stringify({ language }) });
+}
+export type Retention = 3 | 6 | 12 | 24 | null;
+export function patchRetention(retention_months: Retention) {
+  return request<{ retention_months: Retention }>('/api/me', '', { method: 'PATCH', body: JSON.stringify({ retention_months }) });
 }
 
 export type ActionItem = { task: string; owner: string | null };
@@ -192,7 +197,7 @@ export function verifyLoginCode(phone: string, code: string) {
   });
 }
 export function getMe() {
-  return request<{ phone: string; tier: string; agent_number: string | null; terms_required: boolean; language: 'en' | 'am' }>('/api/me', '');
+  return request<{ phone: string; tier: string; agent_number: string | null; terms_required: boolean; language: 'en' | 'am'; retention_months: Retention }>('/api/me', '');
 }
 export function acceptTerms(version: string) {
   return request<{ accepted_at: string }>('/api/me/terms', '', { method: 'POST', body: JSON.stringify({ version }) });

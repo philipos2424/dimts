@@ -73,6 +73,10 @@
     {
       "path": "/api/cron/weekly-briefing",
       "schedule": "0 13 * * 1"
+    },
+    {
+      "path": "/api/cron/retention",
+      "schedule": "30 2 * * *"
     }
   ]
 }
