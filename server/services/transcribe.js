@@ -79,6 +79,37 @@ export function normalizeScribeResponse(data, { direction = 'outbound', voicemai
   };
 }
 
+/**
+ * Channel count from the first MP3 frame header (skipping an ID3 tag), or null
+ * when the bytes are not a recognisable MP3. Channel mode 3 means mono.
+ */
+export function mp3Channels(bytes) {
+  let i = 0;
+  if (bytes.length > 10 && bytes[0] === 0x49 && bytes[1] === 0x44 && bytes[2] === 0x33) {
+    i = 10 + ((bytes[6] & 0x7f) << 21 | (bytes[7] & 0x7f) << 14 | (bytes[8] & 0x7f) << 7 | (bytes[9] & 0x7f));
+  }
+  for (const end = Math.min(bytes.length - 4, i + 64 * 1024); i <= end; i++) {
+    if (bytes[i] === 0xff && (bytes[i + 1] & 0xe0) === 0xe0 && (bytes[i + 1] & 0x06) !== 0) {
+      return ((bytes[i + 3] >> 6) & 0x03) === 3 ? 1 : 2;
+    }
+  }
+  return null;
+}
+
+// ElevenLabs explains a refusal in `detail`; keep it short and plain so the
+// call screen and logs say why, without echoing anything unexpected.
+async function scribeError(response) {
+  let detail = '';
+  try {
+    const body = await response.json();
+    const d = body?.detail;
+    detail = typeof d === 'string' ? d : d?.message ?? d?.status ?? '';
+  } catch { /* not JSON */ }
+  detail = String(detail).replace(/[^\p{L}\p{N} .,:;'()_\-/]/gu, '').slice(0, 160);
+  console.error('[scribe] request failed', response.status, detail);
+  return new Error(`ElevenLabs request failed (HTTP ${response.status})${detail ? `: ${detail}` : ''}`);
+}
+
 async function callScribe(audio, fields, signal) {
   const form = new FormData();
   form.set('file', audio, audio.type === 'audio/wav' ? 'recording.wav' : 'recording.mp3');
@@ -119,18 +150,19 @@ export async function transcribe(audioBlob, options = {}) {
     return normalizeScribeResponse(await response.json(), options);
   }
   if (config.transcribeProvider !== 'elevenlabs') throw new Error('Unsupported TRANSCRIBE_PROVIDER');
-  let response = await callScribe(audioBlob, options.voicemail ? {} : { use_multi_channel: true }, options.signal);
+  // A one-channel file cannot be split by channel; ask for speaker labels instead.
+  const channels = mp3Channels(new Uint8Array(await audioBlob.slice(0, 128 * 1024).arrayBuffer()));
+  if (channels === 1 && !options.voicemail) console.warn('[scribe] recording is mono; using diarize');
+  const multi = !options.voicemail && channels !== 1;
+  let response = await callScribe(audioBlob, options.voicemail ? {} : multi ? { use_multi_channel: true } : { diarize: true }, options.signal);
 
-  if (response.status === 400 && !options.voicemail) {
-    await response.body?.cancel();
-    console.warn('[scribe] multichannel rejected (HTTP 400), retrying with diarize');
+  if (response.status === 400 && multi) {
+    const first = await scribeError(response);
+    console.warn('[scribe] multichannel rejected, retrying with diarize:', first.message);
     response = await callScribe(audioBlob, { diarize: true }, options.signal);
   }
 
-  if (!response.ok) {
-    await response.body?.cancel();
-    throw new Error(`ElevenLabs request failed (HTTP ${response.status})`);
-  }
+  if (!response.ok) throw await scribeError(response);
 
   return normalizeScribeResponse(await response.json(), options);
 }
