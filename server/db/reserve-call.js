@@ -82,12 +82,14 @@ export async function reserveCallInTransaction(db, user, destination, record, re
     ON CONFLICT(user_id,phone) DO UPDATE SET phone=EXCLUDED.phone RETURNING id`, [user.id, destination])).rows[0].id;
   const policy = recordingPolicy(process.env, [user.phone, destination]);
   // Notice calls carry the owner's account-level consent on the owner's own leg.
+  // Outgoing calls show the owner's own mobile once the carrier has verified it.
+  const callerId = direction === 'outbound' && user.caller_id_verified_at ? user.phone : null;
   const call = (await db.query(`INSERT INTO calls(user_id,user_phone,destination,contact_id,record_enabled,request_key,max_duration_sec,status,direction,twilio_call_sid,agent_number,twilio_account_sid,consent_mode,consent_scope,
-      parent_consent_at,child_consent_at,billing_tier,plan_seconds,surcharge_cents,overage_cents)
+      parent_consent_at,child_consent_at,caller_id,billing_tier,plan_seconds,surcharge_cents,overage_cents)
     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::text,$10,$11,$12,$13::text,$14,
       CASE WHEN $13::text='notice' AND $5 AND $9::text='outbound' THEN now() END,
-      CASE WHEN $13::text='notice' AND $5 AND $9::text='inbound' THEN now() END,$15,$16,$17,$18) RETURNING *`,
-    [user.id, user.phone, destination, contactId, record, requestKey, remaining, direction === 'inbound' ? 'ringing' : 'initiating', direction, options.callSid ?? null, user.agent_number ?? null, account, policy.mode, policy.scope,
+      CASE WHEN $13::text='notice' AND $5 AND $9::text='inbound' THEN now() END,$15,$16,$17,$18,$19) RETURNING *`,
+    [user.id, user.phone, destination, contactId, record, requestKey, remaining, direction === 'inbound' ? 'ringing' : 'initiating', direction, options.callSid ?? null, user.agent_number ?? null, account, policy.mode, policy.scope, callerId,
       tier, planSeconds, surcharge, options.voicemailOnly ? 0 : OVERAGE_CENTS_PER_MIN])).rows[0];
   if (options.voicemailOnly) {
     const missed = (await db.query(`UPDATE calls SET status='missed', voicemail=true, duration_sec=0, completed_at=now()

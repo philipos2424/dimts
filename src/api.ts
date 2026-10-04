@@ -225,7 +225,16 @@ export function verifyLoginCode(phone: string, code: string) {
   });
 }
 export function getMe() {
-  return request<{ phone: string; tier: string; agent_number: string | null; number_release_at?: string | null; terms_required: boolean; language: 'en' | 'am'; retention_months: Retention }>('/api/me', '');
+  return request<{ phone: string; tier: string; agent_number: string | null; terms_required: boolean; language: 'en' | 'am'; retention_months: Retention; caller_id?: boolean; number_release_at?: string | null }>('/api/me', '');
+}
+export function startCallerId(method: 'call' | 'sms' = 'call') {
+  return request<{ status: 'code_sent' | 'verified' }>('/api/me/caller-id/start', '', { method: 'POST', body: JSON.stringify({ method }) });
+}
+export function verifyCallerId(code: string) {
+  return request<{ status: 'verified' }>('/api/me/caller-id/verify', '', { method: 'POST', body: JSON.stringify({ code }) });
+}
+export function stopCallerId() {
+  return request<{ status: 'off' }>('/api/me/caller-id', '', { method: 'DELETE' });
 }
 export function acceptTerms(version: string) {
   return request<{ accepted_at: string }>('/api/me/terms', '', { method: 'POST', body: JSON.stringify({ version }) });
@@ -285,6 +294,8 @@ function publicErrorMessage(status: number, body: string): string {
     invalid_phone: 'Enter a mobile number with its country code, starting with +.',
     handset_required: 'Use the mobile number you will answer, not the Dimts business number.',
     invalid_code: 'That verification code is incorrect or expired. Request another code and try again.',
+    caller_id_rejected: 'The carrier could not verify this number. Check it can receive calls, then try again.',
+    caller_id_unavailable: 'Showing your own number is not available yet.',
     invalid_verification: 'Check your phone number and verification code, then try again.',
     verification_trial_number_required: 'This pilot uses a Twilio trial account. Verify this mobile number in Twilio first, or use a verified test number.',
     verification_country_disabled: 'Verification messages are not enabled for this country. The operator needs to check Twilio Verify geographic permissions.',

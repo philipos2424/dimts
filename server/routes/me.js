@@ -5,6 +5,7 @@ import { claimNumber } from '../db/claim-number.js';
 import { HttpError, resolveUser } from '../lib/users.js';
 import { TERMS_VERSION, hasAcceptedTerms } from '../lib/terms.js';
 import { audit } from '../lib/audit.js';
+import { confirmCallerId, startCallerIdVerification } from '../services/caller-id.js';
 import { hit } from '../lib/rate-limit.js';
 import { buildExport } from '../services/export-user.js';
 import { deleteAccount } from '../services/delete-account.js';
@@ -28,6 +29,42 @@ meRouter.post('/number', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+meRouter.post('/caller-id/start', async (req, res, next) => {
+  try {
+    const user = await resolveUser(req);
+    await hit(`caller-id:${user.id}`, 5, 3600);
+    const { alreadyVerified } = await startCallerIdVerification(user.phone, req.body?.method);
+    if (alreadyVerified) {
+      await query('UPDATE users SET caller_id_verified_at=now() WHERE id=$1', [user.id]);
+      await audit({ userId: user.id, action: 'caller_id_enabled', req });
+      return res.json({ status: 'verified' });
+    }
+    res.status(202).json({ status: 'code_sent' });
+  } catch (err) { next(err); }
+});
+
+meRouter.post('/caller-id/verify', async (req, res, next) => {
+  try {
+    const user = await resolveUser(req);
+    const code = typeof req.body?.code === 'string' ? req.body.code.trim() : '';
+    if (!/^\d{4,10}$/.test(code)) throw new HttpError(400, 'invalid_code');
+    await hit(`caller-id-check:${user.id}`, 10, 3600);
+    if (!(await confirmCallerId(user.phone, code))) throw new HttpError(401, 'invalid_code');
+    await query('UPDATE users SET caller_id_verified_at=now() WHERE id=$1', [user.id]);
+    await audit({ userId: user.id, action: 'caller_id_enabled', req });
+    res.json({ status: 'verified' });
+  } catch (err) { next(err); }
+});
+
+meRouter.delete('/caller-id', async (req, res, next) => {
+  try {
+    const user = await resolveUser(req);
+    await query('UPDATE users SET caller_id_verified_at=NULL WHERE id=$1', [user.id]);
+    await audit({ userId: user.id, action: 'caller_id_disabled', req });
+    res.json({ status: 'off' });
+  } catch (err) { next(err); }
+});
+
 /** The app needs to know which number to tell the user to publish. */
 meRouter.get('/', async (req, res, next) => {
   try {
@@ -41,6 +78,7 @@ meRouter.get('/', async (req, res, next) => {
       terms_required: !hasAcceptedTerms(user),
       language: user.language ?? 'en',
       retention_months: user.retention_months ?? null,
+      caller_id: !!user.caller_id_verified_at,
     });
   } catch (err) { next(err); }
 });
