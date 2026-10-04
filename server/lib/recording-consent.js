@@ -45,7 +45,10 @@ export function dialCall(twiml, call) {
     timeLimit: call.max_duration_sec ?? 1800,
     // On incoming calls the owner sees who is calling, not the Dimts number.
     // Twilio allows passing the original caller's number through when forwarding.
-    callerId: call.direction === 'inbound' && isE164(call.destination) ? call.destination : call.agent_number || config.twilioNumber,
+    // Outgoing: the owner's verified mobile when they chose it, so people see who is calling.
+    callerId: call.direction === 'inbound' && isE164(call.destination) ? call.destination
+      : call.direction === 'outbound' && isE164(call.caller_id) ? call.caller_id
+      : call.agent_number || config.twilioNumber,
   });
   const target = call.direction === 'inbound' ? call.user_phone : call.destination;
   dial.number({ url: `${base}/twiml/party-consent?callId=${call.id}`, method: 'POST' }, target);

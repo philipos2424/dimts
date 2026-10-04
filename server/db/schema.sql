@@ -276,3 +276,6 @@ CREATE INDEX IF NOT EXISTS calls_search_idx ON calls
 ALTER TABLE calls ADD COLUMN IF NOT EXISTS voicemail BOOLEAN NOT NULL DEFAULT false;
 -- Storage limitation: calls older than this many months are deleted automatically. NULL keeps them until deleted.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS retention_months INT CHECK (retention_months IN (3,6,12,24));
+-- The owner's own mobile shown as caller ID once the carrier has verified it.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS caller_id_verified_at TIMESTAMPTZ;
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS caller_id TEXT;

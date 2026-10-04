@@ -5,6 +5,7 @@ import { getUsage, type Usage } from '../src/api';
 import { Section } from '../src/components/Section';
 import { Txt } from '../src/components/Txt';
 import { BusinessNumber } from '../src/components/BusinessNumber';
+import { CallerIdSettings } from '../src/components/CallerIdSettings';
 import { GoogleConnections } from '../src/components/GoogleConnections';
 import { CallDeletionHistory } from '../src/components/CallDeletion';
 import { NotificationSettings } from '../src/components/NotificationSettings';
@@ -32,6 +33,7 @@ export default function Settings() {
   return (
     <ScrollView contentContainerStyle={{ padding: space.md, gap: space.xl }}>
       <BusinessNumber />
+      <CallerIdSettings />
       <FirstCallLink />
       <GoogleConnections />
       <CallDeletionHistory />

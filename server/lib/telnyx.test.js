@@ -127,6 +127,15 @@ test('on Telnyx, notice calls record through Dial and consent prompts never hang
   assert.match(xml(t => offerVoicemail(t, base)), /<Record[^>]*channels="single"/);
 });
 
+test('an outgoing call shows the owner verified mobile; incoming still shows the caller', () => {
+  const out = xml(t => dialCall(t, { ...base, record_enabled: true, consent_mode: 'notice', caller_id: '+251953405253' }));
+  assert.match(out, /callerId="\+251953405253"/);
+  const plain = xml(t => dialCall(t, { ...base, record_enabled: true, consent_mode: 'notice', caller_id: null }));
+  assert.match(plain, /callerId="\+15555550199"/, 'falls back to the Dimts number');
+  const inbound = xml(t => dialCall(t, { ...base, direction: 'inbound', destination: '+14155552671', caller_id: '+251953405253' }));
+  assert.match(inbound, /callerId="\+14155552671"/);
+});
+
 test('on Twilio, the markup is unchanged', () => {
   process.env.CARRIER = 'twilio';
   process.env.TWILIO_NUMBER = '+15555550999';
