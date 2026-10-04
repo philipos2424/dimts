@@ -136,7 +136,11 @@ export async function processRecording(callId, { force = false, signal: callerSi
     } else {
       const audio = await loadAudio(call, signal);
       await renew();
-      result = await transcribe(audio, { direction: call.direction, voicemail: call.voicemail, signal });
+      // The owner's own contact names help the transcriber spell them.
+      const { rows: named } = await query(`SELECT display_name FROM contacts WHERE user_id=$1 AND display_name IS NOT NULL
+        ORDER BY last_call_at DESC NULLS LAST LIMIT 60`, [call.user_id]);
+      result = await transcribe(audio, { direction: call.direction, voicemail: call.voicemail, signal,
+        names: named.map(r => r.display_name) });
       const saved = await queryOne(`UPDATE calls SET transcript=$3,transcript_data=$4,
         language=$5,language_probability=$6,transcript_recording_url=$7,
         processing_until=now()+interval '10 minutes'
