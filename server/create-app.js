@@ -19,6 +19,7 @@ import { askRouter } from './routes/ask.js';
 import { briefingRouter, cronRouter } from './routes/briefing.js';
 import { myPrivacyRequestsRouter, privacyRequestsRouter } from './routes/privacy-requests.js';
 import { inboundRouter } from './routes/inbound.js';
+import { billingRouter, polarWebhookRouter } from './routes/billing.js';
 import { twimlRouter, webhooksRouter } from './routes/webhooks.js';
 import { apiRateLimit } from './lib/rate-limit.js';
 import { securityHeaders, WEB_SHELL_CSP } from './lib/security-headers.js';
@@ -58,6 +59,7 @@ export function createApp({ webRoot = fileURLToPath(new URL('../dist/', import.m
   app.use('/api/calls', followupsRouter);
   app.use('/api/calls', recapRouter);
   app.use('/api/usage', usageRouter);
+  app.use('/api/billing', billingRouter);
   app.use('/api/promises', promisesRouter);
   app.use('/api/ask', askRouter);
   app.use('/api/briefing', briefingRouter);
@@ -67,6 +69,7 @@ export function createApp({ webRoot = fileURLToPath(new URL('../dist/', import.m
   app.use('/api/privacy-requests', privacyRequestsRouter);
   app.use('/twiml/incoming', inboundRouter);
   app.use('/twiml', twimlRouter);
+  app.use('/webhooks/polar', polarWebhookRouter);
   app.use('/webhooks', webhooksRouter);
 
   if (existsSync(webRoot)) {
@@ -75,7 +78,7 @@ export function createApp({ webRoot = fileURLToPath(new URL('../dist/', import.m
     // Expo's single-page export needs the app shell on browser refresh/deep
     // links. Whitelist app routes so missing APIs/webhooks/assets stay errors.
     app.get(['/', '/onboarding', '/settings', '/first-call', '/dialer', '/ask', '/calls', '/in-call', '/call/:id', '/person/:id',
-      '/privacy', '/terms', '/privacy-request', '/terms-accept'],
+      '/privacy', '/terms', '/privacy-request', '/terms-accept', '/plans'],
       (req,res,next) => {
         if (!req.accepts('html') || (req.params.id && !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(req.params.id))) return next();
         res.set({ 'Cache-Control': 'no-cache', 'Content-Security-Policy': WEB_SHELL_CSP }).sendFile('index.html',{root:webRoot});

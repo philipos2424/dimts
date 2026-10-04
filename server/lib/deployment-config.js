@@ -1,5 +1,6 @@
 import { isE164 } from './phone.js';
 import { recordingPolicy } from './recording-policy.js';
+import { polarProducts } from './polar-products.js';
 
 // Validate before listening or migrating. Error messages name settings only;
 // never include database URLs, tokens or other configured values.
@@ -51,7 +52,12 @@ export function validateDeployment(env = process.env) {
     const redirect = url('GOOGLE_OAUTH_REDIRECT_URI',['https:']);
     if (redirect.origin !== origin.origin || redirect.pathname !== '/oauth/google/callback' || redirect.search) throw new Error('Invalid GOOGLE_OAUTH_REDIRECT_URI');
   }
-  for (const name of ['CALLS_PER_DAY','CALL_MINUTES_PER_MONTH','GLOBAL_CALL_MINUTES_PER_MONTH']) {
+  if (env.POLAR_ACCESS_TOKEN || env.POLAR_WEBHOOK_SECRET || env.POLAR_PRODUCTS) {
+    required('POLAR_ACCESS_TOKEN'); required('POLAR_WEBHOOK_SECRET');
+    if (env.POLAR_SERVER && !['sandbox','production'].includes(env.POLAR_SERVER)) throw new Error('Invalid POLAR_SERVER');
+    try { polarProducts(env); } catch { throw new Error('Invalid POLAR_PRODUCTS'); }
+  }
+  for (const name of ['CALLS_PER_DAY','GLOBAL_CALL_MINUTES_PER_MONTH']) {
     if (env[name] != null && (!Number.isSafeInteger(Number(env[name])) || Number(env[name]) <= 0)) throw new Error(`Invalid ${name}`);
   }
   const port = Number(env.PORT || 3000);

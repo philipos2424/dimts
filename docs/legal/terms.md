@@ -1,7 +1,7 @@
 # Dimts Terms of Service
 
 > **DRAFT. Requires review by a qualified lawyer before the EU launch.**
-> The app shows this text from `src/legal.ts`. Version `2026-10-02`.
+> The app shows this text from `src/legal.ts`. Version `2026-10-04`.
 
 1. **Using Dimts.** You must be old enough to enter a contract where you
    live, and you must use Dimts for lawful business purposes.
@@ -22,4 +22,6 @@
 7. **Liability.** Dimts is provided as is, to the extent the law allows.
    Nothing here limits rights you have under consumer protection law.
 
-Payment terms are added with release 3 (Polar).
+8. **Plans and payment.** Paid plans renew automatically every month or year until you cancel. Before you pay, the app shows the price, the renewal interval, the minutes included and how to cancel. Payments are processed by Polar (polar.sh), our merchant of record, which charges any VAT or sales tax and issues your receipts.
+9. **Minutes and credits.** Plan minutes reset on the first of each month (UTC) and do not roll over. Calls to or from some countries, and calls after your plan minutes run out, use prepaid credits at the rate shown in the app before the call connects. Credits never expire. If your minutes and credits run out, new calls are not connected until you add more.
+10. **Cancelling and refunds.** Cancel any time in the app under Plan. Your plan stays active until the end of the period you paid for and then returns to Free. If you are a consumer in the EU or UK, you can withdraw within 14 days of buying and get a refund, minus the value of minutes and credits you have already used. Unused credits are refunded on request when you delete your account. Nothing here limits your rights under consumer law.

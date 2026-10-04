@@ -276,3 +276,39 @@ CREATE INDEX IF NOT EXISTS calls_search_idx ON calls
 ALTER TABLE calls ADD COLUMN IF NOT EXISTS voicemail BOOLEAN NOT NULL DEFAULT false;
 -- Storage limitation: calls older than this many months are deleted automatically. NULL keeps them until deleted.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS retention_months INT CHECK (retention_months IN (3,6,12,24));
+
+-- Release 3: plans and prepaid credits through Polar (lib/pricing.js).
+-- What a call may cost is fixed when it is reserved, so later price changes
+-- never reprice a call already under way.
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS billing_tier TEXT;
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS plan_seconds INT;
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS surcharge_cents INT NOT NULL DEFAULT 0;
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS overage_cents INT NOT NULL DEFAULT 0;
+-- Append-only. The balance is the sum; source_key makes every grant and charge happen once.
+CREATE TABLE IF NOT EXISTS credit_ledger (
+  id BIGSERIAL PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES users(id),
+  amount_cents INT NOT NULL,
+  reason TEXT NOT NULL CHECK (reason IN ('purchase','call','refund','grant')),
+  source_key TEXT NOT NULL UNIQUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS credit_ledger_user_idx ON credit_ledger(user_id);
+CREATE TABLE IF NOT EXISTS subscriptions (
+  id TEXT PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES users(id),
+  product_key TEXT NOT NULL,
+  plan TEXT NOT NULL CHECK (plan IN ('pro','business')),
+  billing_interval TEXT NOT NULL CHECK (billing_interval IN ('month','year')),
+  status TEXT NOT NULL,
+  current_period_end TIMESTAMPTZ,
+  cancel_at_period_end BOOLEAN NOT NULL DEFAULT false,
+  provider_modified_at TIMESTAMPTZ,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS subscriptions_user_idx ON subscriptions(user_id);
+CREATE TABLE IF NOT EXISTS billing_events (
+  webhook_id TEXT PRIMARY KEY,
+  type TEXT NOT NULL,
+  received_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);

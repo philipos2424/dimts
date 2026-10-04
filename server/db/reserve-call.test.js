@@ -10,7 +10,7 @@ test('call reservations enforce idempotency, concurrency and minute budgets usin
   const db = new PGlite();
   try {
     await db.exec(await readFile(new URL('./schema.sql', import.meta.url), 'utf8'));
-    const owner = (await db.query("INSERT INTO users(phone,terms_version) VALUES('+15555550101','2026-10-02') RETURNING *")).rows[0];
+    const owner = (await db.query("INSERT INTO users(phone,terms_version) VALUES('+15555550101','2026-10-04') RETURNING *")).rows[0];
     const reserve = (key, dest = '+15555550102', record = true) => db.transaction(tx => reserveCallInTransaction(tx, owner, dest, record, key));
     process.env.TWILIO_ACCOUNT_SID = 'invalid';
     await assert.rejects(reserve('invalid-account'), /Invalid TWILIO_ACCOUNT_SID/);
@@ -26,12 +26,13 @@ test('call reservations enforce idempotency, concurrency and minute budgets usin
     await assert.rejects(reserve('request-one', '+15555550103'), { code: 'request_key_reused' });
     await assert.rejects(reserve('request-one', '+15555550102', false), { code: 'request_key_reused' });
     await assert.rejects(reserve('request-two'), { code: 'call_in_progress' });
-    await db.query("UPDATE calls SET status='completed',duration_sec=60 WHERE id=$1", [pair[0].call.id]);
-    process.env.CALL_MINUTES_PER_MONTH = '2';
+    assert.equal(pair[0].call.plan_seconds, 1800, 'free plan: 30 minutes');
+    // A finished call counts what it lasted, not what it reserved.
+    await db.query("UPDATE calls SET status='completed',duration_sec=1740 WHERE id=$1", [pair[0].call.id]);
     const second = await reserve('request-two');
     assert.equal(second.call.max_duration_sec, 60, 'cap uses remaining minutes');
     await db.query("UPDATE calls SET status='failed' WHERE id=$1", [second.call.id]);
-    await assert.rejects(reserve('request-three'), { code: 'call_minutes_limit' });
+    await assert.rejects(reserve('request-three'), { code: 'credits_required', status: 402 });
     await db.query('UPDATE calls SET budget_released=true WHERE id=$1', [second.call.id]);
     process.env.CALLS_PER_DAY = '2';
     await assert.rejects(reserve('request-three'), { code: 'daily_call_limit' });
@@ -41,7 +42,7 @@ test('call reservations enforce idempotency, concurrency and minute budgets usin
     // Idempotency lookup still works after a budget is exhausted.
     assert.equal((await reserve('request-two')).call.id, second.call.id);
     assert.equal((await db.query('SELECT count(*)::int AS n FROM calls')).rows[0].n, 2);
-    process.env.GLOBAL_CALL_MINUTES_PER_MONTH = '2';
+    process.env.GLOBAL_CALL_MINUTES_PER_MONTH = '30'; // 60 seconds left in the shared free pool
     const other = (await db.query("INSERT INTO users(phone) VALUES('+15555550104') RETURNING *")).rows[0];
     other.agent_number = '+15555550999';
     const inbound = () => db.transaction(tx => reserveCallInTransaction(tx, other, 'anonymous', true, 'incoming-CA_TEST',
@@ -55,7 +56,7 @@ test('call reservations enforce idempotency, concurrency and minute budgets usin
     assert.equal((await inbound()).created, false);
     await assert.rejects(reserve('request-three'), { code: 'call_minutes_limit' });
   } finally {
-    delete process.env.CALL_MINUTES_PER_MONTH; delete process.env.CALLS_PER_DAY; delete process.env.GLOBAL_CALL_MINUTES_PER_MONTH;
+    delete process.env.CALLS_PER_DAY; delete process.env.GLOBAL_CALL_MINUTES_PER_MONTH;
     await db.close();
   }
 });
@@ -64,7 +65,7 @@ test('new calls snapshot notice consent with the owner side pre-agreed from thei
   const db = new PGlite();
   try {
     await db.exec(await readFile(new URL('./schema.sql', import.meta.url), 'utf8'));
-    const owner = (await db.query("INSERT INTO users(phone,terms_version) VALUES('+15555550101','2026-10-02') RETURNING *")).rows[0];
+    const owner = (await db.query("INSERT INTO users(phone,terms_version) VALUES('+15555550101','2026-10-04') RETURNING *")).rows[0];
     process.env.RECORDING_CONSENT_MODE = 'owner_only';
     const out = await db.transaction(tx => reserveCallInTransaction(tx, owner, '+15555550102', true, 'out'));
     assert.equal(out.call.consent_mode, 'notice'); assert.equal(out.call.consent_scope, null);

@@ -8,6 +8,8 @@ import { audit } from '../lib/audit.js';
 import { hit } from '../lib/rate-limit.js';
 import { buildExport } from '../services/export-user.js';
 import { deleteAccount } from '../services/delete-account.js';
+import { liveSubscriptionIds } from '../services/billing.js';
+import { revokeSubscription } from '../services/polar.js';
 import { RETENTION_MONTHS } from '../services/retention.js';
 
 export const meRouter = express.Router();
@@ -72,6 +74,9 @@ meRouter.delete('/', async (req, res, next) => {
   try {
     const user = await resolveUser(req);
     if (req.body?.confirm !== 'delete-account') throw new HttpError(400, 'deletion_confirmation_required');
+    // Stop billing first: a deleted account must never be charged again. If
+    // Polar is unreachable the deletion waits rather than leaving a live plan.
+    for (const id of await liveSubscriptionIds(user.id)) await revokeSubscription(id);
     const result = await deleteAccount(user.id);
     await audit({ userId: user.id, action: 'account_deleted', req });
     res.status(202).json(result);

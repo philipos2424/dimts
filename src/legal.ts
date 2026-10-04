@@ -1,6 +1,6 @@
 // Must equal TERMS_VERSION in server/lib/terms.js. Bumping it asks every user
 // to accept again. The documents mirror docs/legal/*.md.
-export const TERMS_VERSION = '2026-10-02';
+export const TERMS_VERSION = '2026-10-04';
 
 export const RECORDING_NOTICE = 'This call is recorded and summarized by Dimts AI.';
 
@@ -27,4 +27,7 @@ export const TERMS: LegalSection[] = [
   { heading: 'Fair use', body: 'Do not use Dimts for harassment, unlawful surveillance, spam or fraud. We may suspend accounts that do.' },
   { heading: 'Changes and ending', body: 'You can stop using Dimts and delete your account at any time. If these terms change, we will ask you to accept the new version in the app.' },
   { heading: 'Liability', body: 'Dimts is provided as is, to the extent the law allows. Nothing here limits rights you have under consumer protection law.' },
+  { heading: "Plans and payment", body: "Paid plans renew automatically every month or year until you cancel. Before you pay, the app shows the price, the renewal interval, the minutes included and how to cancel. Payments are processed by Polar (polar.sh), our merchant of record, which charges any VAT or sales tax and issues your receipts." },
+  { heading: "Minutes and credits", body: "Plan minutes reset on the first of each month (UTC) and do not roll over. Calls to or from some countries, and calls after your plan minutes run out, use prepaid credits at the rate shown in the app before the call connects. Credits never expire. If your minutes and credits run out, new calls are not connected until you add more." },
+  { heading: "Cancelling and refunds", body: "Cancel any time in the app under Plan. Your plan stays active until the end of the period you paid for and then returns to Free. If you are a consumer in the EU or UK, you can withdraw within 14 days of buying and get a refund, minus the value of minutes and credits you have already used. Unused credits are refunded on request when you delete your account. Nothing here limits your rights under consumer law." },
 ];
