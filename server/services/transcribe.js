@@ -110,13 +110,27 @@ async function scribeError(response) {
   return new Error(`ElevenLabs request failed (HTTP ${response.status})${detail ? `: ${detail}` : ''}`);
 }
 
-async function callScribe(audio, fields, signal) {
+// Words Dimts' owners say that general models mishear (birr came back as
+// "dirham" on the first Ethiopian test call).
+export const BASE_KEYTERMS = ['birr', 'Ethiopian birr', 'ብር', 'santim', 'Addis Ababa', 'Dimts'];
+
+/** Usable keyterms: ElevenLabs takes under 50 characters, at most 5 words, none of <>{}[]\. */
+export function keytermsFor(names = []) {
+  const clean = [...BASE_KEYTERMS, ...names]
+    .filter(t => typeof t === 'string').map(t => t.trim().replace(/\s+/g, ' '))
+    .filter(t => t && t.length < 50 && t.split(' ').length <= 5 && !/[<>{}[\]\\]/.test(t));
+  return [...new Set(clean)].slice(0, 100);
+}
+
+async function callScribe(audio, fields, signal, keyterms = []) {
   const form = new FormData();
   form.set('file', audio, audio.type === 'audio/wav' ? 'recording.wav' : 'recording.mp3');
   form.set('model_id', config.scribeModelId);
   for (const [key, value] of Object.entries(fields)) {
     form.set(key, String(value));
   }
+  // ElevenLabs reads a list as the same field repeated, not as JSON.
+  for (const term of keyterms) form.append('keyterms', term);
 
   const response = await fetch(ENDPOINT, {
     method: 'POST',
@@ -154,12 +168,13 @@ export async function transcribe(audioBlob, options = {}) {
   const channels = mp3Channels(new Uint8Array(await audioBlob.slice(0, 128 * 1024).arrayBuffer()));
   if (channels === 1 && !options.voicemail) console.warn('[scribe] recording is mono; using diarize');
   const multi = !options.voicemail && channels !== 1;
-  let response = await callScribe(audioBlob, options.voicemail ? {} : multi ? { use_multi_channel: true } : { diarize: true }, options.signal);
+  const keyterms = keytermsFor(options.names);
+  let response = await callScribe(audioBlob, options.voicemail ? {} : multi ? { use_multi_channel: true } : { diarize: true }, options.signal, keyterms);
 
   if (response.status === 400 && multi) {
     const first = await scribeError(response);
     console.warn('[scribe] multichannel rejected, retrying with diarize:', first.message);
-    response = await callScribe(audioBlob, { diarize: true }, options.signal);
+    response = await callScribe(audioBlob, { diarize: true }, options.signal, keyterms);
   }
 
   if (!response.ok) throw await scribeError(response);
