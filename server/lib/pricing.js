@@ -162,3 +162,32 @@ export function catalogFor(phone) {
 }
 
 export const planOf = user => (PLANS[user?.tier] ? user.tier : 'free');
+
+/**
+ * What one minute of one leg costs us, in micro-dollars, before the actual
+ * bill arrives (provider_costs holds the real figures, synced daily).
+ * Includes Telnyx's $0.002 call-control fee. Ethiopia is measured: $0.3361
+ * a minute on Telnyx in October 2026. The rest are estimates to be replaced
+ * as provider_costs fills in.
+ */
+export const LEG_COST_MICROS = { default: 8000, 44: 20000, eea: 40000, 971: 200000, 966: 120000, 974: 220000, 973: 150000, 965: 150000, 968: 300000, 251: 338100 };
+const RECORDING_MICROS_PER_MIN = 2000;
+const TRANSCRIBE_MICROS_PER_MIN = 4500; // Scribe v2 $0.22/h + keyterms $0.05/h
+
+export function legCost(number) {
+  const code = callingCode(number);
+  if (!code) return LEG_COST_MICROS.default;
+  if (LEG_COST_MICROS[code] != null) return LEG_COST_MICROS[code];
+  return EEA_CODES.has(code) ? LEG_COST_MICROS.eea : LEG_COST_MICROS.default;
+}
+
+/**
+ * Estimated cost of a finished call. Carriers bill each leg per started
+ * minute, and the owner's leg runs from answer, so a short ring is counted.
+ */
+export function estimateCallCost({ ownerPhone, otherPhone, direction, seconds, recorded }) {
+  if (!(seconds > 0)) return 0;
+  const minutes = Math.ceil(seconds / 60);
+  const legs = legCost(ownerPhone) + (direction === 'inbound' ? LEG_COST_MICROS.default : legCost(otherPhone));
+  return minutes * legs + (recorded ? minutes * RECORDING_MICROS_PER_MIN + Math.ceil(seconds / 60 * TRANSCRIBE_MICROS_PER_MIN) : 0);
+}

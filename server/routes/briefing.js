@@ -5,6 +5,8 @@ import { query } from '../db/pool.js';
 import { weeklyBriefing, briefingIsEmpty } from '../services/briefing.js';
 import { sendBriefingNotification } from '../services/briefing-push.js';
 import { expireOldCalls } from '../services/retention.js';
+import { releaseExpiredNumbers } from '../services/release-numbers.js';
+import { syncProviderCosts } from '../services/provider-costs.js';
 
 export const briefingRouter = express.Router();
 
@@ -41,8 +43,13 @@ cronRouter.get('/weekly-briefing', async (req, res) => {
   res.json({ users: rows.length, sent });
 });
 
-// Daily: delete calls past each owner's retention period.
+// Daily housekeeping: delete calls past each owner's retention period,
+// release business numbers whose grace has ended, and copy carrier costs.
+// One cron path, because plans with few cron slots must still run all three.
 cronRouter.get('/retention', async (req, res) => {
   if (!authorizedCron(req)) return res.status(401).json({ error: 'unauthorized' });
-  res.json(await expireOldCalls());
+  const result = await expireOldCalls();
+  const numbers = await releaseExpiredNumbers().catch(err => ({ error: err?.message }));
+  const costs = await syncProviderCosts().catch(err => ({ error: err?.message }));
+  res.json({ ...result, numbers, costs });
 });

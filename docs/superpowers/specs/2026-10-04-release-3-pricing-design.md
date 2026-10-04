@@ -15,7 +15,7 @@ minute costs us depends on the country of each leg, and the spread is about 25 t
 | US, Canada | ~$0.006 |
 | UK, EEA | ~$0.01–0.05 |
 | Gulf | ~$0.10–0.30 |
-| Ethiopia | ~$0.30–0.50 |
+| Ethiopia | **$0.336 measured** (Telnyx bill, 4 Oct 2026) |
 
 On top of that, AI costs about $0.01 a minute (recording, speech-to-text, summary). A flat
 "minutes" plan is either too expensive for a New York user or loses money on every Addis
@@ -129,10 +129,42 @@ App: `app/plans.tsx`, the dialer's `CallPrice`, and the Plan link in Settings.
    set above Twilio's published mobile rates on purpose.
 8. Sign Polar's DPA. Polar is already listed in `docs/legal/subprocessors.md`.
 
+## Retention and cost control (added 4 October 2026)
+
+**Measured margin on Ethiopia.** Telnyx bills $0.3361 a minute for an Ethiopian leg,
+plus $0.002 call control and $0.002 recording, about $0.34 in total. The 50¢ surcharge
+less Polar's fee of about 12% on credit packs leaves about $0.10 a minute: positive, but
+thin. Do not lower it.
+
+- **Business numbers come with Pro and Business.** Each number costs about $1 a month
+  whether or not it rings. Free accounts get a "See plans" link instead of a number. When a
+  paid plan ends, the number stays for **30 days** (`users.number_release_at`), shown on
+  the Plan screen and next to the number. Paying again cancels the release. After 30 days
+  the daily cron releases it to the back of the pool queue. Numbers that Free accounts held
+  before this change are left alone.
+- **Incoming calls are never refused for money.** When the owner has no minutes and no
+  credits, the caller hears the recording notice and can leave a message of up to 2
+  minutes. That call is recorded as missed with voicemail and costs the owner nothing. The
+  owner gets one push a day explaining why. If the owner has not accepted the terms, the
+  call is still turned away, because we cannot record without consent.
+- **Warnings come before a call fails, not after.** Pushes are sent at 80% and 100% of
+  plan minutes (once each per month) and when bought credits fall below US$2 (once per
+  purchase). Tapping one opens Plan. The push carries only a type; the app decides where
+  to go.
+- **Unit economics from real bills.**
+  - `calls.est_cost_micros` stores our estimate for each finished call.
+  - `provider_costs` stores what Telnyx actually billed, per day, record type and country.
+    The daily `/api/cron/retention` run copies it from Telnyx detail records, skipping
+    today and the oldest day because they may be partial.
+  - `payments` stores every Polar order (plans and credits) with tax and refunds.
+  - `node --env-file=../.env server/scripts/unit-economics.js 2026-10 [--sync]` prints
+    revenue, Polar fees, the carrier bill by country, estimated AI cost, numbers held, and
+    gross profit.
+  - Fixed platform costs are not included.
+
 ## Deliberately not done yet
 
 - In-app purchases for the iOS and Android apps.
-- An inbound call that finds no minutes and no credits is still refused. Sending it to
-  voicemail instead would be kinder to a business line; that is the next change.
-- Low-balance push notifications and auto top-up.
+- Auto top-up (Polar one-time purchases cannot charge a saved card off-session).
+- An in-app cancel screen (pause or downgrade, plus one "why" question) before Polar's portal.
 - Team seats.

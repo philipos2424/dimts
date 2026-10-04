@@ -17,7 +17,12 @@ export async function syncTier(tx, userId) {
   const { rows } = await tx.query('SELECT plan FROM subscriptions WHERE user_id=$1 AND status = ANY($2)', [userId, GRANTING]);
   const plans = rows.map(row => row.plan);
   const tier = plans.includes('business') ? 'business' : plans.includes('pro') ? 'pro' : 'free';
-  await tx.query('UPDATE users SET tier=$2 WHERE id=$1', [userId, tier]);
+  // Dropping to Free keeps the business number for 30 days, so callers who
+  // already have it are not cut off while the owner decides; paying again cancels that.
+  await tx.query(`UPDATE users SET tier=$2,
+    number_release_at = CASE WHEN $2 <> 'free' OR agent_number IS NULL THEN NULL
+      ELSE COALESCE(number_release_at, now() + interval '30 days') END
+    WHERE id=$1`, [userId, tier]);
   return tier;
 }
 
@@ -41,8 +46,16 @@ async function applySubscription(tx, data, userId) {
 
 async function applyOrder(tx, type, data, userId) {
   const key = productKeyFor(data.product_id ?? data.product?.id);
+  if (!key) return 'ignored_product';
+  // Revenue record for unit economics: every paid order, plans and credits alike.
+  const amount = value => (Number.isSafeInteger(Number(value)) ? Number(value) : 0);
+  await tx.query(`INSERT INTO payments(order_id,user_id,product_key,currency,total_amount,tax_amount,refunded_amount,paid_at)
+    VALUES($1,$2,$3,$4,$5,$6,$7,COALESCE($8::timestamptz, now()))
+    ON CONFLICT(order_id) DO UPDATE SET refunded_amount=GREATEST(payments.refunded_amount, EXCLUDED.refunded_amount)`,
+    [data.id, userId, key, String(data.currency ?? 'usd').toLowerCase(), amount(data.total_amount), amount(data.tax_amount),
+      amount(data.refunded_amount), data.created_at ?? null]);
   const pack = CREDIT_PACKS[key];
-  if (!pack) return 'ignored_product'; // Subscription orders are handled by subscription events.
+  if (!pack) return 'applied'; // Plan access follows subscription events.
   if (type === 'order.paid') {
     await tx.query(`INSERT INTO credit_ledger(user_id,amount_cents,reason,source_key) VALUES($1,$2,'purchase',$3)
       ON CONFLICT(source_key) DO NOTHING`, [userId, pack.credits, `order:${data.id}`]);
@@ -84,19 +97,22 @@ export function applyPolarEvent(webhookId, event) {
 /** Plan, minutes and credits as the app shows them. */
 export async function billingState(user, db = database) {
   const tier = planOf(user);
-  const [usage, credits, subscription] = await Promise.all([
+  const [usage, credits, subscription, number] = await Promise.all([
     db.queryOne(`SELECT COALESCE(sum(${PLAN_SECONDS_SQL}),0)::int AS seconds FROM calls
       WHERE user_id=$1 AND NOT budget_released
       AND created_at >= date_trunc('month', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'`, [user.id]),
     db.queryOne('SELECT COALESCE(sum(amount_cents),0)::int AS cents FROM credit_ledger WHERE user_id=$1', [user.id]),
     db.queryOne(`SELECT plan,billing_interval,status,current_period_end,cancel_at_period_end FROM subscriptions
       WHERE user_id=$1 AND status = ANY($2) ORDER BY (plan='business') DESC, updated_at DESC LIMIT 1`, [user.id, GRANTING]),
+    db.queryOne('SELECT agent_number, number_release_at FROM users WHERE id=$1', [user.id]),
   ]);
   return {
     tier,
     minutes_included: PLANS[tier].minutes,
     minutes_used: Math.round(usage.seconds / 6) / 10,
     credits_cents: credits.cents,
+    business_number: number?.agent_number ?? null,
+    number_release_at: number?.agent_number ? number.number_release_at : null,
     subscription: subscription ? {
       plan: subscription.plan,
       interval: subscription.billing_interval,

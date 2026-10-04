@@ -312,3 +312,39 @@ CREATE TABLE IF NOT EXISTS billing_events (
   type TEXT NOT NULL,
   received_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Release 3b: retention and unit economics.
+-- A free account keeps its business number for 30 days after a paid plan ends.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS number_release_at TIMESTAMPTZ;
+-- One push per threshold and period; the key says which (e.g. minutes80:2026-10).
+CREATE TABLE IF NOT EXISTS billing_alerts (
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  alert_key TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, alert_key)
+);
+-- Every paid Polar order, so revenue can be set against cost.
+CREATE TABLE IF NOT EXISTS payments (
+  order_id TEXT PRIMARY KEY,
+  user_id UUID REFERENCES users(id),
+  product_key TEXT,
+  currency TEXT NOT NULL,
+  total_amount INT NOT NULL,
+  tax_amount INT NOT NULL DEFAULT 0,
+  refunded_amount INT NOT NULL DEFAULT 0,
+  paid_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+-- What carriers actually billed, per day, from their detail records.
+CREATE TABLE IF NOT EXISTS provider_costs (
+  day DATE NOT NULL,
+  provider TEXT NOT NULL,
+  record_type TEXT NOT NULL,
+  country_code TEXT NOT NULL DEFAULT '',
+  records INT NOT NULL,
+  billed_sec BIGINT NOT NULL DEFAULT 0,
+  cost_micros BIGINT NOT NULL,
+  synced_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (day, provider, record_type, country_code)
+);
+-- Our own estimate per finished call (carrier legs + recording + transcription), in micro-dollars.
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS est_cost_micros BIGINT;

@@ -30,6 +30,7 @@ const COPY = {
     afterCheckout: 'Payment received. Your plan updates in a few seconds.',
     webOnly: 'Plans and credits can be bought at dimts.app from any browser.',
     regional: 'Regional pricing for your country.',
+    numberGrace: (n: string, d: string) => `Your business number ${n} stays yours until ${d}. Choose a plan to keep it; after that it is released.`,
     free: 'Free', pro: 'Pro', business: 'Business',
   },
   am: {
@@ -49,6 +50,7 @@ const COPY = {
     afterCheckout: 'ክፍያው ደርሷል። ዕቅድዎ በጥቂት ሰከንዶች ውስጥ ይዘመናል።',
     webOnly: 'ዕቅድ እና ክሬዲት በማንኛውም ብራውዘር dimts.app ላይ መግዛት ይቻላል።',
     regional: 'ለአገርዎ የተዘጋጀ ዋጋ።',
+    numberGrace: (n: string, d: string) => `የንግድ ቁጥርዎ ${n} እስከ ${d} የእርስዎ ነው። ለማቆየት ዕቅድ ይምረጡ፤ ከዚያ በኋላ ይለቀቃል።`,
     free: 'ነፃ', pro: 'ፕሮ', business: 'ቢዝነስ',
   },
 };
@@ -128,6 +130,7 @@ export default function Plans() {
         </View>
         <Txt>{copy.credits}: <Txt weight="bold">{formatCredits(billing.credits_cents, lang)}</Txt></Txt>
         {subscription?.status === 'past_due' && <Txt tone="danger">{copy.pastDue}</Txt>}
+        {billing.business_number && billing.number_release_at && <Txt tone="warn">{copy.numberGrace(billing.business_number, date(billing.number_release_at))}</Txt>}
         {subscription?.renews_at && <Txt tone="muted">{copy.renews(date(subscription.renews_at))}</Txt>}
         {subscription?.ends_at && <Txt tone="muted">{copy.ends(date(subscription.ends_at))}</Txt>}
         {shop && subscription && <Button variant="quiet" label={copy.manage} busy={busy === 'portal'} onPress={manage} />}

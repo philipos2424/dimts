@@ -177,6 +177,9 @@ export type Billing = {
   minutes_used: number;
   /** 1 credit = 1 US cent. */
   credits_cents: number;
+  business_number: string | null;
+  /** When a Free account's business number will be released, if it is in its 30-day grace. */
+  number_release_at: string | null;
   subscription: { plan: PlanId; interval: Interval; status: string; renews_at: string | null; ends_at: string | null } | null;
   purchasable: boolean;
   catalog: {
@@ -222,7 +225,7 @@ export function verifyLoginCode(phone: string, code: string) {
   });
 }
 export function getMe() {
-  return request<{ phone: string; tier: string; agent_number: string | null; terms_required: boolean; language: 'en' | 'am'; retention_months: Retention }>('/api/me', '');
+  return request<{ phone: string; tier: string; agent_number: string | null; number_release_at?: string | null; terms_required: boolean; language: 'en' | 'am'; retention_months: Retention }>('/api/me', '');
 }
 export function acceptTerms(version: string) {
   return request<{ accepted_at: string }>('/api/me/terms', '', { method: 'POST', body: JSON.stringify({ version }) });
@@ -296,6 +299,7 @@ function publicErrorMessage(status: number, body: string): string {
     daily_call_limit: 'You have reached today’s call limit. Try again tomorrow.',
     call_minutes_limit: 'Free calling is busy this month. Add credits or upgrade to keep calling.',
     credits_required: 'You need more credits for this call. Add credits or upgrade in Plan.',
+    plan_required: 'A business number comes with Pro and Business. See Plan to upgrade.',
     billing_unavailable: 'Payments are unavailable right now. Try again in a minute.',
     invalid_item: 'That plan is not available. Reload and try again.',
     number_pool_empty: 'No business number is available yet. Your account is still saved.',

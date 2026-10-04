@@ -1,4 +1,7 @@
-import { queryOne } from './pool.js';
+import { query, queryOne } from './pool.js';
+import { estimateCallCost } from '../lib/pricing.js';
+import { defer } from '../lib/defer.js';
+import { sendBalanceAlerts } from '../services/billing-alerts.js';
 
 // All writes form one SQL statement. If usage accounting fails, duration stays
 // unclaimed so Twilio can safely retry. Duplicate callbacks claim no rows.
@@ -32,8 +35,17 @@ export const FINISH_CALL_SQL = `WITH changed AS (
 )
 SELECT id, user_id FROM changed`;
 
-export function finishCall(call, seconds, status, month) {
+export async function finishCall(call, seconds, status, month) {
   if (!Number.isSafeInteger(seconds) || seconds < 0) throw new Error('Invalid call duration');
-  return queryOne(FINISH_CALL_SQL, [call.id, seconds, status === 'completed' && seconds > 0,
+  const connected = status === 'completed' && seconds > 0;
+  const finished = await queryOne(FINISH_CALL_SQL, [call.id, seconds, connected,
     `Dial ${status}`, call.direction === 'inbound' ? 'missed' : 'failed', month]);
+  if (finished && connected) {
+    // Our side of the ledger: what this call cost, for unit economics.
+    const cost = estimateCallCost({ ownerPhone: call.user_phone, otherPhone: call.destination, direction: call.direction,
+      seconds, recorded: call.record_enabled !== false });
+    await query('UPDATE calls SET est_cost_micros=$2 WHERE id=$1', [call.id, cost]).catch(err => console.error('[cost] estimate not saved', err?.message));
+    if (finished.user_id) defer(sendBalanceAlerts(finished.user_id), `balance-alerts:${finished.user_id}`);
+  }
+  return finished;
 }

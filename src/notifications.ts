@@ -33,7 +33,7 @@ export async function disableIncomingNotifications(phone: string) {
 export async function restoreIncomingNotifications(phone: string) {
   if (Platform.OS !== 'web' && await notificationPreference(phone)) await register(false);
 }
-export async function observeIncomingNotifications(onCall: (id: string) => Promise<void>) {
+export async function observeIncomingNotifications(onCall: (id: string) => Promise<void>, onBilling: () => void = () => {}) {
   if (Platform.OS === 'web') return () => {};
   const Notifications = await import('expo-notifications');
   Notifications.setNotificationHandler({ handleNotification: async () => ({
@@ -42,6 +42,13 @@ export async function observeIncomingNotifications(onCall: (id: string) => Promi
   const seen = new Set<string>();
   async function respond(response: import('expo-notifications').NotificationResponse) {
     const request = response.notification.request, data = request.content.data;
+    // Minutes and credit warnings open Plan. The destination is fixed here, never read from the push.
+    if (typeof data?.type === 'string' && data.type.startsWith('billing-') && !seen.has(request.identifier)) {
+      seen.add(request.identifier);
+      await Notifications.clearLastNotificationResponseAsync().catch(() => {});
+      onBilling();
+      return;
+    }
     if (data?.type !== 'incoming-call' || typeof data.callId !== 'string' ||
         !/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(data.callId) || seen.has(request.identifier)) return;
     seen.add(request.identifier);
