@@ -25,6 +25,29 @@ test('numbers are local to the owner where we sell them, otherwise from the firs
   assert.equal(countryFor('+14155550100', ['US', 'GB']), 'US');
   assert.equal(countryFor('+251911000000', ['US', 'GB']), 'US');
   assert.equal(countryFor('+447700900123', ['US']), 'US');
+  assert.equal(countryFor('+14165550100', ['US', 'CA']), 'CA');
+  assert.equal(countryFor('+14165550100', ['US']), 'US');
+  assert.equal(countryFor('+14155550100', ['CA', 'US']), 'US');
+});
+
+test('a +1 owner gets a number in their own area code, or any local one when it has none left', async () => {
+  const searches = [];
+  let orders = 0;
+  mock.method(globalThis, 'fetch', async (href, init) => {
+    const query = new URL(String(href)).searchParams;
+    if (init.method === 'GET') searches.push(query.get('filter[national_destination_code]'));
+    const data = init.method === 'GET'
+      ? (query.get('filter[national_destination_code]') === '415' ? [{ phone_number: '+14155550111' }] : [])
+        .concat(query.has('filter[national_destination_code]') ? [] : [{ phone_number: '+12125550111' }])
+      : { id: 'order-2', status: 'pending', phone_numbers: [{ id: `num-area-${++orders}`, phone_number: init.body && JSON.parse(init.body).phone_numbers[0].phone_number }] };
+    return new Response(JSON.stringify({ data }), { status: 200 });
+  });
+  try {
+    assert.equal(await buyPoolNumber({ userId: await newUser('+14155550210'), ownerPhone: '+14155550210', voiceUrl: url }), '+14155550111');
+    assert.equal(await buyPoolNumber({ userId: await newUser('+19075550211'), ownerPhone: '+19075550211', voiceUrl: url }), '+12125550111');
+    assert.equal(await buyPoolNumber({ userId: await newUser('+447700900212'), ownerPhone: '+447700900212', voiceUrl: url }), '+12125550111');
+  } finally { mock.restoreAll(); await db.query("DELETE FROM agent_number_pool WHERE provider_sid LIKE 'num-area-%'"); }
+  assert.deepEqual(searches, ['415', '907', null, null]);
 });
 
 test('an empty pool buys one number, routes it to Dimts and gives it to the claimant', async () => {
