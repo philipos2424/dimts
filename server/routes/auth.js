@@ -6,7 +6,6 @@ import { isE164 } from '../lib/phone.js';
 import { canCall, signupCountryCode } from '../lib/destinations.js';
 import { hashToken, HttpError, resolveUser } from '../lib/users.js';
 import { checkPhoneCode, sendPhoneCode } from '../services/verify-phone.js';
-import { reviewLogin } from '../lib/review-login.js';
 import { audit } from '../lib/audit.js';
 import { hit } from '../lib/rate-limit.js';
 import { hasAcceptedTerms } from '../lib/terms.js';
@@ -20,7 +19,7 @@ const limit = (key, maximum) => hit(key, maximum, 3600);
 async function signInException(phone) {
   if (!canCall(phone)) return false;
   const invited = (process.env.SIGNUP_ALLOWED_NUMBERS ?? '').split(',').map(n => n.trim()).filter(Boolean);
-  if (invited.includes(phone) || reviewLogin()?.phone === phone) return true;
+  if (invited.includes(phone)) return true;
   return !!(await queryOne('SELECT 1 AS found FROM users WHERE phone=$1 AND deleted_at IS NULL', [phone]));
 }
 

@@ -27,16 +27,3 @@ test('sending a code is not approval, and configuration errors are not mistaken 
     failure={code};assert.equal(await checkPhoneCode('+15555550101','123456'),false);
   }
 });
-
-test('the review number signs in with its fixed code only, and never reaches the provider',async()=>{
-  process.env.REVIEW_PHONE='+15555550101'; process.env.REVIEW_CODE='1234';
-  let before=requests;
-  await sendPhoneCode('+15555550101');  // a short code leaves the review login off
-  assert.equal(requests,before+1);
-  process.env.REVIEW_CODE='31415926'; before=requests;
-  await sendPhoneCode('+15555550101');
-  assert.equal(requests,before);
-  assert.equal(await checkPhoneCode('+15555550101','31415926'),true);
-  assert.equal(await checkPhoneCode('+15555550101','31415927'),false);
-  delete process.env.REVIEW_PHONE; delete process.env.REVIEW_CODE;
-});
