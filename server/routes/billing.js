@@ -9,7 +9,8 @@ import { CREDIT_PACKS, INTERVALS, PAID_PLANS, OVERAGE_CENTS_PER_MIN, affordableS
   catalogFor, displayCurrency, pick, planProductKey, priceRegion, PLAN_PRICES } from '../lib/pricing.js';
 import { polarProducts } from '../lib/polar-products.js';
 import { verifyWebhook } from '../lib/standard-webhooks.js';
-import { applyPolarEvent, billingState } from '../services/billing.js';
+import { applyPolarEvent, assignNumberAfterUpgrade, billingState } from '../services/billing.js';
+import { defer } from '../lib/defer.js';
 import { billingConfigured, createCheckout, createPortalSession } from '../services/polar.js';
 
 export const billingRouter = express.Router();
@@ -101,6 +102,7 @@ polarWebhookRouter.post('/', async (req, res, next) => {
       return res.status(403).json({ error: 'invalid_signature' });
     }
     const outcome = await applyPolarEvent(req.get('webhook-id'), req.body);
+    if (outcome === 'applied') defer(assignNumberAfterUpgrade(req.body), 'assign-number');
     res.status(202).json({ outcome });
   } catch (err) { next(err); }
 });
