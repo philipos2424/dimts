@@ -69,6 +69,8 @@ async function nameContact(call, transcript, signal) {
 
   try {
     await touchLastCall(call.contact_id);
+    // A name the owner typed always wins, so asking the model would be wasted.
+    if (call.contact_display_name && call.contact_name_source === 'user') return;
 
     const identity = await identifyCaller(transcript, { signal });
     const existing = {
@@ -196,8 +198,8 @@ export async function processRecording(callId, { force = false, signal: callerSi
     // Only the worker that committed the notes may spend on identification or
     // update a contact. A stale worker cannot apply its old result.
     if (saved.rows.length) {
-      await nameContact(call, result.text, signal);
-      await checkConsistency(callId, { signal });
+      // Both are best-effort and independent, so neither waits for the other.
+      await Promise.all([nameContact(call, result.text, signal), checkConsistency(callId, { signal })]);
       // Notes are safe and the audio is in EU storage: Twilio's copy can go.
       defer(removeArchivedFromProvider(callId), `archive-remove:${callId}`);
     }
