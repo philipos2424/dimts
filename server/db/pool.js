@@ -2,6 +2,7 @@ import pg from 'pg';
 import { config } from '../config.js';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
+import { safeError } from '../lib/log-safe.js';
 
 let pool;
 let localDatabase;
@@ -22,7 +23,7 @@ export function getPool() {
       idleTimeoutMillis: 10_000,
       connectionTimeoutMillis: 10_000,
     });
-    pool.on('error', (err) => console.error('[pg] idle client error', err));
+    pool.on('error', (err) => console.error('[pg] idle client error', safeError(err)));
 
     // Best-effort: absent outside Vercel, and irrelevant to `node dev.js`.
     import('@vercel/functions')

@@ -14,6 +14,7 @@ import { defer } from '../lib/defer.js';
 import { resolveAgreements } from '../lib/agreements.js';
 import { transcriptTurns } from '../lib/transcript-turns.js';
 import { checkConsistency } from './consistency.js';
+import { safeError } from '../lib/log-safe.js';
 
 const DOWNLOAD_ATTEMPTS = 3;
 const DOWNLOAD_BACKOFF_MS = 2000;
@@ -80,7 +81,7 @@ async function nameContact(call, transcript, signal) {
       await adoptExtractedName(call.contact_id, identity);
     }
   } catch (err) {
-    console.error('[identify] naming failed for call', call.id, err);
+    console.error('[identify] naming failed for call', call.id, safeError(err));
   }
 }
 
