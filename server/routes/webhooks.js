@@ -214,6 +214,20 @@ twimlRouter.post('/dial-done', async (req, res) => {
   const { DialCallStatus, DialCallDuration, CallSid } = req.body ?? {};
   const call = await resolveCall({ callId: req.query.callId, callSid: CallSid });
 
+  // The network refused the call carrying the owner's own number (Ethio Telecom
+  // blocks local caller IDs arriving from abroad). The owner is still on the
+  // line, so ring the same person once more from the Dimts number. Busy and
+  // no-answer are the other person's choice and are not retried.
+  const retry = call?.direction === 'outbound' && DialCallStatus === 'failed' && call.caller_id &&
+    await queryOne(`UPDATE calls SET caller_id=NULL, child_call_sid=NULL
+      WHERE id=$1 AND caller_id IS NOT NULL AND duration_sec IS NULL RETURNING *`, [call.id]);
+  if (retry) {
+    const twiml = new VoiceResponse();
+    twiml.say('Your number could not be shown. Calling from your Dimts number.');
+    dialCall(twiml, retry);
+    return res.type('text/xml').send(twiml.toString());
+  }
+
   if (call) {
     await finishCall(call, Number(DialCallDuration ?? 0), DialCallStatus, currentMonth());
   }
