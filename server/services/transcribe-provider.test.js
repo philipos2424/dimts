@@ -22,3 +22,15 @@ test('provider rejection does not expose its response body', async t => {
   });
   assert.equal(uploadedName, 'recording.wav');
 });
+
+test('EU residency and zero retention are switched on by environment', async t => {
+  const names = ['TRANSCRIBE_PROVIDER', 'ELEVENLABS_API_KEY', 'ELEVENLABS_BASE_URL', 'ELEVENLABS_ZERO_RETENTION'];
+  const previous = Object.fromEntries(names.map(name => [name, process.env[name]]));
+  Object.assign(process.env, { TRANSCRIBE_PROVIDER: 'elevenlabs', ELEVENLABS_API_KEY: 'synthetic-test-key',
+    ELEVENLABS_BASE_URL: 'https://api.eu.residency.elevenlabs.io/', ELEVENLABS_ZERO_RETENTION: 'true' });
+  t.after(() => { for (const name of names) if (previous[name] === undefined) delete process.env[name]; else process.env[name] = previous[name]; });
+  let called;
+  t.mock.method(globalThis, 'fetch', async url => { called = String(url); return new Response('', { status: 401 }); });
+  await assert.rejects(transcribe(new Blob(['audio'], { type: 'audio/wav' })));
+  assert.equal(called, 'https://api.eu.residency.elevenlabs.io/v1/speech-to-text?enable_logging=false');
+});

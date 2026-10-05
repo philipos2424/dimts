@@ -9,6 +9,7 @@ import { queryOne } from '../db/pool.js';
 import { config } from '../config.js';
 import { sendIncomingNotification } from '../services/notifications.js';
 import { defer } from '../lib/defer.js';
+import { safeError } from '../lib/log-safe.js';
 
 const { VoiceResponse } = twilio.twiml;
 
@@ -26,7 +27,7 @@ async function resolveContact(userId, callerNumber) {
     const contact = await findOrCreateContact(userId, callerNumber);
     return contact?.id ?? null;
   } catch (err) {
-    console.error('[inbound] contact lookup failed', err);
+    console.error('[inbound] contact lookup failed', safeError(err));
     return null;
   }
 }
@@ -37,7 +38,7 @@ inboundRouter.post('/', async (req, res) => {
   const twiml = new VoiceResponse();
 
   const user = await findUserByAgentNumber(agentNumber).catch((err) => {
-    console.error('[inbound] owner lookup failed', err);
+    console.error('[inbound] owner lookup failed', safeError(err));
     return undefined;
   });
 
@@ -54,7 +55,7 @@ inboundRouter.post('/', async (req, res) => {
     if (!CallSid || !caller || caller === agentNumber || caller === user.phone) throw new Error('Invalid incoming call');
     ({ call } = await reserveCall(user, caller, true, `incoming-${CallSid}`, { direction: 'inbound', callSid: CallSid, contactId }));
   } catch (err) {
-    console.error('[inbound] call reservation refused', err);
+    console.error('[inbound] call reservation refused', safeError(err));
     twiml.say('We cannot connect this call right now. Please try again later.');
     twiml.hangup();
     return res.type('text/xml').send(twiml.toString());

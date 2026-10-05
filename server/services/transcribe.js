@@ -1,6 +1,12 @@
 import { config } from '../config.js';
 
-const ENDPOINT = 'https://api.elevenlabs.io/v1/speech-to-text';
+// ELEVENLABS_BASE_URL=https://api.eu.residency.elevenlabs.io keeps audio in
+// the EU and ELEVENLABS_ZERO_RETENTION=true stops ElevenLabs keeping it; both
+// need an ElevenLabs Enterprise plan, so neither is the default.
+function endpoint() {
+  const base = (process.env.ELEVENLABS_BASE_URL || 'https://api.elevenlabs.io').replace(/\/+$/, '');
+  return `${base}/v1/speech-to-text${process.env.ELEVENLABS_ZERO_RETENTION === 'true' ? '?enable_logging=false' : ''}`;
+}
 
 /**
  * Interleave a multichannel Scribe response into speaker-labelled dialogue.
@@ -132,7 +138,7 @@ async function callScribe(audio, fields, signal, keyterms = []) {
   // ElevenLabs reads a list as the same field repeated, not as JSON.
   for (const term of keyterms) form.append('keyterms', term);
 
-  const response = await fetch(ENDPOINT, {
+  const response = await fetch(endpoint(), {
     method: 'POST',
     headers: { 'xi-api-key': config.elevenLabsApiKey },
     body: form,
