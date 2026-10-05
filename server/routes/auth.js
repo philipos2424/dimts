@@ -9,6 +9,8 @@ import { checkPhoneCode, sendPhoneCode } from '../services/verify-phone.js';
 import { audit } from '../lib/audit.js';
 import { hit } from '../lib/rate-limit.js';
 import { hasAcceptedTerms } from '../lib/terms.js';
+import { checkReviewDemoCode, isReviewDemo } from '../lib/review-demo.js';
+import { resetReviewDemo } from '../services/review-demo.js';
 
 export const authRouter = express.Router();
 
@@ -28,6 +30,8 @@ authRouter.post('/start', async (req, res) => {
   if (!isE164(phone)) throw new HttpError(400, 'invalid_phone');
   if (!['sms', 'call'].includes(channel)) throw new HttpError(400, 'invalid_channel');
   if (phone === config.carrierNumber) throw new HttpError(400, 'handset_required', 'Use your mobile number, not the Dimts number.');
+  // App reviewers type a published code; nothing is sent to the fictional number.
+  if (isReviewDemo(phone)) return res.status(202).json({ status: 'code_sent' });
   // SMS pumping sends codes to expensive ranges; refuse them before paying for one.
   // Existing accounts and invited numbers may still sign in from anywhere we can call.
   const country = signupCountryCode(phone) ?? (await signInException(phone) ? 'exception' : null);
@@ -48,12 +52,14 @@ authRouter.post('/verify', async (req, res) => {
   }
   await limit(`check-phone:${phone}`, 15);
   await limit(`check-ip:${req.ip}`, 40);
-  if (!(await checkPhoneCode(phone, code))) throw new HttpError(401, 'invalid_code');
+  const demo = isReviewDemo(phone);
+  if (!(demo ? checkReviewDemoCode(code) : await checkPhoneCode(phone, code))) throw new HttpError(401, 'invalid_code');
   const user = await queryOne(
     `INSERT INTO users (phone) VALUES ($1)
      ON CONFLICT (phone) DO UPDATE SET phone = EXCLUDED.phone
      RETURNING id, phone, tier, terms_version`, [phone]
   );
+  if (demo) await resetReviewDemo(user);
   const token = randomBytes(32).toString('hex');
   await query(
     `INSERT INTO sessions (token_hash, user_id, expires_at)

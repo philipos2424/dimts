@@ -77,6 +77,22 @@ test('when Telnyx sends no dial-done receipt, the recording length becomes the c
   assert.equal((await row(id)).duration_sec, 62, 'a late receipt does not bill twice');
 });
 
+test('a refused call showing the owner number is redialled once from the Dimts number', async () => {
+  const id = await seed('outbound');
+  await db.query("UPDATE calls SET caller_id='+251953405253', agent_number='+15734881024' WHERE id=$1", [id]);
+  const first = await post(id, '/twiml/dial-done', { CallSid: parent, DialCallStatus: 'failed', DialCallDuration: '0' });
+  assert.match(first.xml, /<Dial[^>]*callerId="\+15734881024"/);
+  const saved = await row(id);
+  assert.equal(saved.caller_id, null);
+  assert.equal(saved.duration_sec, null, 'the call is not finished yet');
+  const second = await post(id, '/twiml/dial-done', { CallSid: parent, DialCallStatus: 'failed', DialCallDuration: '0' });
+  assert.doesNotMatch(second.xml, /<Dial/, 'only one retry');
+  assert.equal((await row(id)).duration_sec, 0);
+  const busy = await seed('outbound');
+  await db.query("UPDATE calls SET caller_id='+251953405253' WHERE id=$1", [busy]);
+  assert.doesNotMatch((await post(busy, '/twiml/dial-done', { CallSid: parent, DialCallStatus: 'busy' })).xml, /<Dial/);
+});
+
 test('inbound notice on Telnyx: the owner answering does not start a second recorder', async () => {
   const id = await seed('inbound', { notice: true });
   const before = starts;

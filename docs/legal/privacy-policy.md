@@ -2,7 +2,7 @@
 
 > **DRAFT. Requires review by a qualified lawyer before the EU launch.**
 > The app shows this text from `src/legal.ts`. Keep the two in sync.
-> Version `2026-10-02` (matches `TERMS_VERSION`).
+> Version `2026-10-05` (matches `TERMS_VERSION`).
 
 ## Who we are
 Dimts is an AI assistant for business phone calls. For your account data,
@@ -33,12 +33,15 @@ controller, and Dimts processes their data on your instructions as your
 - **Your instructions as controller**, for the people you call.
 
 We do not sell your data or use it for advertising. We do not train AI models
-on your calls. Questions you ask about your calls are answered and then
+on your calls, and we do not identify people by their voice. Questions you ask about your calls are answered and then
 discarded; we do not store them.
 
 ## Recording notice
 Every recorded call begins with: *"This call is recorded and summarized by
 Dimts AI."* The other person can end the call if they do not want to be recorded.
+Where the law asks for explicit agreement (Germany, Austria and the Gulf
+states), both people press 1 before recording starts, and the call is not
+recorded if either declines.
 
 ## Where your data lives
 - **EU:** account data, notes and call audio are stored in Supabase
@@ -46,6 +49,9 @@ Dimts AI."* The other person can end the call if they do not want to be recorded
 - **United States:** calls are connected by Telnyx and transcribed and
   summarized by AI providers that process data in the US. These transfers
   use Standard Contractual Clauses.
+- **Outside the EU:** if you live outside the EU (for example in Ethiopia,
+  the Gulf or North America), your data is transferred to the EU and the US
+  to provide the service.
 
 See the [list of subprocessors](subprocessors.md).
 

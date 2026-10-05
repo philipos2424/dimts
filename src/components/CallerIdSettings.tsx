@@ -42,7 +42,8 @@ export function CallerIdSettings() {
     <Section title="Caller ID">
       <Txt>{on ? `People you call see ${userPhone}.` : 'People you call see your Dimts business number.'}</Txt>
       <Txt size="caption" tone="muted">
-        Showing your own mobile helps people answer. If they call back, it rings your mobile directly and is not recorded.
+        Showing your own mobile helps people answer. If their network refuses it, Dimts calls again from your Dimts number.
+        If they call back, it rings your mobile directly and is not recorded.
       </Txt>
       {on ? <Button compact variant="quiet" label="Show my Dimts number instead" busy={busy} onPress={turnOff} />
         : step === 'idle' ? (

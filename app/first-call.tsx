@@ -25,7 +25,7 @@ export default function FirstCall() {
     </Section>
     <Section title="2. Start a short outgoing call">
       <Txt>Open the dialer and enter the other person’s number with its country code. Your own phone rings first, from your Dimts number: answer it. That is Dimts connecting you. Then the other person’s phone rings.</Txt>
-      <Txt tone="muted">There is nothing to press. The other person hears: “This call is recorded and summarized by Dimts AI.” Then the conversation starts. Calls with a Gulf number (UAE, Saudi Arabia, Qatar, Bahrain, Kuwait, Oman) are different: both of you press 1 to agree before recording.</Txt>
+      <Txt tone="muted">There is nothing to press. The other person hears: “This call is recorded and summarized by Dimts AI.” Then the conversation starts. Calls with a number in Germany, Austria or the Gulf (UAE, Saudi Arabia, Qatar, Bahrain, Kuwait, Oman) are different: both of you press 1 to agree before recording.</Txt>
       {!autoRecord && <Txt tone="muted">Recording is currently off. Enable it in Settings before this recording test.</Txt>}
       <Link label={autoRecord ? 'Open dialer (does not place a call)' : 'Open Settings to enable recording'}
         onPress={() => router.push(autoRecord ? '/dialer' : '/settings')} />

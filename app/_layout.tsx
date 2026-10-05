@@ -13,7 +13,7 @@ import { IncomingBriefing } from '../src/components/IncomingBriefing';
 import { IncomingNotificationObserver } from '../src/components/IncomingNotificationObserver';
 import { font, useTheme } from '../src/theme';
 
-const PUBLIC = new Set(['privacy', 'terms', 'privacy-request']);
+const PUBLIC = new Set(['privacy', 'terms', 'privacy-request', 'subprocessors']);
 
 function Gate() {
   const { c } = useTheme();
@@ -61,6 +61,7 @@ function Gate() {
       <Stack.Screen name="privacy" options={{ title: 'Privacy' }} />
       <Stack.Screen name="terms" options={{ title: 'Terms' }} />
       <Stack.Screen name="privacy-request" options={{ title: 'Privacy request' }} />
+      <Stack.Screen name="subprocessors" options={{ title: 'Subprocessors' }} />
     </Stack>
     </View>
   );

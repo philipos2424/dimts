@@ -8,7 +8,7 @@ import React, {
   useState,
 } from 'react';
 import { type Key, type Lang, translate } from './i18n';
-import { acceptTerms as acceptTermsApi, getMe, logout, patchLanguage, setApiSession } from './api';
+import { acceptTerms as acceptTermsApi, ApiError, getMe, logout, patchLanguage, setApiSession } from './api';
 import { TERMS_VERSION } from './legal';
 import { readSession, storeSession } from './session';
 
@@ -59,7 +59,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             // The server's language is the account's; the device follows it.
             if (me.language === 'am' || me.language === 'en') setLangState(me.language);
           }
-          catch { setApiSession(null); await storeSession(null); }
+          catch (err) {
+            // Only an expired or revoked session signs the owner out. A slow
+            // cold start or a dropped connection keeps them signed in.
+            if (err instanceof ApiError && err.status === 401) { setApiSession(null); await storeSession(null); }
+            else if (storedPhone[1]) setPhoneState(storedPhone[1]);
+          }
         }
         if (storedAuto[1] !== null) setAutoRecordState(storedAuto[1] === 'true');
       } catch {
@@ -98,6 +103,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (me.language === 'am' || me.language === 'en') setLangState(me.language);
     } catch { setTermsRequired(true); }
     setPhoneState(phone);
+    AsyncStorage.setItem(KEYS.phone, phone).catch(() => {});
   }, []);
 
   const acceptTerms = useCallback(async () => {

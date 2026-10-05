@@ -10,6 +10,7 @@ import { queryOne } from '../db/pool.js';
 import { config } from '../config.js';
 import { sendIncomingNotification } from '../services/notifications.js';
 import { defer } from '../lib/defer.js';
+import { safeError } from '../lib/log-safe.js';
 
 const { VoiceResponse } = twilio.twiml;
 
@@ -27,7 +28,7 @@ async function resolveContact(userId, callerNumber) {
     const contact = await findOrCreateContact(userId, callerNumber);
     return contact?.id ?? null;
   } catch (err) {
-    console.error('[inbound] contact lookup failed', err);
+    console.error('[inbound] contact lookup failed', safeError(err));
     return null;
   }
 }
@@ -55,7 +56,7 @@ inboundRouter.post('/', async (req, res) => {
   const twiml = new VoiceResponse();
 
   const user = await findUserByAgentNumber(agentNumber).catch((err) => {
-    console.error('[inbound] owner lookup failed', err);
+    console.error('[inbound] owner lookup failed', safeError(err));
     return undefined;
   });
 
@@ -75,12 +76,12 @@ inboundRouter.post('/', async (req, res) => {
     // Out of minutes and credits: a business line should still take a message.
     if (['credits_required', 'call_minutes_limit'].includes(err?.code)) {
       const message = await takeMessage(user, caller, CallSid, contactId, twiml).catch(fallback => {
-        console.error('[inbound] voicemail fallback failed', fallback);
+        console.error('[inbound] voicemail fallback failed', safeError(fallback));
         return false;
       });
       if (message) return res.type('text/xml').send(twiml.toString());
     }
-    console.error('[inbound] call reservation refused', err);
+    console.error('[inbound] call reservation refused', safeError(err));
     twiml.say('We cannot connect this call right now. Please try again later.');
     twiml.hangup();
     return res.type('text/xml').send(twiml.toString());

@@ -67,10 +67,15 @@ export const signupCountryCode = number => (canSignUp(number) ? countryCode(numb
 /** Calling code of a callable number, for pricing each call leg; null otherwise. */
 export const callingCode = number => (canCall(number) ? countryCode(number, CALLS) : null);
 
+// Germany (StGB §201) and Austria (StGB §120) make recording a private
+// conversation without consent a crime; carrying on after a notice may not
+// count as consent there, so these calls ask both people too.
+const EXPLICIT_CONSENT = [...GULF, '49', '43'];
+
 /**
  * Whether recording a call with this number needs every person's explicit
  * consent rather than a notice. UAE and Saudi law are described as requiring
  * prior consent from all parties, with criminal penalties; the other Gulf
  * states are treated the same until counsel says otherwise.
  */
-export const requiresExplicitConsent = number => isE164(number) && GULF.some(code => number.slice(1).startsWith(code));
+export const requiresExplicitConsent = number => isE164(number) && EXPLICIT_CONSENT.some(code => number.slice(1).startsWith(code));

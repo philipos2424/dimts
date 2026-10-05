@@ -18,6 +18,12 @@ test('a Gulf number on either side needs every person to press 1', () => {
   assert.deepEqual(recordingPolicy({}, ['+14155550000', '+251911234567']), { mode: 'notice', scope: null });
 });
 
+test('German and Austrian numbers need every person to press 1; the rest of the EU gets the notice', () => {
+  assert.deepEqual(recordingPolicy({}, ['+14155550000', '+4915112345678']), { mode: 'all_parties', scope: null });
+  assert.deepEqual(recordingPolicy({}, ['+436641234567', '+447911123456']), { mode: 'all_parties', scope: null });
+  assert.deepEqual(recordingPolicy({}, ['+33612345678', '+447911123456']), { mode: 'notice', scope: null });
+});
+
 test('atomic SQL and UI authorization agree for every combination of direction, policy, choices, notice and scope', async () => {
   const db = new PGlite();
   try {

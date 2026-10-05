@@ -21,7 +21,7 @@ const { reserveCallInTransaction } = await import('../db/reserve-call.js');
 const { finishCall } = await import('../db/finish-call.js');
 test.after(() => db.close());
 
-const newUser = async phone => (await db.query("INSERT INTO users(phone,terms_version) VALUES($1,'2026-10-04') RETURNING *", [phone])).rows[0];
+const newUser = async phone => (await db.query("INSERT INTO users(phone,terms_version) VALUES($1,'2026-10-06') RETURNING *", [phone])).rows[0];
 const reload = async user => (await db.query('SELECT * FROM users WHERE id=$1', [user.id])).rows[0];
 const sub = (user, fields) => ({ id: 'sub_grace', status: 'active', product_id: ids.pro_month, current_period_end: '2026-11-04T00:00:00Z',
   cancel_at_period_end: false, modified_at: '2026-10-06T00:00:00Z', customer: { external_id: user.id }, ...fields });
