@@ -10,12 +10,14 @@ import { hit } from '../lib/rate-limit.js';
 import { buildExport } from '../services/export-user.js';
 import { deleteAccount } from '../services/delete-account.js';
 import { RETENTION_MONTHS } from '../services/retention.js';
+import { refuseForReviewDemo } from '../lib/review-demo.js';
 
 export const meRouter = express.Router();
 
 meRouter.post('/number', async (req, res, next) => {
   try {
     const user = await resolveUser(req);
+    refuseForReviewDemo(user);
     if (user.agent_number) return res.json({ agent_number: user.agent_number });
     if (!process.env.PUBLIC_BASE_URL) throw new HttpError(503, 'routing_unavailable', 'Business-number routing is not configured yet.');
     const base = new URL(config.publicBaseUrl);
@@ -27,6 +29,7 @@ meRouter.post('/number', async (req, res, next) => {
 meRouter.post('/caller-id/start', async (req, res, next) => {
   try {
     const user = await resolveUser(req);
+    refuseForReviewDemo(user);
     await hit(`caller-id:${user.id}`, 5, 3600);
     const { alreadyVerified } = await startCallerIdVerification(user.phone, req.body?.method);
     if (alreadyVerified) {
@@ -41,6 +44,7 @@ meRouter.post('/caller-id/start', async (req, res, next) => {
 meRouter.post('/caller-id/verify', async (req, res, next) => {
   try {
     const user = await resolveUser(req);
+    refuseForReviewDemo(user);
     const code = typeof req.body?.code === 'string' ? req.body.code.trim() : '';
     if (!/^\d{4,10}$/.test(code)) throw new HttpError(400, 'invalid_code');
     await hit(`caller-id-check:${user.id}`, 10, 3600);

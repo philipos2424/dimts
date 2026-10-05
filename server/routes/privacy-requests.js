@@ -7,6 +7,7 @@ import { audit } from '../lib/audit.js';
 import { defer } from '../lib/defer.js';
 import { checkPhoneCode, sendPhoneCode } from '../services/verify-phone.js';
 import { sendPrivacyRequestNotification } from '../services/notifications.js';
+import { isReviewDemo } from '../lib/review-demo.js';
 
 export const privacyRequestsRouter = express.Router();
 export const SENT_MESSAGE = 'Your request was sent to the businesses who recorded calls with this number. They must act within 30 days. Contact privacy@dimts.app if they do not.';
@@ -16,7 +17,8 @@ privacyRequestsRouter.post('/start', async (req, res) => {
   if (!isE164(phone)) throw new HttpError(400, 'invalid_phone');
   await hit(`privacy-send-phone:${phone}`, 5, 3600);
   await hit(`privacy-send-ip:${req.ip}`, 20, 3600);
-  await sendPhoneCode(phone);
+  // Same answer as a real send, but the fictional review number is never texted.
+  if (!isReviewDemo(phone)) await sendPhoneCode(phone);
   res.status(202).json({ status: 'code_sent' });
 });
 

@@ -20,6 +20,8 @@ import { getAudio } from '../services/audio-store.js';
 import { captureState, todayCard } from '../lib/today.js';
 import { scheduleArchiveRetries } from '../services/archive-audio.js';
 import { audit } from '../lib/audit.js';
+import { isReviewDemo } from '../lib/review-demo.js';
+import { createReviewDemoCall } from '../services/review-demo.js';
 
 export const callsRouter = express.Router();
 
@@ -69,6 +71,11 @@ callsRouter.post('/', async (req, res, next) => {
         'invalid_destination',
         'destination must be an E.164 number, e.g. +251911234567'
       );
+    }
+    // The review account's number is fictional: file sample notes, ring no one.
+    if (isReviewDemo(user.phone)) {
+      const call = await createReviewDemoCall(user, destination);
+      return res.status(201).json({ callId: call.id, status: call.status });
     }
     // Toll fraud dials premium and unserved countries; both legs are billed to us.
     if (!canCall(destination)) {
