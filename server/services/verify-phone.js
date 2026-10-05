@@ -2,6 +2,10 @@ import { twilioClient } from '../lib/twilio-client.js';
 import { telnyxRequest } from '../lib/telnyx-rest.js';
 import { config } from '../config.js';
 import { HttpError } from '../lib/users.js';
+import { createHash, timingSafeEqual } from 'node:crypto';
+import { reviewLogin } from '../lib/review-login.js';
+
+const digest = value => createHash('sha256').update(value).digest();
 
 function service() {
   return twilioClient({ timeout: 15_000 })
@@ -11,6 +15,7 @@ function service() {
 // Some carriers (Ethio Telecom among them) filter international SMS codes; a
 // voice call reading the code out is the fallback.
 export async function sendPhoneCode(phone, channel = 'sms') {
+  if (reviewLogin()?.phone === phone) return;
   if (config.carrier === 'telnyx') return sendTelnyxCode(phone, channel);
   try { await service().verifications.create({ to: phone, channel }); }
   catch (err) {
@@ -23,6 +28,8 @@ export async function sendPhoneCode(phone, channel = 'sms') {
 }
 
 export async function checkPhoneCode(phone, code) {
+  const review = reviewLogin();
+  if (review?.phone === phone) return timingSafeEqual(digest(code), digest(review.code));
   if (config.carrier === 'telnyx') return checkTelnyxCode(phone, code);
   try {
     const result = await service().verificationChecks.create({ to: phone, code });

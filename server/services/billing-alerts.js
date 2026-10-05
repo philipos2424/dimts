@@ -9,18 +9,19 @@ const headers = () => ({ 'Content-Type': 'application/json', Accept: 'applicatio
 /** Credits below this, once someone has bought credits, earn a warning. */
 export const LOW_CREDIT_CENTS = 200;
 
+// Push only reaches the native apps, where store rules forbid prompting for outside purchases.
 const TEXT = {
   en: {
-    minutes80: (left) => ({ title: 'Plan minutes running low', body: `${left} minutes left this month. Add credits so calls keep connecting.` }),
-    minutes100: () => ({ title: 'Plan minutes used up', body: 'Calls now use credits. Add credits or upgrade so calls keep connecting.' }),
-    creditsLow: (left) => ({ title: 'Credits running low', body: `${left} of credit left. Top up so your next call connects.` }),
-    missed: () => ({ title: 'A caller reached your voicemail', body: 'You are out of minutes and credits, so the call went to voicemail. Add credits to take calls again.' }),
+    minutes80: (left) => ({ title: 'Plan minutes running low', body: `${left} minutes left this month. Calls after that use credits.` }),
+    minutes100: () => ({ title: 'Plan minutes used up', body: 'Calls now use your credits.' }),
+    creditsLow: (left) => ({ title: 'Credits running low', body: `${left} of credit left.` }),
+    missed: () => ({ title: 'A caller reached your voicemail', body: 'You are out of minutes and credits, so the call went to voicemail.' }),
   },
   am: {
-    minutes80: (left) => ({ title: 'የዕቅድ ደቂቃ እያለቀ ነው', body: `በዚህ ወር ${left} ደቂቃ ቀርቷል። ጥሪዎች እንዳይቋረጡ ክሬዲት ይጨምሩ።` }),
-    minutes100: () => ({ title: 'የዕቅድ ደቂቃ አልቋል', body: 'ጥሪዎች አሁን ክሬዲት ይጠቀማሉ። ጥሪዎች እንዳይቋረጡ ክሬዲት ይጨምሩ ወይም ያሳድጉ።' }),
-    creditsLow: (left) => ({ title: 'ክሬዲት እያለቀ ነው', body: `${left} ክሬዲት ቀርቷል። ቀጣዩ ጥሪዎ እንዲገናኝ ይሙሉ።` }),
-    missed: () => ({ title: 'ደዋይ ወደ ድምፅ መልዕክት ሄደ', body: 'ደቂቃ እና ክሬዲት ስላለቀብዎ ጥሪው ወደ ድምፅ መልዕክት ሄዷል። ጥሪ ለመቀበል ክሬዲት ይጨምሩ።' }),
+    minutes80: (left) => ({ title: 'የዕቅድ ደቂቃ እያለቀ ነው', body: `በዚህ ወር ${left} ደቂቃ ቀርቷል።` }),
+    minutes100: () => ({ title: 'የዕቅድ ደቂቃ አልቋል', body: 'ጥሪዎች አሁን ክሬዲት ይጠቀማሉ።' }),
+    creditsLow: (left) => ({ title: 'ክሬዲት እያለቀ ነው', body: `${left} ክሬዲት ቀርቷል።` }),
+    missed: () => ({ title: 'ደዋይ ወደ ድምፅ መልዕክት ሄደ', body: 'ደቂቃ እና ክሬዲት ስላለቀብዎ ጥሪው ወደ ድምፅ መልዕክት ሄዷል።' }),
   },
 };
 

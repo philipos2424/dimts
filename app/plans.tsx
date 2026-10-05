@@ -64,7 +64,6 @@ const FEATURES: Record<string, { en: string; am: string }> = {
   memory_check: { en: 'Memory check: flags when someone changes their word', am: 'የማስታወስ ፍተሻ፦ ቃላቸውን ሲቀይሩ ያሳውቃል' },
   business_number: { en: 'Your own business number', am: 'የራስዎ የንግድ ቁጥር' },
   google: { en: 'Google Calendar and Gmail drafts', am: 'Google Calendar እና Gmail ረቂቆች' },
-  live_memory_check: { en: 'Live memory check during calls (coming soon)', am: 'በጥሪ ጊዜ የቀጥታ ፍተሻ (በቅርቡ)' },
   priority_support: { en: 'Priority support', am: 'ቅድሚያ ድጋፍ' },
 };
 
@@ -136,7 +135,8 @@ export default function Plans() {
         {shop && subscription && <Button variant="quiet" label={copy.manage} busy={busy === 'portal'} onPress={manage} />}
       </Section>
 
-      {!shop && <Txt tone="muted">{copy.webOnly}</Txt>}
+      {/* App Store and Play anti-steering rules forbid pointing native users to an outside purchase page. */}
+      {!shop && Platform.OS === 'web' && <Txt tone="muted">{copy.webOnly}</Txt>}
 
       {shop && (
         <View style={{ gap: space.md }}>

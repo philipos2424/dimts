@@ -17,7 +17,7 @@ import { callingCode } from './destinations.js';
 export const PLANS = {
   free: { minutes: 30, features: ['notes', 'agreements', 'ask'] },
   pro: { minutes: 500, features: ['notes', 'agreements', 'ask', 'recaps', 'promises', 'memory_check', 'business_number', 'google'] },
-  business: { minutes: 1500, features: ['notes', 'agreements', 'ask', 'recaps', 'promises', 'memory_check', 'business_number', 'google', 'live_memory_check', 'priority_support'] },
+  business: { minutes: 1500, features: ['notes', 'agreements', 'ask', 'recaps', 'promises', 'memory_check', 'business_number', 'google', 'priority_support'] },
 };
 export const PAID_PLANS = ['pro', 'business'];
 export const INTERVALS = ['month', 'year'];

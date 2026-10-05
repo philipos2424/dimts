@@ -308,9 +308,13 @@ function publicErrorMessage(status: number, body: string): string {
     session_expired: 'Your session expired. Please sign in again.',
     call_in_progress: 'Finish your current call before starting another.',
     daily_call_limit: 'You have reached today’s call limit. Try again tomorrow.',
-    call_minutes_limit: 'Free calling is busy this month. Add credits or upgrade to keep calling.',
-    credits_required: 'You need more credits for this call. Add credits or upgrade in Plan.',
-    plan_required: 'A business number comes with Pro and Business. See Plan to upgrade.',
+    // Store rules: native apps may not prompt for purchases made outside the app.
+    call_minutes_limit: Platform.OS === 'web' ? 'Free calling is busy this month. Add credits or upgrade to keep calling.'
+      : 'Your free minutes for this month are used up.',
+    credits_required: Platform.OS === 'web' ? 'You need more credits for this call. Add credits or upgrade in Plan.'
+      : 'You do not have enough minutes or credits for this call.',
+    plan_required: Platform.OS === 'web' ? 'A business number comes with Pro and Business. See Plan to upgrade.'
+      : 'A business number comes with the Pro and Business plans.',
     billing_unavailable: 'Payments are unavailable right now. Try again in a minute.',
     invalid_item: 'That plan is not available. Reload and try again.',
     number_pool_empty: 'No business number is available yet. Your account is still saved.',
