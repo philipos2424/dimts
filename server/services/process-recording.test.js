@@ -55,6 +55,7 @@ mock.module('./summarize.js', {
 mock.module('./identify.js', {
   namedExports: {
     identifyCaller: async () => {
+      identifyCalls += 1;
       if (identifyThrows) throw new Error('openai is down');
       return identity;
     },
@@ -69,6 +70,7 @@ mock.module('../db/contacts.js', {
   },
 });
 
+let identifyCalls = 0;
 const { processRecording } = await import('./process-recording.js');
 
 test.beforeEach(() => {
@@ -83,6 +85,7 @@ test.beforeEach(() => {
   };
   identity = { name: 'Phili', company: 'Amax', confidence: 0.92 };
   identifyThrows = false;
+  identifyCalls = 0;
   adopted.length = 0;
   touched.length = 0;
   transcriptions.length = 0;
@@ -107,6 +110,7 @@ test('does not overwrite a name the user set', async () => {
 
   assert.equal(adopted.length, 0);
   assert.deepEqual(touched, ['c1'], 'still records that we spoke');
+  assert.equal(identifyCalls, 0, 'no model call for a name that cannot change');
 });
 
 test('skips naming below the confidence floor', async () => {
