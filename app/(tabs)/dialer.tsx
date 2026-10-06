@@ -6,6 +6,7 @@ import { ApiError, startCall, newCallRequestKey } from '../../src/api';
 import { Banner } from '../../src/components/Banner';
 import { Txt } from '../../src/components/Txt';
 import { CallBriefing } from '../../src/components/CallBriefing';
+import { CallPrice } from '../../src/components/CallPrice';
 import { geezDigits, type Key } from '../../src/i18n';
 import { radius, space, type, useTheme } from '../../src/theme';
 
@@ -72,6 +73,7 @@ export default function Dialer() {
             {t('enterNumber')}
           </Txt>
         )}
+        {dialable && <View style={{ marginTop: space.sm }}><CallPrice phone={number} /></View>}
       </View>
 
       {dialable && <View style={{ padding: space.md }}><CallBriefing phone={number} /></View>}

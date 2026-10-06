@@ -22,7 +22,7 @@ async function account() {
   n += 1;
   const phone = `+1555555${String(6000 + n)}`, agent = `+1555556${String(6000 + n)}`;
   await db.query("INSERT INTO agent_number_pool(phone,provider_sid,voice_url) VALUES($1,$2,'https://x/twiml/incoming')", [agent, 'PN' + randomBytes(16).toString('hex')]);
-  const user = (await db.query("INSERT INTO users(phone,agent_number,terms_version) VALUES($1,$2,'2026-10-05') RETURNING id", [phone, agent])).rows[0];
+  const user = (await db.query("INSERT INTO users(phone,agent_number,terms_version) VALUES($1,$2,'2026-10-06') RETURNING id", [phone, agent])).rows[0];
   const token = randomBytes(32).toString('hex');
   await db.query("INSERT INTO sessions(token_hash,user_id,expires_at) VALUES($1,$2,now()+interval '1 day')", [createHash('sha256').update(token).digest('hex'), user.id]);
   const contact = (await db.query("INSERT INTO contacts(user_id,phone,display_name) VALUES($1,'+15555550999','Sara') RETURNING id", [user.id])).rows[0];

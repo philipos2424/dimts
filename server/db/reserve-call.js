@@ -4,11 +4,44 @@ import { config } from '../config.js';
 import { isAccountSid } from '../lib/carrier.js';
 import { recordingPolicy } from '../lib/recording-policy.js';
 import { hasAcceptedTerms } from '../lib/terms.js';
+import { PLAN_SECONDS_SQL } from './plan-usage.js';
+import { VOICEMAIL_MAX_SECONDS } from '../lib/recording-consent.js';
+import { PLANS, affordableSeconds, callSurcharge, planOf, OVERAGE_CENTS_PER_MIN } from '../lib/pricing.js';
 
 function limit(name, fallback) {
   const value = Number(process.env[name] ?? fallback);
   if (!Number.isSafeInteger(value) || value <= 0) throw new Error(`Invalid ${name}`);
   return value;
+}
+
+/**
+ * How long this call may last and what it may cost: plan minutes first, then
+ * credits. Throws when neither can pay for a minute.
+ */
+async function callBudget(db, user, destination, direction, tier) {
+  // Pending or uncertain calls reserve their whole cap. A definitively failed
+  // request with no provider SID releases its minutes but still counts daily.
+  // Finished calls count only the plan minutes they used (finish-call.js).
+  const usage = (await db.query(`SELECT
+    COALESCE(sum(CASE WHEN user_id=$1 THEN ${PLAN_SECONDS_SQL} ELSE 0 END),0)::int AS plan_seconds,
+    COALESCE(sum(CASE WHEN COALESCE(billing_tier,'free')='free' THEN ${PLAN_SECONDS_SQL} ELSE 0 END),0)::int AS free_seconds
+    FROM calls WHERE created_at >= date_trunc('month', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'
+    AND NOT budget_released`, [user.id])).rows[0];
+  const credits = (await db.query('SELECT COALESCE(sum(amount_cents),0)::int AS cents FROM credit_ledger WHERE user_id=$1', [user.id])).rows[0].cents;
+  // The free plan's minutes come from one monthly pool shared by all free
+  // users: a cost guard against sign-up farms. Credits are never held by it.
+  const freePool = limit('GLOBAL_CALL_MINUTES_PER_MONTH', 300) * 60 - usage.free_seconds;
+  const ownPlanSeconds = Math.max(0, PLANS[tier].minutes * 60 - usage.plan_seconds);
+  const planSecondsLeft = tier === 'free' ? Math.min(ownPlanSeconds, Math.max(0, freePool)) : ownPlanSeconds;
+  const surcharge = callSurcharge(user.phone, destination, direction);
+  const remaining = affordableSeconds({ planSecondsLeft, credits, surcharge });
+  if (remaining < 60) {
+    if (ownPlanSeconds >= 60 && planSecondsLeft < 60 && surcharge === 0) throw new HttpError(429, 'call_minutes_limit', 'Call minute limit reached.');
+    throw new HttpError(402, 'credits_required', surcharge > 0
+      ? `Calls to this country cost ${surcharge} credits a minute. Add credits to call.`
+      : "You have used this month's minutes. Add credits or upgrade to keep calling.");
+  }
+  return { remaining, planSeconds: Math.min(planSecondsLeft, remaining), surcharge };
 }
 
 export function reserveCall(user, destination, record, requestKey, options = {}) {
@@ -37,16 +70,12 @@ export async function reserveCallInTransaction(db, user, destination, record, re
   const daily = (await db.query(`SELECT count(*)::int AS count FROM calls WHERE user_id=$1
     AND created_at >= date_trunc('day', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'`, [user.id])).rows[0].count;
   if (daily >= limit('CALLS_PER_DAY', 10)) throw new HttpError(429, 'daily_call_limit', 'Daily call limit reached.');
-  // Pending or uncertain calls reserve their entire cap. A definitively failed
-  // request with no provider SID releases its minutes but still counts daily.
-  const usage = (await db.query(`SELECT
-    COALESCE(sum(CASE WHEN user_id=$1 THEN COALESCE(duration_sec, max_duration_sec) ELSE 0 END),0)::int AS owner_seconds,
-    COALESCE(sum(COALESCE(duration_sec, max_duration_sec)),0)::int AS global_seconds
-    FROM calls WHERE created_at >= date_trunc('month', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'
-    AND NOT budget_released`, [user.id])).rows[0];
-  const remaining = Math.min(limit('CALL_MINUTES_PER_MONTH', 120) * 60 - usage.owner_seconds,
-    limit('GLOBAL_CALL_MINUTES_PER_MONTH', 300) * 60 - usage.global_seconds, 1800);
-  if (remaining < 60) throw new HttpError(429, 'call_minutes_limit', 'Call minute limit reached.');
+  const tier = planOf(user);
+  // A caller who reaches an owner with no minutes or credits left can still
+  // leave a message: the call is recorded as missed, with voicemail, at no charge.
+  const { remaining, planSeconds, surcharge } = options.voicemailOnly
+    ? { remaining: VOICEMAIL_MAX_SECONDS, planSeconds: 0, surcharge: 0 }
+    : await callBudget(db, user, destination, direction, tier);
   const account = config.providerAccountSid;
   if (!isAccountSid(account)) throw new Error(`Invalid ${config.carrier === 'telnyx' ? 'TELNYX' : 'TWILIO'}_ACCOUNT_SID`);
   const contactId = options.contactId !== undefined ? options.contactId : (await db.query(`INSERT INTO contacts(user_id,phone) VALUES($1,$2)
@@ -56,10 +85,16 @@ export async function reserveCallInTransaction(db, user, destination, record, re
   // Outgoing calls show the owner's own mobile once the carrier has verified it.
   const callerId = direction === 'outbound' && user.caller_id_verified_at ? user.phone : null;
   const call = (await db.query(`INSERT INTO calls(user_id,user_phone,destination,contact_id,record_enabled,request_key,max_duration_sec,status,direction,twilio_call_sid,agent_number,twilio_account_sid,consent_mode,consent_scope,
-      parent_consent_at,child_consent_at,caller_id)
+      parent_consent_at,child_consent_at,caller_id,billing_tier,plan_seconds,surcharge_cents,overage_cents)
     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::text,$10,$11,$12,$13::text,$14,
       CASE WHEN $13::text='notice' AND $5 AND $9::text='outbound' THEN now() END,
-      CASE WHEN $13::text='notice' AND $5 AND $9::text='inbound' THEN now() END,$15) RETURNING *`,
-    [user.id, user.phone, destination, contactId, record, requestKey, remaining, direction === 'inbound' ? 'ringing' : 'initiating', direction, options.callSid ?? null, user.agent_number ?? null, account, policy.mode, policy.scope, callerId])).rows[0];
+      CASE WHEN $13::text='notice' AND $5 AND $9::text='inbound' THEN now() END,$15,$16,$17,$18,$19) RETURNING *`,
+    [user.id, user.phone, destination, contactId, record, requestKey, remaining, direction === 'inbound' ? 'ringing' : 'initiating', direction, options.callSid ?? null, user.agent_number ?? null, account, policy.mode, policy.scope, callerId,
+      tier, planSeconds, surcharge, options.voicemailOnly ? 0 : OVERAGE_CENTS_PER_MIN])).rows[0];
+  if (options.voicemailOnly) {
+    const missed = (await db.query(`UPDATE calls SET status='missed', voicemail=true, duration_sec=0, completed_at=now()
+      WHERE id=$1 RETURNING *`, [call.id])).rows[0];
+    return { call: missed, created: true };
+  }
   return { call, created: true };
 }

@@ -280,6 +280,78 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS retention_months INT CHECK (retention
 ALTER TABLE users ADD COLUMN IF NOT EXISTS caller_id_verified_at TIMESTAMPTZ;
 ALTER TABLE calls ADD COLUMN IF NOT EXISTS caller_id TEXT;
 
+-- Release 3: plans and prepaid credits through Polar (lib/pricing.js).
+-- What a call may cost is fixed when it is reserved, so later price changes
+-- never reprice a call already under way.
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS billing_tier TEXT;
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS plan_seconds INT;
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS surcharge_cents INT NOT NULL DEFAULT 0;
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS overage_cents INT NOT NULL DEFAULT 0;
+-- Append-only. The balance is the sum; source_key makes every grant and charge happen once.
+CREATE TABLE IF NOT EXISTS credit_ledger (
+  id BIGSERIAL PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES users(id),
+  amount_cents INT NOT NULL,
+  reason TEXT NOT NULL CHECK (reason IN ('purchase','call','refund','grant')),
+  source_key TEXT NOT NULL UNIQUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS credit_ledger_user_idx ON credit_ledger(user_id);
+CREATE TABLE IF NOT EXISTS subscriptions (
+  id TEXT PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES users(id),
+  product_key TEXT NOT NULL,
+  plan TEXT NOT NULL CHECK (plan IN ('pro','business')),
+  billing_interval TEXT NOT NULL CHECK (billing_interval IN ('month','year')),
+  status TEXT NOT NULL,
+  current_period_end TIMESTAMPTZ,
+  cancel_at_period_end BOOLEAN NOT NULL DEFAULT false,
+  provider_modified_at TIMESTAMPTZ,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS subscriptions_user_idx ON subscriptions(user_id);
+CREATE TABLE IF NOT EXISTS billing_events (
+  webhook_id TEXT PRIMARY KEY,
+  type TEXT NOT NULL,
+  received_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Release 3b: retention and unit economics.
+-- A free account keeps its business number for 30 days after a paid plan ends.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS number_release_at TIMESTAMPTZ;
+-- One push per threshold and period; the key says which (e.g. minutes80:2026-10).
+CREATE TABLE IF NOT EXISTS billing_alerts (
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  alert_key TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, alert_key)
+);
+-- Every paid Polar order, so revenue can be set against cost.
+CREATE TABLE IF NOT EXISTS payments (
+  order_id TEXT PRIMARY KEY,
+  user_id UUID REFERENCES users(id),
+  product_key TEXT,
+  currency TEXT NOT NULL,
+  total_amount INT NOT NULL,
+  tax_amount INT NOT NULL DEFAULT 0,
+  refunded_amount INT NOT NULL DEFAULT 0,
+  paid_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+-- What carriers actually billed, per day, from their detail records.
+CREATE TABLE IF NOT EXISTS provider_costs (
+  day DATE NOT NULL,
+  provider TEXT NOT NULL,
+  record_type TEXT NOT NULL,
+  country_code TEXT NOT NULL DEFAULT '',
+  records INT NOT NULL,
+  billed_sec BIGINT NOT NULL DEFAULT 0,
+  cost_micros BIGINT NOT NULL,
+  synced_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (day, provider, record_type, country_code)
+);
+-- Our own estimate per finished call (carrier legs + recording + transcription), in micro-dollars.
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS est_cost_micros BIGINT;
+
 -- Signed-in devices: listed in Settings, revocable one by one or all at once.
 ALTER TABLE sessions ADD COLUMN IF NOT EXISTS id UUID NOT NULL DEFAULT gen_random_uuid();
 CREATE UNIQUE INDEX IF NOT EXISTS sessions_id_idx ON sessions (id);

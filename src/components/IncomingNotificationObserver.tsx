@@ -17,7 +17,7 @@ export function IncomingNotificationObserver() {
       if (cancelled || call.deleted_at) return;
       if (['ringing','in-progress'].includes(call.status)) router.push(`/in-call?id=${call.id}&dest=${encodeURIComponent(call.destination)}`);
       else router.push(`/call/${call.id}`);
-    }).then(stop => { if (cancelled) stop(); else cleanup = stop; }).catch(() => {});
+    }, () => { if (!cancelled) router.push('/plans'); }).then(stop => { if (cancelled) stop(); else cleanup = stop; }).catch(() => {});
     return () => { cancelled = true; cleanup?.(); };
   }, [ready,userPhone,router]);
   return null;

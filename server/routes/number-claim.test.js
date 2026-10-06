@@ -15,7 +15,7 @@ const { createApp } = await import('../create-app.js');
 const app = createApp();
 const tokens = ['a'.repeat(64), 'b'.repeat(64)];
 for (const [index, token] of tokens.entries()) {
-  const user = (await db.query('INSERT INTO users(phone) VALUES($1) RETURNING id', [`+1555555010${index + 1}`])).rows[0];
+  const user = (await db.query("INSERT INTO users(phone,tier) VALUES($1,'pro') RETURNING id", [`+1555555010${index + 1}`])).rows[0];
   await db.query("INSERT INTO sessions(token_hash,user_id,expires_at) VALUES($1,$2,now()+interval '1 day')",
     [createHash('sha256').update(token).digest('hex'), user.id]);
 }
@@ -40,4 +40,15 @@ test('only a real authenticated owner can claim; forged fields and retries canno
   assert.equal((await request(tokens[1])).status, 409);
   assert.equal((await request(tokens[1], '/api/me', 'GET')).data.agent_number, null);
   assert.equal((await request(tokens[0], '/api/me', 'GET')).data.agent_number, '+15555550105');
+});
+
+test('a business number comes with a paid plan; Free is told why and keeps none', async () => {
+  const token = 'c'.repeat(64);
+  const user = (await db.query("INSERT INTO users(phone) VALUES('+15555550109') RETURNING id")).rows[0];
+  await db.query("INSERT INTO sessions(token_hash,user_id,expires_at) VALUES($1,$2,now()+interval '1 day')",
+    [createHash('sha256').update(token).digest('hex'), user.id]);
+  const refused = await request(token);
+  assert.equal(refused.status, 402);
+  assert.equal(refused.data.error, 'plan_required');
+  assert.equal((await request(token, '/api/me', 'GET')).data.agent_number, null);
 });

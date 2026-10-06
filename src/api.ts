@@ -168,6 +168,34 @@ export type ResolvedConflict = { note: string; now: Agreement; before: Agreement
 
 export type Usage = { month: string; tier: string; minutes_used: number };
 
+export type Price = { amount: number; currency: string };
+export type PlanId = 'free' | 'pro' | 'business';
+export type Interval = 'month' | 'year';
+export type Billing = {
+  tier: PlanId;
+  minutes_included: number;
+  minutes_used: number;
+  /** 1 credit = 1 US cent. */
+  credits_cents: number;
+  business_number: string | null;
+  /** When a Free account's business number will be released, if it is in its 30-day grace. */
+  number_release_at: string | null;
+  subscription: { plan: PlanId; interval: Interval; status: string; renews_at: string | null; ends_at: string | null } | null;
+  purchasable: boolean;
+  catalog: {
+    region: 'standard' | 'lite';
+    currency: string;
+    overage_cents_per_min: number;
+    leg_surcharges: Record<string, number>;
+    plans: { id: PlanId; minutes: number; features: string[]; prices: Record<Interval, Price> | null }[];
+    credit_packs: { id: string; credits: number; price: Price }[];
+  };
+};
+export type CallQuote = {
+  to: string; surcharge_cents_per_min: number; overage_cents_per_min: number;
+  plan_minutes_left: number; credits_cents: number; pays_with: 'plan' | 'credits'; max_minutes: number;
+};
+
 /** Carries an i18n key so callers can surface the failure in either language. */
 export class ApiError extends Error {
   messageKey: Key;
@@ -217,7 +245,7 @@ export function endOtherSessions(all = false) {
   return request<{ ended: number }>(`/api/me/sessions/revoke${all ? '?all=1' : ''}`, '', { method: 'POST' });
 }
 export function getMe() {
-  return request<{ phone: string; tier: string; agent_number: string | null; terms_required: boolean; language: 'en' | 'am'; retention_months: Retention; caller_id?: boolean }>('/api/me', '');
+  return request<{ phone: string; tier: string; agent_number: string | null; terms_required: boolean; language: 'en' | 'am'; retention_months: Retention; caller_id?: boolean; number_release_at?: string | null }>('/api/me', '');
 }
 export function startCallerId(method: 'call' | 'sms' = 'call') {
   return request<{ status: 'code_sent' | 'verified' }>('/api/me/caller-id/start', '', { method: 'POST', body: JSON.stringify({ method }) });
@@ -300,7 +328,15 @@ function publicErrorMessage(status: number, body: string): string {
     session_expired: 'Your session expired. Please sign in again.',
     call_in_progress: 'Finish your current call before starting another.',
     daily_call_limit: 'You have reached today’s call limit. Try again tomorrow.',
-    call_minutes_limit: 'The call minute limit has been reached. Check your available usage.',
+    // Store rules: native apps may not prompt for purchases made outside the app.
+    call_minutes_limit: Platform.OS === 'web' ? 'Free calling is busy this month. Add credits or upgrade to keep calling.'
+      : 'Your free minutes for this month are used up.',
+    credits_required: Platform.OS === 'web' ? 'You need more credits for this call. Add credits or upgrade in Plan.'
+      : 'You do not have enough minutes or credits for this call.',
+    plan_required: Platform.OS === 'web' ? 'A business number comes with Pro and Business. See Plan to upgrade.'
+      : 'A business number comes with the Pro and Business plans.',
+    billing_unavailable: 'Payments are unavailable right now. Try again in a minute.',
+    invalid_item: 'That plan is not available. Reload and try again.',
     number_pool_empty: 'No business number is available yet. Your account is still saved.',
     recording_check_cooldown: 'Please wait a minute before checking the recording again.',
     recording_not_recoverable: 'This call is not eligible for recording recovery.',
@@ -435,6 +471,22 @@ export async function fetchCallExport(id: string, kind: 'notes' | 'audio', signa
   const bytes = new Uint8Array(await response.arrayBuffer());
   if (!bytes.length) throw new Error('The export was empty. Try again.');
   return bytes;
+}
+
+export function getBilling() {
+  return request<Billing>('/api/billing', '');
+}
+export function getCallQuote(to: string) {
+  return request<CallQuote>(`/api/billing/quote?to=${encodeURIComponent(to)}`, '');
+}
+/** A Polar checkout URL, or the customer portal when a plan is already active. */
+export function startCheckout(item: string, interval: Interval = 'month') {
+  return request<{ kind: 'checkout' | 'portal'; url: string }>('/api/billing/checkout', '', {
+    method: 'POST', body: JSON.stringify({ item, interval }),
+  });
+}
+export function openBillingPortal() {
+  return request<{ url: string }>('/api/billing/portal', '', { method: 'POST' });
 }
 
 export function getUsage(userPhone: string) {
