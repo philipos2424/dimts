@@ -33,7 +33,21 @@ and sign-in codes to Telnyx; every other setting stays the same.
 | `TELNYX_PUBLIC_KEY` | public key (base64) |
 | `TELNYX_NUMBER` | the number, E.164 |
 
-Redeploy after setting them. Then stock the number for incoming calls:
+Redeploy after setting them.
+
+Business numbers for incoming calls are bought automatically: when a Pro or
+Business owner has no number (right after their subscription webhook, or when
+they tap "Get my business number") and the pool is empty, Dimts orders a local
+number in their country, attaches it to the TeXML application and assigns it.
+The API key needs number-ordering permission and the account needs a balance.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `NUMBER_COUNTRIES` | `US` | ISO countries to buy in. Owners elsewhere get a number from the first one. Add `GB` or EU countries only after a Telnyx requirement group (address/ID) is approved there. |
+| `NUMBER_AUTOBUY_DAILY_MAX` | `20` | Purchases allowed per day across all accounts (each account: 2 an hour). |
+| `NUMBER_AUTOBUY` | on | `off` stops purchases; claims then use only hand-stocked numbers. |
+
+To add a number you already own instead, stock it by hand:
 `node --env-file=.env server/scripts/stock-number.js +1XXXXXXXXXX`.
 
 ## How Telnyx differs (already handled in code)

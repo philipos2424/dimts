@@ -51,9 +51,9 @@ function BusinessNumberForAccount() {
         <Txt tone="accent" weight="bold">See plans</Txt>
       </Pressable>
     </> : <>
-      <Txt tone="muted">{loaded ? 'Get a dedicated number for incoming calls. Availability depends on the pilot’s number pool.' : 'Loading your business number…'}</Txt>
+      <Txt tone="muted">{loaded ? 'Get a dedicated local number for incoming calls. It takes a few seconds.' : 'Loading your business number…'}</Txt>
       {loaded && <Pressable accessibilityRole="button" disabled={busy} onPress={claim} style={{ paddingVertical: space.sm }}>
-        <Txt tone="accent" weight="bold">{busy ? 'Assigning…' : 'Get my business number'}</Txt>
+        <Txt tone="accent" weight="bold">{busy ? 'Setting up your number…' : 'Get my business number'}</Txt>
       </Pressable>}
     </>}
     {!!message && <Txt tone="muted">{message}</Txt>}

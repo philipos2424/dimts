@@ -2,6 +2,7 @@ import * as database from '../db/pool.js';
 import { CREDIT_PACKS, PLANS, planOf } from '../lib/pricing.js';
 import { parsePlanKey, productKeyFor } from '../lib/polar-products.js';
 import { PLAN_SECONDS_SQL } from '../db/plan-usage.js';
+import { claimNumber, incomingVoiceUrl } from '../db/claim-number.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // past_due keeps the plan while Polar retries the card; it ends in canceled or active.
@@ -92,6 +93,21 @@ export function applyPolarEvent(webhookId, event) {
     }
     return type.startsWith('subscription.') ? applySubscription(tx, event.data, user.id) : applyOrder(tx, type, event.data, user.id);
   });
+}
+
+/**
+ * A paid plan includes a business number, so hand it over as soon as the
+ * subscription lands rather than waiting for the owner to find the button.
+ * Runs after the webhook is acknowledged; if it fails, the button still works.
+ */
+export async function assignNumberAfterUpgrade(event, db = database, claim = claimNumber) {
+  if (!String(event?.type ?? '').startsWith('subscription.')) return null;
+  const userId = ownerOf(event.data);
+  const voiceUrl = incomingVoiceUrl();
+  if (!userId || !voiceUrl) return null;
+  const user = await db.queryOne('SELECT id, tier, agent_number FROM users WHERE id=$1 AND deleted_at IS NULL', [userId]);
+  if (!user || planOf(user) === 'free' || user.agent_number) return null;
+  return claim(user.id, voiceUrl);
 }
 
 /** Plan, minutes and credits as the app shows them. */
