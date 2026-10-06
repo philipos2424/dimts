@@ -1,7 +1,7 @@
 import * as database from './pool.js';
 import { config } from '../config.js';
 import { HttpError } from '../lib/users.js';
-import { buyPoolNumber } from '../services/provision-number.js';
+import { buyPoolNumber, countryFor, numberCountryUnavailable } from '../services/provision-number.js';
 
 /** Where business numbers send incoming calls; null until public HTTPS routing is configured. */
 export function incomingVoiceUrl() {
@@ -39,6 +39,8 @@ export async function claimNumberInTransaction(db, userId, voiceUrl) {
   const owner = (await db.query('SELECT id, phone, agent_number FROM users WHERE id=$1 FOR UPDATE', [userId])).rows[0];
   if (!owner) throw new HttpError(404, 'account_not_found');
   if (owner.agent_number) return { agent_number: owner.agent_number };
+  // The pool holds numbers from the countries we sell in; never hand one to an owner elsewhere.
+  if (!countryFor(owner.phone)) throw numberCountryUnavailable();
   const available = (await db.query(`SELECT p.phone FROM agent_number_pool p
     WHERE p.enabled AND p.voice_url=$1 AND p.phone<>$2
       AND NOT EXISTS(SELECT 1 FROM users u WHERE u.agent_number=p.phone OR u.phone=p.phone)

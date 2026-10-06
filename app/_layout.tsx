@@ -34,6 +34,10 @@ function Gate() {
     else if (userPhone && !termsRequired && (onOnboarding || screen === 'terms-accept')) router.replace('/');
   }, [ready, userPhone, termsRequired, segments, router]);
 
+  // Screens fetch on mount; before the stored session is restored those
+  // requests go out signed-out, fail with 401 and never retry.
+  if (!ready) return <View style={{ flex: 1, backgroundColor: c.bg }} />;
+
   return (
     <View style={{ flex: 1 }}>
     <IncomingBriefing />

@@ -5,6 +5,7 @@ import { answerQuestion } from '../services/ask.js';
 import { briefingAnswer, isPlanningQuestion, weeklyBriefing } from '../services/briefing.js';
 
 export const askRouter = express.Router();
+export const ASK_TIMEOUT_MS = 25_000;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Questions and answers are not stored: the app keeps the conversation.
@@ -27,5 +28,14 @@ askRouter.post('/', async (req, res) => {
     return res.json({ answer: briefingAnswer(briefing, user.language), grounded: true, citations });
   }
   const focus = history.at(-1)?.call_ids ?? [];
-  res.json(await answerQuestion(user.id, question, history.map(({ question, answer }) => ({ question, answer })), focus));
+  // The app gives up after 30 seconds; stop the model before that so the
+  // owner gets a clear answer and we stop paying for one nobody will read.
+  try {
+    res.json(await answerQuestion(user.id, question, history.map(({ question, answer }) => ({ question, answer })), focus,
+      { signal: AbortSignal.timeout(ASK_TIMEOUT_MS) }));
+  } catch (err) {
+    if (err instanceof HttpError) throw err;
+    console.error('[ask] model unavailable', err?.name ?? 'Error');
+    throw new HttpError(503, 'ai_unavailable', 'Dimts AI is not answering right now. Try again in a minute.');
+  }
 });

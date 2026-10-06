@@ -23,8 +23,8 @@ test.after(() => db.close());
 test('numbers are local to the owner where we sell them, otherwise from the first listed country', () => {
   assert.equal(countryFor('+447700900123', ['US', 'GB']), 'GB');
   assert.equal(countryFor('+14155550100', ['US', 'GB']), 'US');
-  assert.equal(countryFor('+251911000000', ['US', 'GB']), 'US');
-  assert.equal(countryFor('+447700900123', ['US']), 'US');
+  assert.equal(countryFor('+251911000000', ['US', 'GB']), null);
+  assert.equal(countryFor('+447700900123', ['US']), null);
   assert.equal(countryFor('+14165550100', ['US', 'CA']), 'CA');
   assert.equal(countryFor('+14165550100', ['US']), 'US');
   assert.equal(countryFor('+14155550100', ['CA', 'US']), 'US');
@@ -45,9 +45,11 @@ test('a +1 owner gets a number in their own area code, or any local one when it 
   try {
     assert.equal(await buyPoolNumber({ userId: await newUser('+14155550210'), ownerPhone: '+14155550210', voiceUrl: url }), '+14155550111');
     assert.equal(await buyPoolNumber({ userId: await newUser('+19075550211'), ownerPhone: '+19075550211', voiceUrl: url }), '+12125550111');
-    assert.equal(await buyPoolNumber({ userId: await newUser('+447700900212'), ownerPhone: '+447700900212', voiceUrl: url }), '+12125550111');
+    // A UK owner is never sold a US number: their callers would pay international rates.
+    await assert.rejects(buyPoolNumber({ userId: await newUser('+447700900212'), ownerPhone: '+447700900212', voiceUrl: url }),
+      { code: 'number_country_unavailable' });
   } finally { mock.restoreAll(); await db.query("DELETE FROM agent_number_pool WHERE provider_sid LIKE 'num-area-%'"); }
-  assert.deepEqual(searches, ['415', '907', null, null]);
+  assert.deepEqual(searches, ['415', '907', null]);
 });
 
 test('an empty pool buys one number, routes it to Dimts and gives it to the claimant', async () => {

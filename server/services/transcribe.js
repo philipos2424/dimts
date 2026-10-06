@@ -116,13 +116,16 @@ async function scribeError(response) {
   return new Error(`ElevenLabs request failed (HTTP ${response.status})${detail ? `: ${detail}` : ''}`);
 }
 
-// Words Dimts' owners say that general models mishear (birr came back as
-// "dirham" on the first Ethiopian test call).
-export const BASE_KEYTERMS = ['birr', 'Ethiopian birr', 'ብር', 'santim', 'Addis Ababa', 'Dimts'];
+export const BASE_KEYTERMS = ['Dimts'];
+// Words general models mishear on calls with Ethiopia (birr came back as
+// "dirham" on the first Ethiopian test call). Only sent when a +251 number
+// is on the call, so other calls are not nudged toward them.
+export const ETHIOPIA_KEYTERMS = ['birr', 'Ethiopian birr', 'ብር', 'santim', 'Addis Ababa'];
 
 /** Usable keyterms: ElevenLabs takes under 50 characters, at most 5 words, none of <>{}[]\. */
-export function keytermsFor(names = []) {
-  const clean = [...BASE_KEYTERMS, ...names]
+export function keytermsFor(names = [], phones = []) {
+  const ethiopia = phones.some(p => typeof p === 'string' && p.startsWith('+251'));
+  const clean = [...BASE_KEYTERMS, ...(ethiopia ? ETHIOPIA_KEYTERMS : []), ...names]
     .filter(t => typeof t === 'string').map(t => t.trim().replace(/\s+/g, ' '))
     .filter(t => t && t.length < 50 && t.split(' ').length <= 5 && !/[<>{}[\]\\]/.test(t));
   return [...new Set(clean)].slice(0, 100);
@@ -151,9 +154,10 @@ async function callScribe(audio, fields, signal, keyterms = []) {
 /**
  * Transcribe a dual-channel recording.
  *
- * Tries multichannel first so each speaker is separated by channel, which is
- * more reliable than diarization. SPEC prescribes falling back to diarize on a
- * 400 — the two options cannot be combined.
+ * Each speaker is separated by recording channel. A one-channel recording is
+ * transcribed without speaker labels: diarization tells voices apart, which
+ * US biometric-privacy suits (BIPA) treat as a voiceprint, and the notes
+ * pipeline does not use its labels anyway.
  */
 export async function transcribe(audioBlob, options = {}) {
   options.signal?.throwIfAborted();
@@ -170,17 +174,16 @@ export async function transcribe(audioBlob, options = {}) {
     return normalizeScribeResponse(await response.json(), options);
   }
   if (config.transcribeProvider !== 'elevenlabs') throw new Error('Unsupported TRANSCRIBE_PROVIDER');
-  // A one-channel file cannot be split by channel; ask for speaker labels instead.
   const channels = mp3Channels(new Uint8Array(await audioBlob.slice(0, 128 * 1024).arrayBuffer()));
-  if (channels === 1 && !options.voicemail) console.warn('[scribe] recording is mono; using diarize');
+  if (channels === 1 && !options.voicemail) console.warn('[scribe] recording is mono; transcribing without speaker labels');
   const multi = !options.voicemail && channels !== 1;
-  const keyterms = keytermsFor(options.names);
-  let response = await callScribe(audioBlob, options.voicemail ? {} : multi ? { use_multi_channel: true } : { diarize: true }, options.signal, keyterms);
+  const keyterms = keytermsFor(options.names, options.phones);
+  let response = await callScribe(audioBlob, multi ? { use_multi_channel: true } : {}, options.signal, keyterms);
 
   if (response.status === 400 && multi) {
     const first = await scribeError(response);
-    console.warn('[scribe] multichannel rejected, retrying with diarize:', first.message);
-    response = await callScribe(audioBlob, { diarize: true }, options.signal, keyterms);
+    console.warn('[scribe] multichannel rejected, retrying as one channel:', first.message);
+    response = await callScribe(audioBlob, {}, options.signal, keyterms);
   }
 
   if (!response.ok) throw await scribeError(response);

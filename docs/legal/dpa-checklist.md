@@ -25,9 +25,8 @@
   - Ask about zero data retention for the project.
   - For EU residency, create an EU project and set
     `OPENAI_BASE_URL=https://eu.api.openai.com/v1` in Vercel.
-- [ ] **Ollama Cloud** (if used instead of OpenAI): confirm its data
-  retention and training terms. If they are not acceptable, switch to a
-  provider with a DPA.
+- [ ] **One LLM provider.** Production must run `LLM_PROVIDER=openai`. Ollama
+  Cloud is not a listed subprocessor; do not configure it in production.
 - [ ] **Expo.** Accept the DPA for push notifications.
 - [ ] **Polar.** Accept the merchant-of-record terms and DPA before release 3.
 - [ ] **GitHub, Google Cloud.** Turn on two-factor login.

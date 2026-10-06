@@ -23,20 +23,28 @@ const CANADIAN_AREA_CODES = new Set(('204 226 236 249 250 257 263 289 306 343 35
   + '437 438 450 460 468 474 506 514 519 548 579 581 584 587 604 613 639 647 672 683 705 709 742 753 778 780 782 807 819 '
   + '825 867 873 879 902 905 942').split(' '));
 
+export const numberCountryUnavailable = () => new HttpError(409, 'number_country_unavailable',
+  'Business numbers are not available in your country yet.');
+
 /** The owner's +1 area code, so their business number looks local to the people they call. */
 export function areaCodeOf(ownerPhone) {
   return /^\+1([2-9]\d{2})/.exec(String(ownerPhone ?? ''))?.[1] ?? null;
 }
 
-/** A local number in the owner's own country when we sell there, otherwise the first listed country. */
+/**
+ * A local number in the owner's own country, or null when we do not sell
+ * numbers there. A UK owner given a US number would have every caller pay
+ * international rates, which is the top complaint about US-based recorders.
+ * US and Canadian owners share +1, so either may take the other's number.
+ */
 export function countryFor(ownerPhone, countries = numberCountries()) {
   const areaCode = areaCodeOf(ownerPhone);
   if (areaCode) {
     const nanp = CANADIAN_AREA_CODES.has(areaCode) ? 'CA' : 'US';
-    if (countries.includes(nanp)) return nanp;
+    return countries.includes(nanp) ? nanp : countries.find(c => CALLING_CODES[c] === '1') ?? null;
   }
   const digits = String(ownerPhone ?? '').replace(/^\+/, '');
-  return countries.find(c => digits.startsWith(CALLING_CODES[c])) ?? countries[0];
+  return countries.find(c => CALLING_CODES[c] !== '1' && digits.startsWith(CALLING_CODES[c])) ?? null;
 }
 
 async function findTelnyx(country, areaCode) {
@@ -82,6 +90,7 @@ export async function buyPoolNumber({ userId, ownerPhone, voiceUrl }) {
   await hit(`number-buy:${userId}`, 2, 3600);
   await hit('number-buy-all', Number(process.env.NUMBER_AUTOBUY_DAILY_MAX) || 20, 86_400);
   const country = countryFor(ownerPhone);
+  if (!country) throw numberCountryUnavailable();
   // An area code only means something inside the owner's own country.
   const areaCode = CALLING_CODES[country] === '1' ? areaCodeOf(ownerPhone) : null;
   const bought = config.carrier === 'telnyx' ? await buyTelnyx(country, areaCode) : await buyTwilio(country, areaCode, voiceUrl);

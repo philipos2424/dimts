@@ -98,7 +98,7 @@ function excerpt(call, question) {
   return { lines, sent: [...chosen].sort((a, b) => a - b) };
 }
 
-export async function answerQuestion(userId, question, history = [], focus = []) {
+export async function answerQuestion(userId, question, history = [], focus = [], { signal } = {}) {
   // A follow-up ("and the delivery date?") is searched together with the
   // question it follows, so the same calls come back.
   const searchText = [history.at(-1)?.question, question].filter(Boolean).join(' ');
@@ -111,7 +111,7 @@ export async function answerQuestion(userId, question, history = [], focus = [])
     `${s.label} | ${s.call.contact_name ?? 'Unknown caller'} | ${new Date(s.call.created_at).toISOString().slice(0, 10)} | ${s.call.direction}`,
     ...s.sent.map(i => `[${i + 1}] ${s.lines[i]}`), '',
   ])].join('\n');
-  const reply = JSON.parse(await completeJson(PROMPT, input));
+  const reply = JSON.parse(await completeJson(PROMPT, input, 'json', { signal }));
   const citations = [];
   for (const cite of Array.isArray(reply?.citations) ? reply.citations : []) {
     const section = sections.find(s => s.label === cite?.call);

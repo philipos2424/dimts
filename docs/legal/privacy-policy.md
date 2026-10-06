@@ -2,13 +2,13 @@
 
 > **DRAFT. Requires review by a qualified lawyer before the EU launch.**
 > The app shows this text from `src/legal.ts`. Keep the two in sync.
-> Version `2026-10-05` (matches `TERMS_VERSION`).
+> Version `2026-10-07` (matches `TERMS_VERSION`).
 
 ## Who we are
 Dimts is an AI assistant for business phone calls. For your account data,
 Dimts is the **controller**. For the people you speak with, **you** are the
-controller, and Dimts processes their data on your instructions as your
-**processor**.
+controller: you decide to record them and need a lawful basis for it, and
+Dimts processes their data only on your instructions as your **processor**.
 
 ## What we collect
 - Your phone number and account settings.
@@ -30,7 +30,10 @@ controller, and Dimts processes their data on your instructions as your
 **Legal bases:**
 - **Contract**, for providing the service to you.
 - **Legitimate interests**, for security logs.
-- **Your instructions as controller**, for the people you call.
+- For the people you call, **you** choose the basis as controller: usually
+  your **legitimate interest** in an accurate record of business calls, or
+  their **consent** where local law requires it (Dimts asks every person to
+  press 1 on calls to or from Germany, Austria and the Gulf).
 
 We do not sell your data or use it for advertising. We do not train AI models
 on your calls, and we do not identify people by their voice. Questions you ask about your calls are answered and then
@@ -57,8 +60,9 @@ recorded if either declines.
 See the [list of subprocessors](subprocessors.md).
 
 ## How long we keep it
-Until you delete it, or for the period you choose in Settings (3, 6, 12 or
-24 months), after which calls are deleted automatically. You can delete a
+For 12 months, unless you choose another period in Settings (3, 6 or 24
+months, or until you delete them), after which calls are deleted
+automatically. You can delete a
 call, a contact or your whole account in Settings. Deleted recordings are
 removed from our storage and from our call provider. Encrypted database
 backups expire on their own schedule; deleted content in them cannot be read

@@ -29,7 +29,7 @@ const call = async (userId, months) => (await db.query(`INSERT INTO calls(user_i
 
 test('the owner chooses how long calls are kept; only allowed periods are accepted and the change is audited', async () => {
   const o = await signedIn('+15555550901');
-  assert.equal((await api('/api/me', o.token)).body.retention_months, null);
+  assert.equal((await api('/api/me', o.token)).body.retention_months, 12, 'new accounts keep calls for a year');
   assert.equal((await api('/api/me', o.token, { method: 'PATCH', body: { retention_months: 5 } })).status, 400);
   const saved = await api('/api/me', o.token, { method: 'PATCH', body: { retention_months: 6 } });
   assert.equal(saved.status, 200); assert.equal(saved.body.retention_months, 6); assert.equal(saved.body.language, 'en');
@@ -42,6 +42,7 @@ test('the owner chooses how long calls are kept; only allowed periods are accept
 test('the daily sweep deletes only calls past their owner\'s period, and only with the cron secret', async () => {
   const keeps = await signedIn('+15555550902'), limited = await signedIn('+15555550903');
   await db.query('UPDATE users SET retention_months=3 WHERE id=$1', [limited.id]);
+  await db.query('UPDATE users SET retention_months=NULL WHERE id=$1', [keeps.id]);
   const old = await call(limited.id, 4), recent = await call(limited.id, 1), forever = await call(keeps.id, 30);
   assert.equal((await fetch(origin + '/api/cron/retention')).status, 401);
   const result = await fetch(origin + '/api/cron/retention', { headers: { Authorization: 'Bearer retention-cron-secret-123' } }).then(r => r.json());

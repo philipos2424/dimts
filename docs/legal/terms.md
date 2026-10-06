@@ -3,8 +3,9 @@
 > **DRAFT. Requires review by a qualified lawyer before the EU launch.**
 > The app shows this text from `src/legal.ts`. Version `2026-10-06`.
 
-1. **Using Dimts.** You must be old enough to enter a contract where you
-   live, and you must use Dimts for lawful business purposes.
+1. **Using Dimts.** You must be at least 18, and you must use Dimts for
+   lawful business purposes. Dimts is not for emergency calls: it cannot
+   reach 911, 112, 999 or other emergency numbers.
 2. **Recording.** You agree that calls through Dimts are recorded, and that
    the other person hears *"This call is recorded and summarized by Dimts
    AI."* Where the law asks for explicit agreement (Germany, Austria and

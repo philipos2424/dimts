@@ -131,9 +131,11 @@ test('reads the channel count from an MP3 frame header, after an ID3 tag', async
   assert.equal(mp3Channels(Uint8Array.from([1, 2, 3, 4, 5])), null);
 });
 
-test('keyterms always include birr and the owner contacts, within ElevenLabs limits', async () => {
+test('keyterms include the owner contacts, within ElevenLabs limits; birr only on calls with Ethiopia', async () => {
   const { keytermsFor } = await import('./transcribe.js');
-  const terms = keytermsFor(['Abebe Kebede', '  Tigist  ', 'Abebe Kebede', 'a{bad}', 'x'.repeat(60), 'one two three four five six', null]);
+  assert.ok(!keytermsFor(['Dave'], ['+14155550100', '+447700900123']).includes('birr'));
+  const terms = keytermsFor(['Abebe Kebede', '  Tigist  ', 'Abebe Kebede', 'a{bad}', 'x'.repeat(60), 'one two three four five six', null],
+    ['+14155550100', '+251911234567']);
   assert.ok(terms.includes('birr') && terms.includes('ብር'));
   assert.ok(terms.includes('Abebe Kebede') && terms.includes('Tigist'));
   assert.equal(terms.filter(t => t === 'Abebe Kebede').length, 1);
