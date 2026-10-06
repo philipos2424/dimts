@@ -9,6 +9,7 @@ import { useEffect } from 'react';
 import { View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AppProvider, useApp } from '../src/AppContext';
+import { AppLockGate } from '../src/AppLock';
 import { IncomingBriefing } from '../src/components/IncomingBriefing';
 import { IncomingNotificationObserver } from '../src/components/IncomingNotificationObserver';
 import { font, useTheme } from '../src/theme';
@@ -62,6 +63,7 @@ function Gate() {
       <Stack.Screen name="privacy-request" options={{ title: 'Privacy request' }} />
       <Stack.Screen name="subprocessors" options={{ title: 'Subprocessors' }} />
     </Stack>
+    <AppLockGate />
     </View>
   );
 }

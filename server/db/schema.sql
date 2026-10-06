@@ -270,8 +270,8 @@ CREATE TABLE IF NOT EXISTS promise_states (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (call_id, item_index)
 );
-CREATE INDEX IF NOT EXISTS calls_search_idx ON calls
-  USING gin (to_tsvector('simple', coalesce(summary,'') || ' ' || coalesce(transcript,'')));
+-- Call content is encrypted at rest; a text index would keep a readable copy of every word.
+DROP INDEX IF EXISTS calls_search_idx;
 -- A message left after a missed incoming call: one mono channel, the caller only.
 ALTER TABLE calls ADD COLUMN IF NOT EXISTS voicemail BOOLEAN NOT NULL DEFAULT false;
 -- Storage limitation: calls older than this many months are deleted automatically. NULL keeps them until deleted.
@@ -279,3 +279,10 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS retention_months INT CHECK (retention
 -- The owner's own mobile shown as caller ID once the carrier has verified it.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS caller_id_verified_at TIMESTAMPTZ;
 ALTER TABLE calls ADD COLUMN IF NOT EXISTS caller_id TEXT;
+
+-- Signed-in devices: listed in Settings, revocable one by one or all at once.
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS id UUID NOT NULL DEFAULT gen_random_uuid();
+CREATE UNIQUE INDEX IF NOT EXISTS sessions_id_idx ON sessions (id);
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS device_name TEXT;
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS sessions_user_idx ON sessions (user_id);

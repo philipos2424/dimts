@@ -13,6 +13,8 @@ const ACTION_LABELS: Record<string, string> = {
   data_exported: 'Downloaded your data', call_deleted: 'Deleted a call', contact_deleted: 'Deleted a contact',
   privacy_request_received: 'Received a privacy request', account_deleted: 'Deleted the account',
   call_auto_deleted: 'Deleted an old call automatically', retention_changed: 'Changed how long calls are kept',
+  session_revoked: 'Signed out a device', sessions_revoked_others: 'Signed out all other devices',
+  sessions_revoked_all: 'Signed out everywhere', contact_auto_deleted: 'Removed an old contact automatically',
 };
 
 export function DataControls() {

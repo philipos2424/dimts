@@ -11,7 +11,7 @@ let configured = true, uploadError = null, storedSize = null, removed = [], prov
 mock.module('./audio-store.js', { namedExports: {
   audioStoreConfigured: () => configured,
   objectKey: (u, c) => `${u}/${c}.mp3`,
-  putAudio: async () => { if (uploadError) throw uploadError; },
+  putAudio: async (_key, bytes) => { if (uploadError) throw uploadError; return bytes.byteLength; },
   headAudio: async () => (storedSize == null ? null : { size: storedSize }),
   removeAudio: async key => { removed.push(key); return 'confirmed'; },
 } });

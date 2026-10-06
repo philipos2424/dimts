@@ -191,10 +191,30 @@ export function authHeaders(userPhone: string): Record<string, string> {
 export function sendLoginCode(phone: string, channel: 'sms' | 'call' = 'sms') {
   return request('/api/auth/start', '', { method: 'POST', body: JSON.stringify({ phone, channel }) });
 }
+/** Shown in Settings › Signed-in devices; browsers are named by the server from the user agent. */
+function deviceName(): string | undefined {
+  if (Platform.OS === 'ios') return Platform.isPad ? 'iPad (Dimts app)' : 'iPhone (Dimts app)';
+  if (Platform.OS === 'android') {
+    const model = (Platform.constants as { Model?: string }).Model;
+    return `${model?.trim() || 'Android phone'} (Dimts app)`;
+  }
+  return undefined;
+}
 export function verifyLoginCode(phone: string, code: string) {
   return request<{ token: string; phone: string }>('/api/auth/verify', '', {
-    method: 'POST', body: JSON.stringify({ phone, code }),
+    method: 'POST', body: JSON.stringify({ phone, code, device: deviceName() }),
   });
+}
+export type SignedInDevice = { id: string; device_name: string | null; created_at: string; last_seen_at: string | null; current: boolean };
+export function getSessions() {
+  return request<{ sessions: SignedInDevice[] }>('/api/me/sessions', '').then(r => r.sessions);
+}
+export function endSession(id: string) {
+  return request<{ status: string; current: boolean }>(`/api/me/sessions/${encodeURIComponent(id)}`, '', { method: 'DELETE' });
+}
+/** Signs out every other device; with all, this one too. */
+export function endOtherSessions(all = false) {
+  return request<{ ended: number }>(`/api/me/sessions/revoke${all ? '?all=1' : ''}`, '', { method: 'POST' });
 }
 export function getMe() {
   return request<{ phone: string; tier: string; agent_number: string | null; terms_required: boolean; language: 'en' | 'am'; retention_months: Retention; caller_id?: boolean }>('/api/me', '');

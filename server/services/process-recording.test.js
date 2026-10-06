@@ -154,3 +154,20 @@ test('interrupted processing releases its lease and keeps a recoverable error', 
   assert.match(failed.sql, /processing_token = \$3/);
   assert.doesNotMatch(failed.sql, /recording_url\s*=/);
 });
+
+test('with encryption keys set, the transcript, raw response and summary are stored sealed for the owner', async () => {
+  const { randomBytes } = await import('node:crypto');
+  const { openValue } = await import('../lib/field-crypto.js');
+  process.env.DATA_ENCRYPTION_KEYS = `t1:${randomBytes(32).toString('base64')}`;
+  try {
+    call = { ...call, id: '0b3f2b6e-1111-4111-8111-111111111111', user_id: '0b3f2b6e-2222-4222-8222-222222222222' };
+    await processRecording(call.id);
+    const final = updates.find(u => /status = 'ready'/.test(u.sql));
+    const [, transcript, raw, summary] = final.params;
+    assert.ok(transcript.startsWith('dmt1.') && !transcript.includes('Phili'));
+    assert.equal(openValue(transcript), 'Caller: hi this is Phili from Amax\nUser: hello');
+    assert.deepEqual(openValue(JSON.parse(raw)), {});
+    assert.equal(openValue(summary), 'Pricing discussion.');
+    assert.ok(transcript.includes(call.user_id) && transcript.includes(call.id), 'bound to this owner and call');
+  } finally { delete process.env.DATA_ENCRYPTION_KEYS; }
+});

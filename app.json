@@ -45,7 +45,13 @@
         }
       ],
       "expo-sharing",
-      "expo-notifications"
+      "expo-notifications",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Allow Dimts to use Face ID to keep your calls private."
+        }
+      ]
     ],
     "scheme": "dimts",
     "experiments": {

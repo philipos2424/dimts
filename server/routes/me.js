@@ -135,3 +135,37 @@ meRouter.patch('/', async (req, res, next) => {
     res.json(row);
   } catch (err) { next(err); }
 });
+
+// Signed-in devices. A stolen phone number signs in with a valid code, so the
+// owner must be able to see every session and end it.
+meRouter.get('/sessions', async (req, res, next) => {
+  try {
+    const user = await resolveUser(req);
+    const { rows } = await query(`SELECT id, device_name, created_at, last_seen_at FROM sessions
+      WHERE user_id=$1 AND expires_at > now() ORDER BY coalesce(last_seen_at, created_at) DESC LIMIT 50`, [user.id]);
+    res.set('Cache-Control', 'no-store').json({ sessions: rows.map(row => ({ ...row, current: row.id === user.sessionId })) });
+  } catch (err) { next(err); }
+});
+
+meRouter.delete('/sessions/:id', async (req, res, next) => {
+  try {
+    const user = await resolveUser(req);
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.params.id)) throw new HttpError(404, 'session_not_found');
+    const ended = await queryOne('DELETE FROM sessions WHERE id=$1 AND user_id=$2 RETURNING id', [req.params.id, user.id]);
+    if (!ended) throw new HttpError(404, 'session_not_found');
+    await audit({ userId: user.id, action: 'session_revoked', targetType: 'session', targetId: ended.id, req });
+    res.json({ status: 'signed_out', current: ended.id === user.sessionId });
+  } catch (err) { next(err); }
+});
+
+/** Ends every other session; with ?all=1, this one too. */
+meRouter.post('/sessions/revoke', async (req, res, next) => {
+  try {
+    const user = await resolveUser(req);
+    const all = req.query.all === '1';
+    const { rows } = await query(`DELETE FROM sessions WHERE user_id=$1 AND ($2::boolean OR id<>$3) RETURNING id`,
+      [user.id, all, user.sessionId]);
+    await audit({ userId: user.id, action: all ? 'sessions_revoked_all' : 'sessions_revoked_others', req });
+    res.json({ status: 'signed_out', ended: rows.length });
+  } catch (err) { next(err); }
+});

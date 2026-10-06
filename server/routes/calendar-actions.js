@@ -4,6 +4,7 @@ import * as database from '../db/pool.js';
 import { resolveUser, HttpError } from '../lib/users.js';
 import { validateReviewedFollowups } from '../services/followups.js';
 import { createCalendarEvent, findCalendarEvent } from '../services/calendar.js';
+import { sealJson } from '../lib/field-crypto.js';
 
 export const calendarActionsRouter = Router();
 const transcriptHash = text => createHash('sha256').update(text).digest('hex');
@@ -50,7 +51,8 @@ calendarActionsRouter.post('/:id/followups/meeting/action', async (req, res) => 
       VALUES($1,$2,$3,$4,$5,$6,'pending',$7,$8,now()+interval '2 minutes')
       ON CONFLICT(call_id) DO UPDATE SET connection_id=excluded.connection_id,proposal_version=excluded.proposal_version,
         meeting=excluded.meeting,status='pending',error_code=NULL,lease_token=excluded.lease_token,lease_until=excluded.lease_until,updated_at=now() RETURNING *`,
-      [id, call.id, user.id, connection.connection_id, call.followups_version, JSON.stringify(meeting), id.replaceAll('-', ''), token]);
+      [id, call.id, user.id, connection.connection_id, call.followups_version,
+        sealJson(meeting, { userId: user.id, rowId: id, field: 'calendar_actions:meeting' }), id.replaceAll('-', ''), token]);
     return { action, create: true };
   });
   if (!reservation.create) return res.json({ action: receipt(reservation.action) });

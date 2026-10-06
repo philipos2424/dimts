@@ -9,6 +9,7 @@ import { summarize } from './summarize.js';
 import { randomUUID } from 'node:crypto';
 import { recordingQualityError, voicemailQualityError } from '../lib/recording-quality.js';
 import { getAudio } from './audio-store.js';
+import { sealJson, sealText } from '../lib/field-crypto.js';
 import { archiveAudio, removeArchivedFromProvider } from './archive-audio.js';
 import { defer } from '../lib/defer.js';
 import { resolveAgreements } from '../lib/agreements.js';
@@ -124,6 +125,11 @@ export async function processRecording(callId, { force = false, signal: callerSi
     return { status: 'skipped' };
   }
 
+  // Conversation content is encrypted for this call's owner before it is stored.
+  const seal = (column, value) => column === 'transcript_data'
+    ? sealJson(value, { userId: call.user_id, rowId: callId, field: `calls:${column}` })
+    : sealText(value, { userId: call.user_id, rowId: callId, field: `calls:${column}` });
+
   try {
     async function renew() {
       const owned = await queryOne(`UPDATE calls SET processing_until=now()+interval '10 minutes'
@@ -146,7 +152,7 @@ export async function processRecording(callId, { force = false, signal: callerSi
         language=$5,language_probability=$6,transcript_recording_url=$7,
         processing_until=now()+interval '10 minutes'
         WHERE id=$1 AND processing_token=$2 AND status='processing' RETURNING id`,
-        [callId, lease, result.text, JSON.stringify(result.raw), result.language, result.languageProbability, call.recording_url]);
+        [callId, lease, seal('transcript', result.text), seal('transcript_data', result.raw), result.language, result.languageProbability, call.recording_url]);
       if (!saved) throw new Error('Processing ownership changed');
     }
 
@@ -181,9 +187,9 @@ export async function processRecording(callId, { force = false, signal: callerSi
         WHERE id = $1 AND processing_token = $10 RETURNING id`,
       [
         callId,
-        result.text,
-        JSON.stringify(result.raw),
-        summary.summary,
+        seal('transcript', result.text),
+        seal('transcript_data', result.raw),
+        seal('summary', summary.summary),
         JSON.stringify(summary.next_moves),
         JSON.stringify(summary.action_items),
         JSON.stringify(summary.key_points),

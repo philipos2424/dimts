@@ -35,6 +35,7 @@ controller, and Dimts processes their data on your instructions as your
 We do not sell your data or use it for advertising. We do not train AI models
 on your calls, and we do not identify people by their voice. Questions you ask about your calls are answered and then
 discarded; we do not store them.
+Our transcription and AI providers process call audio and transcripts only to return a result to us and may not use them to train their models. Unless a zero-retention agreement is in place, they may keep them for a limited period (typically up to 30 days) to detect abuse, then delete them.
 
 ## Recording notice
 Every recorded call begins with: *"This call is recorded and summarized by
@@ -59,7 +60,9 @@ See the [list of subprocessors](subprocessors.md).
 Until you delete it, or for the period you choose in Settings (3, 6, 12 or
 24 months), after which calls are deleted automatically. You can delete a
 call, a contact or your whole account in Settings. Deleted recordings are
-removed from our storage and from our call provider.
+removed from our storage and from our call provider. Encrypted database
+backups expire on their own schedule; deleted content in them cannot be read
+without keys held outside the database.
 Activity-log entries are kept for one year and contain no call content.
 
 ## Your rights
@@ -71,9 +74,19 @@ Activity-log entries are kept for one year and contain no call content.
 - **Complaints:** contact `privacy@dimts.app` or your local data protection authority.
 
 ## Security
-- Encryption in transit (TLS) and at rest (AES-256).
-- Per-account access control and rate limiting.
-- Private storage that only our server can read.
+- Encryption in transit (TLS).
+- Call recordings, transcripts, summaries, drafts and contact notes are
+  encrypted before they are stored, with a key unique to your account
+  (AES-256-GCM). The master keys are kept outside the database, so a copy of
+  the database or its backups alone does not reveal any conversation.
+  Short structured notes (agreements, next steps) are protected by the
+  storage provider's disk encryption only.
+- Private storage that only our server can read, per-account access control
+  and rate limiting.
+- An optional app lock (Face ID, fingerprint or passcode) that also hides
+  calls in the app switcher.
+- A list of every signed-in device, a warning when a new device signs in,
+  and one tap to sign out everywhere.
 - A user-visible activity log.
 
 ## Contact

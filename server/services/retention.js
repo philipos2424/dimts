@@ -33,5 +33,26 @@ export async function expireOldCalls({ limit = 200 } = {}) {
       console.error('[retention] skipped a call', err?.code ?? err?.message);
     }
   }
-  return { deleted, skipped };
+  const forgotten = await forgetOldContacts({ limit });
+  return { deleted, skipped, forgotten };
+}
+
+/**
+ * The other people on calls are data subjects too. A contact the AI created
+ * from calls is removed once its last call has passed the owner's retention
+ * period and no call (even a deleted one) still points at it. Contacts the
+ * owner named or edited themselves are their address book and stay.
+ */
+export async function forgetOldContacts({ limit = 200 } = {}) {
+  const { rows } = await database.query(`DELETE FROM contacts WHERE id IN (
+      SELECT k.id FROM contacts k JOIN users u ON u.id=k.user_id
+      WHERE u.retention_months IS NOT NULL AND u.deleted_at IS NULL AND k.name_source <> 'user'
+        AND coalesce(k.last_call_at, k.first_seen_at) < now() - make_interval(months => u.retention_months)
+        AND NOT EXISTS (SELECT 1 FROM calls c WHERE c.contact_id=k.id)
+      LIMIT $1)
+    RETURNING id, user_id`, [limit]);
+  for (const { id, user_id: userId } of rows) {
+    await audit({ userId, action: 'contact_auto_deleted', targetType: 'contact', targetId: id });
+  }
+  return rows.length;
 }

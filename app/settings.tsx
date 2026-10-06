@@ -11,6 +11,8 @@ import { CallDeletionHistory } from '../src/components/CallDeletion';
 import { NotificationSettings } from '../src/components/NotificationSettings';
 import { FirstCallLink } from '../src/components/FirstCallLink';
 import { DataControls } from '../src/components/DataControls';
+import { AppLockSetting } from '../src/components/AppLockSetting';
+import { SignedInDevices } from '../src/components/SignedInDevices';
 import type { Lang } from '../src/i18n';
 import { radius, space, useTheme } from '../src/theme';
 
@@ -38,6 +40,8 @@ export default function Settings() {
       <GoogleConnections />
       <CallDeletionHistory />
       <NotificationSettings />
+      <AppLockSetting />
+      <SignedInDevices />
       <DataControls />
       <Section title={t('language')}>
         <View style={{ flexDirection: 'row', gap: space.sm }}>

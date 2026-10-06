@@ -13,9 +13,9 @@ export async function archiveAudio(call, bytes) {
   if (!audioStoreConfigured()) return 'skipped';
   const key = objectKey(call.user_id, call.id);
   try {
-    await putAudio(key, bytes);
+    const expected = await putAudio(key, bytes);
     const stored = await headAudio(key);
-    if (stored?.size !== bytes.byteLength) throw new Error('Stored audio size does not match');
+    if (stored?.size !== expected) throw new Error('Stored audio size does not match');
   } catch (err) {
     console.error('[archive] upload failed for call', call.id, err?.message);
     await queryOne(`UPDATE calls SET provider_archive_status='upload_failed'

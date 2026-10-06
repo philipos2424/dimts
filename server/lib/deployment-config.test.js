@@ -5,7 +5,8 @@ const base=()=>({DATABASE_MODE:'postgres',DATABASE_URL:'postgresql://dimts:test-
   PUBLIC_BASE_URL:'https://calls.example.com',TWILIO_ACCOUNT_SID:'AC'+'a'.repeat(32),
   TWILIO_AUTH_TOKEN:'b'.repeat(32),TWILIO_VERIFY_SERVICE_SID:'VA'+'c'.repeat(32),TWILIO_NUMBER:'+15555550999',
   LLM_PROVIDER:'ollama',OLLAMA_BASE_URL:'https://ollama.com',OLLAMA_API_KEY:'test-cloud-key',OLLAMA_MODEL:'gemma4:31b',
-  TRANSCRIBE_PROVIDER:'whisper',WHISPER_BASE_URL:'http://whisper:3104',WHISPER_API_TOKEN:'d'.repeat(64)});
+  TRANSCRIBE_PROVIDER:'whisper',WHISPER_BASE_URL:'http://whisper:3104',WHISPER_API_TOKEN:'d'.repeat(64),
+  DATA_ENCRYPTION_KEYS:`k1:${Buffer.alloc(32,7).toString('base64')}`,AUDIT_SALT:'s'.repeat(32)});
 
 test('accepts the pilot stack and fully configured same-origin Google callbacks',()=>{
   assert.deepEqual(validateDeployment(base()),{host:'0.0.0.0',port:3000});
@@ -29,4 +30,13 @@ test('optional alternative AI providers require their own credentials',()=>{
   assert.throws(()=>validateDeployment(env),/OPENAI_API_KEY/);
   env.OPENAI_API_KEY='test-key';assert.throws(()=>validateDeployment(env),/ELEVENLABS_API_KEY/);
   env.ELEVENLABS_API_KEY='test-key';assert.equal(validateDeployment(env).port,3000);
+});
+
+test('production refuses to run without data encryption keys or a private audit salt',()=>{
+  for (const [name,value,error] of [['DATA_ENCRYPTION_KEYS',undefined,/Set DATA_ENCRYPTION_KEYS/],
+    ['DATA_ENCRYPTION_KEYS','k1:short',/Invalid DATA_ENCRYPTION_KEYS/],['AUDIT_SALT',undefined,/Set AUDIT_SALT/],
+    ['AUDIT_SALT','short',/AUDIT_SALT must have/]]) {
+    const env={...base()}; if (value===undefined) delete env[name]; else env[name]=value;
+    assert.throws(()=>validateDeployment(env),error);
+  }
 });

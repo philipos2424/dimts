@@ -3,7 +3,9 @@ import { transcriptTurns } from '../lib/transcript-turns.js';
 import { completeJson } from './llm.js';
 
 const MAX_CALLS = 8, MAX_LINES = 120;
-const SEARCH = `to_tsvector('simple', coalesce(summary,'') || ' ' || coalesce(transcript,''))`;
+// Call content is encrypted at rest, so the database cannot search it.
+// The owner's recent calls are opened on the server and ranked here instead.
+const SEARCH_POOL = 300;
 const COLUMNS = `c.id, c.created_at, c.direction, c.duration_sec, c.transcript, c.transcript_data, c.recording_url,
   c.transcript_recording_url, c.deleted_at, c.agreements, k.display_name AS contact_name`;
 const READY = `c.user_id=$1 AND c.status='ready' AND c.deleted_at IS NULL AND c.transcript IS NOT NULL`;
@@ -29,6 +31,39 @@ they are not evidence. Cite the excerpts.`;
 const LABELS = /\s*\((?:\s*(?:C\d+|\[\d+\])[\s,;]*)+\)|\s*\bC\d+\s*(?:\[\d+\][\s,]*)+|\s*\[\d+\]/g;
 export const stripLabels = text => text.replace(LABELS, '').trim();
 
+export const words = text => (String(text ?? '').toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []);
+
+/**
+ * Rank calls by the question's words, rarer words counting for more (so
+ * "what" or "the" barely matter and a name or product decides). Returns up
+ * to six call IDs, best first, newest first among equals.
+ */
+export function rankCalls(calls, question) {
+  const terms = [...new Set(words(question))];
+  if (!terms.length) return [];
+  const documents = calls.map(call => {
+    const counts = new Map();
+    for (const word of words(`${call.summary ?? ''} ${call.transcript ?? ''}`)) counts.set(word, (counts.get(word) ?? 0) + 1);
+    return { call, counts };
+  });
+  const weight = new Map(terms.map(term => {
+    const containing = documents.filter(d => d.counts.has(term)).length;
+    return [term, containing ? Math.log(1 + documents.length / containing) : 0];
+  }));
+  return documents
+    .map(({ call, counts }) => ({ call, score: terms.reduce((sum, term) =>
+      sum + (counts.has(term) ? weight.get(term) * (1 + Math.log(counts.get(term))) : 0), 0) }))
+    .filter(entry => entry.score > 0)
+    .sort((a, b) => b.score - a.score || new Date(b.call.created_at) - new Date(a.call.created_at))
+    .slice(0, 6).map(entry => entry.call.id);
+}
+
+async function search(userId, question) {
+  const { rows } = await query(`SELECT c.id, c.created_at, c.summary, c.transcript FROM calls c
+    WHERE ${READY} ORDER BY c.created_at DESC LIMIT ${SEARCH_POOL}`, [userId]);
+  return rankCalls(rows, question);
+}
+
 async function retrieve(userId, question, focus) {
   const picked = new Map();
   const add = rows => { for (const row of rows) if (picked.size < MAX_CALLS && !picked.has(row.id)) picked.set(row.id, row); };
@@ -36,9 +71,12 @@ async function retrieve(userId, question, focus) {
   // that" has no words of its own to search for.
   if (focus.length) add((await query(`SELECT ${COLUMNS} FROM calls c LEFT JOIN contacts k ON k.id=c.contact_id
     WHERE ${READY} AND c.id = ANY($2::uuid[]) ORDER BY c.created_at DESC`, [userId, focus])).rows);
-  add((await query(`SELECT ${COLUMNS} FROM calls c LEFT JOIN contacts k ON k.id=c.contact_id
-    WHERE ${READY} AND ${SEARCH} @@ websearch_to_tsquery('simple', $2)
-    ORDER BY ts_rank(${SEARCH}, websearch_to_tsquery('simple', $2)) DESC, c.created_at DESC LIMIT 6`, [userId, question])).rows);
+  const matches = await search(userId, question);
+  if (matches.length) {
+    const { rows } = await query(`SELECT ${COLUMNS} FROM calls c LEFT JOIN contacts k ON k.id=c.contact_id
+      WHERE ${READY} AND c.id = ANY($2::uuid[])`, [userId, matches]);
+    add(matches.map(id => rows.find(row => row.id === id)).filter(Boolean));
+  }
   add((await query(`SELECT ${COLUMNS} FROM calls c JOIN contacts k ON k.id=c.contact_id
     WHERE ${READY} AND length(k.display_name) >= 2 AND position(lower(k.display_name) IN lower($2)) > 0
     ORDER BY c.created_at DESC LIMIT 3`, [userId, question])).rows);

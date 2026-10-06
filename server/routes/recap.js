@@ -3,6 +3,7 @@ import { queryOne } from '../db/pool.js';
 import { HttpError, resolveUser } from '../lib/users.js';
 import { hit } from '../lib/rate-limit.js';
 import { completeJson } from '../services/llm.js';
+import { sealText } from '../lib/field-crypto.js';
 
 export const recapRouter = express.Router();
 
@@ -40,6 +41,6 @@ recapRouter.post('/:id/recap', async (req, res) => {
     console.error('[recap] generation failed', err?.message);
     throw new HttpError(502, 'recap_failed', 'Could not write a recap. Try again.');
   }
-  await queryOne('UPDATE calls SET recap=$2 WHERE id=$1 AND deleted_at IS NULL RETURNING id', [call.id, text]);
+  await queryOne('UPDATE calls SET recap=$2 WHERE id=$1 AND deleted_at IS NULL RETURNING id', [call.id, sealText(text, { userId: user.id, rowId: call.id, field: 'calls:recap' })]);
   res.json({ text });
 });
