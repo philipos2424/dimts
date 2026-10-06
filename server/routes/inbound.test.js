@@ -18,10 +18,18 @@ mock.module('../services/notifications.js', { namedExports: {
 } });
 mock.module('../db/reserve-call.js', { namedExports: {
   reserveCall: async (owner, caller, record, key, options) => {
-    if (failReservation) throw new Error('budget exceeded');
+    if (failReservation === 'out_of_credit' && !options.voicemailOnly) throw Object.assign(new Error('no credit'), { code: 'credits_required' });
+    if (failReservation === true) throw new Error('budget exceeded');
+    if (options.voicemailOnly) return { call: { ...reserved, status: 'missed', voicemail: true }, created: true };
     inserted.push([owner.id, owner.phone, caller, options.callSid, options.contactId]);
     return { call: reserved, created: true };
   },
+} });
+
+const balanceAlerts = [];
+mock.module('../services/billing-alerts.js', { namedExports: {
+  sendMissedForBalanceAlert: async id => { balanceAlerts.push(id); return true; },
+  sendBalanceAlerts: async () => [],
 } });
 
 mock.module('../db/agent-numbers.js', {
@@ -157,4 +165,25 @@ test('cannot bridge when budget reservation fails', async () => {
   const { xml } = await incoming(CALL);
   assert.match(xml, /<Hangup/);
   assert.doesNotMatch(xml, /<Dial|<Gather/);
+});
+
+test('an owner out of minutes and credits still gets a message, and is told why', async () => {
+  failReservation = 'out_of_credit';
+  balanceAlerts.length = 0;
+  const { xml } = await incoming(CALL);
+  assert.match(xml, /This call is recorded and summarized by Dimts AI\./);
+  assert.match(xml, /Leave a message after the tone/);
+  assert.match(xml, /<Record[^>]*maxLength="120"/);
+  assert.doesNotMatch(xml, /<Dial/);
+  assert.ok(xml.indexOf('Dimts AI') < xml.indexOf('<Record'), 'notice before recording');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(balanceAlerts, ['u1']);
+});
+
+test('without recording consent the out-of-credit caller is turned away, not recorded', async () => {
+  failReservation = 'out_of_credit';
+  reserved = { ...reserved, record_enabled: false };
+  const { xml } = await incoming(CALL);
+  assert.match(xml, /cannot connect this call/);
+  assert.doesNotMatch(xml, /<Record/);
 });

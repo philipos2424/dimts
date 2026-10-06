@@ -64,6 +64,9 @@ export const canCall = number => permitted(number, CALLS);
 /** Calling code of an allowed signup number, for per-country send limits. */
 export const signupCountryCode = number => (canSignUp(number) ? countryCode(number, SIGNUP) : null);
 
+/** Calling code of a callable number, for pricing each call leg; null otherwise. */
+export const callingCode = number => (canCall(number) ? countryCode(number, CALLS) : null);
+
 // Germany (StGB §201) and Austria (StGB §120) make recording a private
 // conversation without consent a crime; carrying on after a notice may not
 // count as consent there, so these calls ask both people too.

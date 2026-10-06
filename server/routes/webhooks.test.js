@@ -38,6 +38,11 @@ function run(text, params = []) {
     db.statements.at(-1).billed = params[2];
     return { rows: [{ id: call.id, user_id: call.user_id }] };
   }
+  if (sql.includes('SET est_cost_micros=$2')) {
+    const call = db.calls.find((c) => c.id === params[0]);
+    if (call) call.est_cost_micros = params[1];
+    return { rows: [] };
+  }
   if (sql.includes('UPDATE calls')) {
     const call = db.calls.find((c) => c.id === params[0]);
     if (call && sql.includes('parent_consent_choice=$2')) {

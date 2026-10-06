@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Pressable, Share, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { captureSessionGuard, claimBusinessNumber, getMe } from '../api';
 import { useApp } from '../AppContext';
 import { space } from '../theme';
@@ -11,14 +12,17 @@ export function BusinessNumber() {
 }
 
 function BusinessNumberForAccount() {
+  const router = useRouter();
   const [number, setNumber] = useState<string | null>(null);
+  const [tier, setTier] = useState('free');
+  const [releaseAt, setReleaseAt] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   useEffect(() => {
     let mounted = true;
     const stillSignedIn = captureSessionGuard();
-    getMe().then(me => { if (mounted && stillSignedIn()) setNumber(me.agent_number); })
+    getMe().then(me => { if (mounted && stillSignedIn()) { setNumber(me.agent_number); setTier(me.tier); setReleaseAt(me.number_release_at ?? null); } })
       .catch(() => { if (mounted && stillSignedIn()) setMessage('Could not load your business number. Try again.'); })
       .finally(() => { if (mounted && stillSignedIn()) setLoaded(true); });
     return () => { mounted = false; };
@@ -37,6 +41,14 @@ function BusinessNumberForAccount() {
       <Txt tone="muted">Share this number with callers. Incoming calls ring your verified mobile; every call becomes notes.</Txt>
       <Pressable accessibilityRole="button" onPress={() => Share.share({ message: number }).catch(() => setMessage('Could not open sharing.'))}>
         <Txt tone="accent">Share business number</Txt>
+      </Pressable>
+      {releaseAt && <Pressable accessibilityRole="link" onPress={() => router.push('/plans')}>
+        <Txt tone="warn">Your plan has ended. This number stays yours until {new Date(releaseAt).toLocaleDateString(undefined, { day: 'numeric', month: 'long' })}. Choose a plan to keep it ›</Txt>
+      </Pressable>}
+    </> : loaded && tier === 'free' ? <>
+      <Txt tone="muted">A business number for incoming calls comes with Pro and Business. Callers reach you on it, and every call becomes notes.</Txt>
+      <Pressable accessibilityRole="link" onPress={() => router.push('/plans')} style={{ paddingVertical: space.sm }}>
+        <Txt tone="accent" weight="bold">See plans</Txt>
       </Pressable>
     </> : <>
       <Txt tone="muted">{loaded ? 'Get a dedicated number for incoming calls. Availability depends on the pilot’s number pool.' : 'Loading your business number…'}</Txt>

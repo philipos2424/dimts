@@ -9,6 +9,9 @@ import { confirmCallerId, startCallerIdVerification } from '../services/caller-i
 import { hit } from '../lib/rate-limit.js';
 import { buildExport } from '../services/export-user.js';
 import { deleteAccount } from '../services/delete-account.js';
+import { liveSubscriptionIds } from '../services/billing.js';
+import { planOf } from '../lib/pricing.js';
+import { revokeSubscription } from '../services/polar.js';
 import { RETENTION_MONTHS } from '../services/retention.js';
 import { refuseForReviewDemo } from '../lib/review-demo.js';
 
@@ -19,6 +22,8 @@ meRouter.post('/number', async (req, res, next) => {
     const user = await resolveUser(req);
     refuseForReviewDemo(user);
     if (user.agent_number) return res.json({ agent_number: user.agent_number });
+    // Each number costs about $1 a month whether or not it rings, so it comes with a paid plan.
+    if (planOf(user) === 'free') throw new HttpError(402, 'plan_required', 'A business number comes with Pro and Business.');
     if (!process.env.PUBLIC_BASE_URL) throw new HttpError(503, 'routing_unavailable', 'Business-number routing is not configured yet.');
     const base = new URL(config.publicBaseUrl);
     if (base.protocol !== 'https:') throw new HttpError(503, 'routing_unavailable');
@@ -72,6 +77,8 @@ meRouter.get('/', async (req, res, next) => {
       phone: user.phone,
       tier: user.tier,
       agent_number: user.agent_number ?? null,
+      // Set while a Free account keeps its number after a paid plan ended.
+      number_release_at: user.agent_number ? (await queryOne('SELECT number_release_at FROM users WHERE id=$1', [user.id]))?.number_release_at ?? null : null,
       terms_required: !hasAcceptedTerms(user),
       language: user.language ?? 'en',
       retention_months: user.retention_months ?? null,
@@ -114,6 +121,9 @@ meRouter.delete('/', async (req, res, next) => {
   try {
     const user = await resolveUser(req);
     if (req.body?.confirm !== 'delete-account') throw new HttpError(400, 'deletion_confirmation_required');
+    // Stop billing first: a deleted account must never be charged again. If
+    // Polar is unreachable the deletion waits rather than leaving a live plan.
+    for (const id of await liveSubscriptionIds(user.id)) await revokeSubscription(id);
     const result = await deleteAccount(user.id);
     await audit({ userId: user.id, action: 'account_deleted', req });
     res.status(202).json(result);

@@ -75,6 +75,7 @@ Lessons from the reviews that this release must meet:
 - Make support reachable.
 
 ### Release 3: Payments (Polar)
+Built; see `2026-10-04-release-3-pricing-design.md` (final prices: Pro $19, Business $49, per-leg credits).
 - Plans:
   - **Free:** 30 min, AI notes.
   - **Pro, about $15/month:** 500 min to low-cost countries, plus recaps, promises and memory check.

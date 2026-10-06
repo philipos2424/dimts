@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, Switch, View } from 'react-native';
 import { useApp } from '../src/AppContext';
-import { getUsage, type Usage } from '../src/api';
+import { useRouter } from 'expo-router';
+import { getBilling, type Billing } from '../src/api';
+import { formatCredits } from '../src/billing';
 import { Section } from '../src/components/Section';
 import { Txt } from '../src/components/Txt';
 import { BusinessNumber } from '../src/components/BusinessNumber';
@@ -23,11 +25,12 @@ export default function Settings() {
   const { c } = useTheme();
   const { t, lang, setLang, autoRecord, setAutoRecord, userPhone, setUserPhone } =
     useApp();
-  const [usage, setUsage] = useState<Usage | null>(null);
+  const router = useRouter();
+  const [billing, setBilling] = useState<Billing | null>(null);
 
   useEffect(() => {
     if (!userPhone) return;
-    getUsage(userPhone).then(setUsage).catch(() => {});
+    getBilling().then(setBilling).catch(() => {});
   }, [userPhone]);
 
   return (
@@ -91,9 +94,16 @@ export default function Settings() {
       </Section>
 
       <Section title={t('minutesThisMonth')}>
-        <Txt size="screen" weight="bold">
-          {usage ? usage.minutes_used.toFixed(1) : '—'}
-        </Txt>
+        <Pressable accessibilityRole="link" onPress={() => router.push('/plans')} style={{ gap: space.xs }}>
+          <Txt size="screen" weight="bold">
+            {billing ? `${Math.round(billing.minutes_used)} / ${billing.minutes_included}` : '—'}
+          </Txt>
+          {billing && (
+            <Txt tone="muted">
+              {billing.tier.toUpperCase()} · {formatCredits(billing.credits_cents, lang)} · <Txt tone="accent" weight="bold">{lang === 'am' ? 'ዕቅድ ›' : 'Plan ›'}</Txt>
+            </Txt>
+          )}
+        </Pressable>
       </Section>
 
       <Section title={t('yourNumber')}>
