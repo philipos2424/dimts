@@ -6,14 +6,28 @@ Written for the Dimts founder and anyone given staff access. Branch
 ## Turning it on
 
 1. Apply `server/db/migrations/20261007_master_admin.sql` to production
-   (adds `audit_events.reason` and two indexes). **Before deploying**: the
-   activity log, the data export and the console read that column.
-2. Set `ADMIN_PHONES=+1555…` (comma-separated E.164) in Vercel, Production only.
-3. Deploy. Sign in to `https://dimts.vercel.app` with a staff number, then open
-   `https://dimts.vercel.app/admin/`.
+   **before deploying** (audit reasons, passkey tables with row-level security
+   and backend grants). It is additive and safe to run twice.
+2. Set `ADMIN_PHONES=+251…` (comma-separated E.164) in Vercel, Production.
+3. Deploy.
 
-Anyone not on the list, including signed-out visitors, gets a plain 404. A staff
-session must be less than 12 hours old; after that, sign out and in again.
+## Signing in
+
+- **First time on a device:** sign in to `https://dimts.vercel.app` with your
+  staff number (one text code), open `/admin/` and press **Set up Face ID or
+  fingerprint**.
+- **After that:** open `/admin/` and press **Sign in with Face ID or
+  fingerprint**. No code. The passkey syncs through iCloud Keychain or Google
+  Password Manager, so it also works on your other devices signed in to the
+  same account.
+- Console sessions last 12 hours. **Sign out** ends the session in that browser.
+- Removing a number from `ADMIN_PHONES` stops its passkeys working immediately.
+- A passkey is bound to the site address (`PUBLIC_BASE_URL`, or
+  `ADMIN_PASSKEY_ORIGIN` if set). Moving to a new domain needs new passkeys.
+
+Anyone not on the list gets a plain 404 from the API. Passkey sign-in is
+rate-limited per IP. Each challenge works once and expires in five minutes.
+The server keeps only the passkey's public key.
 
 ## What the law allows here, and how the console keeps to it
 

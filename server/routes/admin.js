@@ -7,6 +7,9 @@ import { HttpError } from '../lib/users.js';
 import {
   accessLog, cohorts, compliance, customerDetail, customerPhone, customers, grantCredits, overview,
 } from '../services/admin-metrics.js';
+import {
+  authenticationOptions, finishAuthentication, finishRegistration, listPasskeys, registrationOptions, removePasskey,
+} from '../services/admin-passkeys.js';
 
 /**
  * Operator console API. Every request is from an allowlisted, recently
@@ -26,7 +29,9 @@ const handler = (section, work) => async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-adminApiRouter.get('/me', handler('signed_in', async (_req, staff) => ({ reasons: ACCESS_REASONS, staff_id: staff.id })));
+adminApiRouter.get('/me', handler('signed_in', async (_req, staff) => ({
+  reasons: ACCESS_REASONS, staff_id: staff.id, passkeys: await listPasskeys(staff),
+})));
 adminApiRouter.get('/overview', handler('viewed_overview', () => overview()));
 adminApiRouter.get('/cohorts', handler('viewed_cohorts', async () => ({ cohorts: await cohorts() })));
 adminApiRouter.get('/compliance', handler('viewed_compliance', () => compliance()));
@@ -34,6 +39,27 @@ adminApiRouter.get('/customers', handler('searched_customers', req => customers(
   q: String(req.query.q ?? '').slice(0, 64), plan: String(req.query.plan ?? ''), page: req.query.page,
 })));
 adminApiRouter.get('/access-log', handler('viewed_access_log', () => accessLog()));
+
+// Passkeys: add one while signed in (phone code, once), then sign in with Face ID or a fingerprint alone.
+adminApiRouter.post('/passkeys/register/options', handler('passkey_setup_started', (_req, staff) => registrationOptions(staff)));
+adminApiRouter.post('/passkeys/register', handler('passkey_added', (req, staff) => finishRegistration(staff, req.body)));
+adminApiRouter.delete('/passkeys/:key', handler('passkey_removed', (req, staff) => removePasskey(staff, req.params.key)));
+
+// Signing in is open to anyone by design, as any login page is; only a registered staff passkey succeeds.
+adminApiRouter.post('/passkeys/login/options', async (req, res, next) => {
+  try {
+    await hit(`admin-passkey-ip:${req.ip}`, 30, 3600);
+    res.json(await authenticationOptions());
+  } catch (err) { next(err); }
+});
+adminApiRouter.post('/passkeys/login', async (req, res, next) => {
+  try {
+    await hit(`admin-passkey-ip:${req.ip}`, 30, 3600);
+    const { token, userId } = await finishAuthentication(req.body);
+    await audit({ userId, action: 'admin_passkey_signed_in', req });
+    res.json({ token });
+  } catch (err) { next(err); }
+});
 
 function reasonOf(req) {
   const reason = req.body?.reason ?? req.query?.reason;

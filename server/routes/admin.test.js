@@ -11,6 +11,22 @@ mock.module('../db/pool.js', { namedExports: {
   withTransaction: work => db.transaction(work), getPool: () => ({}),
 } });
 process.env.ADMIN_PHONES = '+15555550100, not-a-number';
+process.env.PUBLIC_BASE_URL = 'https://dimts.example';
+// The WebAuthn cryptography is the library's job; these tests cover what Dimts does around it.
+const webauthn = { verified: true, challenge: 'challenge-1', newCounter: 1 };
+mock.module('@simplewebauthn/server', { namedExports: {
+  generateRegistrationOptions: async () => ({ challenge: webauthn.challenge, user: { id: 'dXNlcg' } }),
+  generateAuthenticationOptions: async () => ({ challenge: webauthn.challenge }),
+  verifyRegistrationResponse: async ({ expectedOrigin, expectedRPID }) => {
+    assert.equal(expectedOrigin, 'https://dimts.example'); assert.equal(expectedRPID, 'dimts.example');
+    return { verified: webauthn.verified, registrationInfo: { credential: { id: 'credential-abc', publicKey: new Uint8Array([1, 2, 3]), counter: 0, transports: ['internal'] } } };
+  },
+  verifyAuthenticationResponse: async ({ credential }) => {
+    assert.deepEqual([...credential.publicKey], [1, 2, 3]);
+    return { verified: webauthn.verified, authenticationInfo: { newCounter: webauthn.newCounter } };
+  },
+} });
+const clientData = challenge => Buffer.from(JSON.stringify({ challenge })).toString('base64url');
 const { createApp } = await import('../create-app.js');
 const { expireAuditEvents } = await import('../services/retention.js');
 const { maskPhone, regionOf } = await import('../lib/admin.js');
@@ -159,4 +175,46 @@ test('masking, regions and list prices', () => {
   assert.equal(monthlyListCents('pro_year'), 1583);
   assert.equal(monthlyListCents('business_month_lite'), 1900);
   assert.equal(monthlyListCents('credits_10'), 0);
+});
+
+test('staff add a passkey once, then sign in with it alone; challenges work once', async () => {
+  const customer = await signedIn('+15555550101');
+  assert.equal((await api('/api/admin/passkeys/register/options', customer.token, { method: 'POST' })).status, 404);
+  const staff = await signedIn('+15555550100');
+  webauthn.challenge = 'register-challenge';
+  assert.equal((await api('/api/admin/passkeys/register/options', staff.token, { method: 'POST' })).body.challenge, 'register-challenge');
+  const registration = { id: 'credential-abc', response: { clientDataJSON: clientData('register-challenge') } };
+  assert.equal((await api('/api/admin/passkeys/register', staff.token, { method: 'POST', body: registration })).status, 200);
+  const replay = await api('/api/admin/passkeys/register', staff.token, { method: 'POST', body: registration });
+  assert.equal(replay.status, 400); assert.equal(replay.body.error, 'challenge_expired');
+  assert.equal((await api('/api/admin/me', staff.token)).body.passkeys.length, 1);
+
+  webauthn.challenge = 'login-challenge'; webauthn.newCounter = 7;
+  assert.equal((await api('/api/admin/passkeys/login/options', null, { method: 'POST' })).status, 200);
+  const login = await api('/api/admin/passkeys/login', null, { method: 'POST', body: { id: 'credential-abc', response: { clientDataJSON: clientData('login-challenge') } } });
+  assert.equal(login.status, 200); assert.match(login.body.token, /^[a-f0-9]{64}$/);
+  assert.equal((await api('/api/admin/overview', login.body.token)).status, 200, 'the passkey session opens the console');
+  assert.equal(Number((await db.query("SELECT counter FROM admin_passkeys WHERE id='credential-abc'")).rows[0].counter), 7);
+  const session = (await db.query(`SELECT expires_at < now() + interval '12 hours 1 minute' AS short FROM sessions
+    WHERE token_hash=$1`, [hashToken(login.body.token)])).rows[0];
+  assert.equal(session.short, true, 'console sessions last 12 hours, not 30 days');
+  assert.ok((await db.query("SELECT 1 FROM audit_events WHERE user_id=$1 AND action='admin_passkey_signed_in'", [staff.id])).rows.length);
+  const again = await api('/api/admin/passkeys/login', null, { method: 'POST', body: { id: 'credential-abc', response: { clientDataJSON: clientData('login-challenge') } } });
+  assert.equal(again.status, 400, 'a used login challenge cannot be replayed');
+});
+
+test('a passkey stops working when its owner leaves the staff list or the signature fails', async () => {
+  webauthn.challenge = 'login-2';
+  await api('/api/admin/passkeys/login/options', null, { method: 'POST' });
+  process.env.ADMIN_PHONES = '+15555550999';
+  const removed = await api('/api/admin/passkeys/login', null, { method: 'POST', body: { id: 'credential-abc', response: { clientDataJSON: clientData('login-2') } } });
+  process.env.ADMIN_PHONES = '+15555550100';
+  assert.equal(removed.status, 401);
+  webauthn.challenge = 'login-3'; webauthn.verified = false;
+  await api('/api/admin/passkeys/login/options', null, { method: 'POST' });
+  const forged = await api('/api/admin/passkeys/login', null, { method: 'POST', body: { id: 'credential-abc', response: { clientDataJSON: clientData('login-3') } } });
+  webauthn.verified = true;
+  assert.equal(forged.status, 401);
+  const unknown = await api('/api/admin/passkeys/login', null, { method: 'POST', body: { id: 'x', response: { clientDataJSON: clientData('never-issued') } } });
+  assert.equal(unknown.status, 400);
 });

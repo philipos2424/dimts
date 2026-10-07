@@ -2,7 +2,12 @@
 // app on this origin; the server decides who is staff and logs every request.
 const main = document.getElementById('main');
 const tip = document.getElementById('tip');
-const token = (() => { try { return localStorage.getItem('dimts.session'); } catch { return null; } })();
+// A passkey sign-in keeps its own 12-hour console session; a phone-code sign-in to the app also works.
+const store = {
+  get: key => { try { return localStorage.getItem(key); } catch { return null; } },
+  set: (key, value) => { try { value ? localStorage.setItem(key, value) : localStorage.removeItem(key); } catch {} },
+};
+let token = null;
 let reasons = [];
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
@@ -273,9 +278,91 @@ async function showAccess() {
         e.target_id ? `<code>${esc(String(e.target_id).slice(0, 8))}</code>` : '', e.reason ? label(e.reason) : '']))}</div>`;
 }
 
+// WebAuthn speaks bytes; the server speaks base64url JSON.
+const b64 = {
+  enc: buffer => btoa(String.fromCharCode(...new Uint8Array(buffer))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''),
+  dec: text => Uint8Array.from(atob(text.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (text.length % 4)) % 4)), c => c.charCodeAt(0)),
+};
+const post = (path, body) => api(path, { method: 'POST', body: JSON.stringify(body ?? {}) });
+const passkeysWork = () => !!window.PublicKeyCredential && !!navigator.credentials;
+
+async function addPasskey() {
+  const options = await post('/passkeys/register/options');
+  const credential = await navigator.credentials.create({ publicKey: {
+    ...options,
+    challenge: b64.dec(options.challenge),
+    user: { ...options.user, id: b64.dec(options.user.id) },
+    excludeCredentials: (options.excludeCredentials ?? []).map(c => ({ ...c, id: b64.dec(c.id) })),
+  } });
+  await post('/passkeys/register', {
+    id: credential.id, rawId: b64.enc(credential.rawId), type: credential.type,
+    authenticatorAttachment: credential.authenticatorAttachment ?? undefined,
+    clientExtensionResults: credential.getClientExtensionResults(),
+    response: {
+      clientDataJSON: b64.enc(credential.response.clientDataJSON),
+      attestationObject: b64.enc(credential.response.attestationObject),
+      transports: credential.response.getTransports?.() ?? [],
+    },
+  });
+}
+
+async function passkeySignIn() {
+  const options = await post('/passkeys/login/options');
+  const credential = await navigator.credentials.get({ publicKey: {
+    ...options,
+    challenge: b64.dec(options.challenge),
+    allowCredentials: (options.allowCredentials ?? []).map(c => ({ ...c, id: b64.dec(c.id) })),
+  } });
+  const { token: session } = await post('/passkeys/login', {
+    id: credential.id, rawId: b64.enc(credential.rawId), type: credential.type,
+    clientExtensionResults: credential.getClientExtensionResults(),
+    response: {
+      clientDataJSON: b64.enc(credential.response.clientDataJSON),
+      authenticatorData: b64.enc(credential.response.authenticatorData),
+      signature: b64.enc(credential.response.signature),
+      userHandle: credential.response.userHandle ? b64.enc(credential.response.userHandle) : undefined,
+    },
+  });
+  store.set('dimts.admin', session);
+  token = session;
+}
+
+function signInScreen(message = '') {
+  document.getElementById('tabs').hidden = true;
+  document.getElementById('signout').hidden = true;
+  main.innerHTML = `<div class="signin">
+    <h2>Staff sign-in</h2>
+    ${passkeysWork()
+      ? '<button class="btn primary big" id="passkey">Sign in with Face ID or fingerprint</button>'
+      : '<p class="err">This browser cannot use passkeys. Use a current Chrome, Safari, Edge or Firefox.</p>'}
+    <p id="signin-msg" class="small ${message ? 'err' : 'muted'}">${esc(message)}</p>
+    <details><summary>First time on this device?</summary>
+      <ol class="small">
+        <li>Sign in to the <a href="/">Dimts app</a> in this browser with your staff number (one text code, only this once).</li>
+        <li>Come back to <code>/admin/</code> and press <strong>Set up Face ID or fingerprint</strong>.</li>
+        <li>From then on, this button is all you need.</li>
+      </ol></details>
+  </div>`;
+  document.getElementById('passkey')?.addEventListener('click', async () => {
+    const msg = document.getElementById('signin-msg');
+    msg.textContent = 'Waiting for your device…'; msg.className = 'small muted';
+    try { await passkeySignIn(); await start(); } catch (err) {
+      msg.textContent = err.name === 'NotAllowedError' ? 'Cancelled, or no console passkey on this device yet. See “First time on this device?”.' : err.message;
+      msg.className = 'small err';
+    }
+  });
+}
+
+function setupBanner() {
+  return `<div class="panel row" id="setup"><span><strong>Skip the text code next time.</strong> Set up Face ID or fingerprint for this console.</span>
+    <button class="btn primary" id="add-passkey">Set up Face ID or fingerprint</button><span id="setup-msg" class="small"></span></div>`;
+}
+
 function fail(err) {
-  if (err.status === 404) return stop('This account is not on the staff list. Ask the owner to add your number to <code>ADMIN_PHONES</code>.');
-  if (err.status === 403 && err.code === 'reauth_required') return stop(`${esc(err.message)} <a href="/settings">Sign out in Settings</a>, sign in again, then reload this page.`);
+  if ([401, 403, 404].includes(err.status)) {
+    const notStaff = err.status === 404 && token && token === store.get('dimts.session');
+    return signInScreen(notStaff ? 'This number is not on the staff list.' : err.status === 403 ? err.message : '');
+  }
   stop(`<span class="err">${esc(err.message)}</span>`);
 }
 
@@ -286,14 +373,36 @@ async function show(name) {
   try { await views[name](); } catch (err) { fail(err); }
 }
 
-if (!token) {
-  stop('Sign in to the <a href="/">Dimts web app</a> in this browser with your staff number, then come back to <code>/admin/</code>.');
-} else {
-  api('/me').then(me => {
-    reasons = me.reasons;
-    const tabs = document.getElementById('tabs');
-    tabs.hidden = false;
-    tabs.querySelectorAll('button').forEach(b => { b.onclick = () => show(b.dataset.tab); });
-    show('overview');
-  }).catch(fail);
+/** Try the console session first, then the app's; whichever the server accepts wins. */
+async function start() {
+  let me = null;
+  for (const key of ['dimts.admin', 'dimts.session']) {
+    token = store.get(key);
+    if (!token) continue;
+    try { me = await api('/me'); break; } catch (err) {
+      if (key === 'dimts.admin') store.set('dimts.admin', null);
+      else return fail(err);
+    }
+  }
+  if (!me) return signInScreen();
+  reasons = me.reasons;
+  const tabs = document.getElementById('tabs');
+  tabs.hidden = false;
+  tabs.querySelectorAll('button').forEach(b => { b.onclick = () => show(b.dataset.tab); });
+  const signout = document.getElementById('signout');
+  signout.hidden = false;
+  signout.onclick = () => { store.set('dimts.admin', null); token = null; signInScreen(); };
+  await show('overview');
+  if (!me.passkeys.length && passkeysWork()) {
+    main.insertAdjacentHTML('afterbegin', setupBanner());
+    document.getElementById('add-passkey').onclick = async () => {
+      const msg = document.getElementById('setup-msg');
+      try {
+        await addPasskey();
+        document.getElementById('setup').innerHTML = '<span>Done. Next time, press <strong>Sign in with Face ID or fingerprint</strong>.</span>';
+      } catch (err) { msg.textContent = err.name === 'NotAllowedError' ? 'Cancelled.' : err.message; msg.className = 'small err'; }
+    };
+  }
 }
+
+start();
