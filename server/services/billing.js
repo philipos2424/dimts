@@ -124,7 +124,7 @@ export async function billingState(user, db = database) {
   ]);
   return {
     tier,
-    minutes_included: planMinutes(tier, user.phone, { trial: onTrial(user) }),
+    minutes_included: planMinutes(tier, user.phone, { trial: onTrial(user), override: user.minutes_override ?? null }),
     trial_ends_at: onTrial(user) ? new Date(user.trial_ends_at).toISOString() : null,
     trial_used: !!user.trial_ends_at,
     minutes_used: Math.round(usage.seconds / 6) / 10,

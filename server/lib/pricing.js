@@ -85,7 +85,9 @@ export function overageRate(ownerPhone, otherPhone, direction = 'outbound') {
 }
 
 /** Monthly plan minutes for this owner: fewer where calls cost us more. */
-export function planMinutes(tier, ownerPhone, { trial = false } = {}) {
+export function planMinutes(tier, ownerPhone, { trial = false, override = null } = {}) {
+  // Granted by hand (scripts/grant-minutes.js): wins over the plan and the trial.
+  if (Number.isInteger(override) && override >= 0) return override;
   if (trial) return TRIAL_MINUTES;
   const region = { 44: 'uk', eea: 'eea' }[legRegion(ownerPhone)];
   return REGIONAL_MINUTES[region]?.[tier] ?? PLANS[tier]?.minutes ?? PLANS.free.minutes;

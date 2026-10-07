@@ -32,9 +32,11 @@ async function callBudget(db, user, destination, direction, tier) {
   // The free plan's minutes come from one monthly pool shared by all free
   // users: a cost guard against sign-up farms. Credits are never held by it.
   const freePool = limit('GLOBAL_CALL_MINUTES_PER_MONTH', 300) * 60 - usage.free_seconds;
-  const trial = onTrial(user);
-  const ownPlanSeconds = Math.max(0, planMinutes(tier, user.phone, { trial }) * 60 - usage.plan_seconds);
-  const planSecondsLeft = tier === 'free' || trial ? Math.min(ownPlanSeconds, Math.max(0, freePool)) : ownPlanSeconds;
+  const trial = onTrial(user), override = user.minutes_override ?? null;
+  const ownPlanSeconds = Math.max(0, planMinutes(tier, user.phone, { trial, override }) * 60 - usage.plan_seconds);
+  // Granted minutes are the founder's own decision, so the shared free pool does not limit them.
+  const pooled = override == null && (tier === 'free' || trial);
+  const planSecondsLeft = pooled ? Math.min(ownPlanSeconds, Math.max(0, freePool)) : ownPlanSeconds;
   const surcharge = callSurcharge(user.phone, destination, direction);
   const overage = overageRate(user.phone, destination, direction);
   const remaining = affordableSeconds({ planSecondsLeft, credits, surcharge, overage });

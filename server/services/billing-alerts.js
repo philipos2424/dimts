@@ -47,7 +47,7 @@ async function push(userId, message, type) {
  */
 export async function sendBalanceAlerts(userId, now = new Date()) {
   try {
-    const user = await queryOne('SELECT id, tier, language FROM users WHERE id=$1 AND deleted_at IS NULL', [userId]);
+    const user = await queryOne('SELECT id, phone, tier, language, trial_ends_at, minutes_override FROM users WHERE id=$1 AND deleted_at IS NULL', [userId]);
     if (!user) return [];
     const t = TEXT[user.language] ?? TEXT.en;
     const state = await billingState(user);

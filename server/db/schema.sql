@@ -282,6 +282,8 @@ ALTER TABLE users ALTER COLUMN retention_months SET DEFAULT 12;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS timezone TEXT;
 -- Set on the first call of a free account: 21 days of Pro (pricing.js TRIAL_DAYS).
 ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_ends_at TIMESTAMPTZ;
+-- Monthly minutes the founder grants by hand (scripts/grant-minutes.js); replaces the plan's.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS minutes_override INT CHECK (minutes_override >= 0);
 -- The owner's own mobile shown as caller ID once the carrier has verified it.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS caller_id_verified_at TIMESTAMPTZ;
 ALTER TABLE calls ADD COLUMN IF NOT EXISTS caller_id TEXT;

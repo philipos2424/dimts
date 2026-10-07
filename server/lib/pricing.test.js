@@ -90,3 +90,11 @@ test('a free account on its trial is treated as Pro until the trial ends', async
   assert.equal(planOf({ tier: 'business', trial_ends_at: later }), 'business', 'paid plans ignore the trial');
   assert.equal(onTrial({ tier: 'pro', trial_ends_at: later }), false);
 });
+
+test('minutes granted by hand replace the plan, the trial and the region', async () => {
+  const { planMinutes } = await import('./pricing.js');
+  assert.equal(planMinutes('free', '+14155550100', { override: 1000 }), 1000);
+  assert.equal(planMinutes('pro', '+4915112345678', { trial: true, override: 2500 }), 2500);
+  assert.equal(planMinutes('pro', '+4915112345678', { override: 0 }), 0, 'zero is a real grant');
+  assert.equal(planMinutes('pro', '+4915112345678', { override: null }), 200);
+});

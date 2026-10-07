@@ -11,7 +11,10 @@ test('call reservations enforce idempotency, concurrency and minute budgets usin
   try {
     await db.exec(await readFile(new URL('./schema.sql', import.meta.url), 'utf8'));
     const owner = (await db.query("INSERT INTO users(phone,terms_version) VALUES('+15555550101','2026-10-07') RETURNING *")).rows[0];
-    const reserve = (key, dest = '+15555550102', record = true) => db.transaction(tx => reserveCallInTransaction(tx, owner, dest, record, key));
+    const reserve = async (key, dest = '+15555550102', record = true) => {
+      const fresh = (await db.query('SELECT * FROM users WHERE id=$1', [owner.id])).rows[0];
+      return db.transaction(tx => reserveCallInTransaction(tx, fresh, dest, record, key));
+    };
     process.env.TWILIO_ACCOUNT_SID = 'invalid';
     await assert.rejects(reserve('invalid-account'), /Invalid TWILIO_ACCOUNT_SID/);
     assert.equal((await db.query('SELECT count(*)::int AS n FROM calls')).rows[0].n, 0);
@@ -55,6 +58,10 @@ test('call reservations enforce idempotency, concurrency and minute budgets usin
     assert.equal(incoming.call.max_duration_sec, 60);
     assert.equal((await inbound()).created, false);
     await assert.rejects(reserve('request-three'), { code: 'call_minutes_limit' });
+    // The founder's grant is not limited by the exhausted free pool.
+    await db.query('UPDATE users SET minutes_override=600 WHERE id=$1', [owner.id]);
+    const granted = await reserve('request-four', '+15555550105');
+    assert.equal(granted.call.max_duration_sec, 1800, 'a granted account calls up to the 30-minute call cap');
   } finally {
     delete process.env.CALLS_PER_DAY; delete process.env.GLOBAL_CALL_MINUTES_PER_MONTH;
     await db.close();
