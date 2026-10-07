@@ -1,4 +1,5 @@
 import { adoptExtractedName, touchLastCall } from '../db/contacts.js';
+import { capture } from '../lib/analytics.js';
 import { query, queryOne } from '../db/pool.js';
 import { shouldAdoptName } from '../lib/contact-policy.js';
 import { identifyCaller } from './identify.js';
@@ -203,6 +204,7 @@ export async function processRecording(callId, { force = false, signal: callerSi
         JSON.stringify(agreements),
       ]
     );
+    if (saved.rows.length) capture(call.user_id, 'notes_ready', { direction: call.direction, voicemail: !!call.voicemail });
     // Only the worker that committed the notes may spend on identification or
     // update a contact. A stale worker cannot apply its old result.
     if (saved.rows.length) {

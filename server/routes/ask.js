@@ -1,4 +1,5 @@
 import express from 'express';
+import { capture } from '../lib/analytics.js';
 import { HttpError, resolveUser } from '../lib/users.js';
 import { hit } from '../lib/rate-limit.js';
 import { answerQuestion } from '../services/ask.js';
@@ -30,6 +31,7 @@ askRouter.post('/', async (req, res) => {
   const focus = history.at(-1)?.call_ids ?? [];
   // The app gives up after 30 seconds; stop the model before that so the
   // owner gets a clear answer and we stop paying for one nobody will read.
+  capture(user.id, 'ask_used');
   try {
     res.json(await answerQuestion(user.id, question, history.map(({ question, answer }) => ({ question, answer })), focus,
       { signal: AbortSignal.timeout(ASK_TIMEOUT_MS) }));

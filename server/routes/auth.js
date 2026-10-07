@@ -1,4 +1,5 @@
 import express from 'express';
+import { capture } from '../lib/analytics.js';
 import { randomBytes } from 'node:crypto';
 import { query, queryOne } from '../db/pool.js';
 import { config } from '../config.js';
@@ -59,9 +60,10 @@ authRouter.post('/verify', async (req, res) => {
   const user = await queryOne(
     `INSERT INTO users (phone) VALUES ($1)
      ON CONFLICT (phone) DO UPDATE SET phone = EXCLUDED.phone
-     RETURNING id, phone, tier, terms_version`, [phone]
+     RETURNING id, phone, tier, terms_version, (xmax = 0) AS created`, [phone]
   );
   if (demo) await resetReviewDemo(user);
+  if (user.created && !demo) defer(capture(user.id, 'signed_up', { country: signupCountryCode(phone) ?? 'other' }), 'analytics');
   const token = randomBytes(32).toString('hex');
   const device = deviceName(req);
   await query(

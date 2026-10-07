@@ -1,4 +1,5 @@
 import * as database from './pool.js';
+import { capture } from '../lib/analytics.js';
 import { HttpError } from '../lib/users.js';
 import { config } from '../config.js';
 import { isAccountSid } from '../lib/carrier.js';
@@ -75,8 +76,9 @@ export async function reserveCallInTransaction(db, user, destination, record, re
   // A free account's first call starts its trial; the trial is never restarted.
   // Re-read it afterwards: a concurrent first call may have started it.
   if (!options.voicemailOnly && (user.tier ?? 'free') === 'free' && !user.trial_ends_at) {
-    await db.query(`UPDATE users SET trial_ends_at = now() + make_interval(days => $2)
-      WHERE id=$1 AND tier='free' AND trial_ends_at IS NULL`, [user.id, TRIAL_DAYS]);
+    const started = await db.query(`UPDATE users SET trial_ends_at = now() + make_interval(days => $2)
+      WHERE id=$1 AND tier='free' AND trial_ends_at IS NULL RETURNING id`, [user.id, TRIAL_DAYS]);
+    if (started.rows.length) capture(user.id, 'trial_started');
     const row = (await db.query('SELECT trial_ends_at FROM users WHERE id=$1', [user.id])).rows[0];
     user = { ...user, trial_ends_at: row?.trial_ends_at ?? null };
   }
@@ -106,5 +108,6 @@ export async function reserveCallInTransaction(db, user, destination, record, re
       WHERE id=$1 RETURNING *`, [call.id])).rows[0];
     return { call: missed, created: true };
   }
+  capture(user.id, 'call_started', { direction, plan: tier, recorded: !!record });
   return { call, created: true };
 }

@@ -40,6 +40,10 @@ export type Person = {
   calls: { id: string; created_at: string; direction: string; status: string; duration_sec: number | null; summary: string | null; agreements: Agreement[] | null }[];
   promises: Promises;
 };
+/** Funnel events only the app can see; fire and forget. */
+export function trackEvent(event: 'paywall_viewed' | 'recap_shared') {
+  request('/api/events', '', { method: 'POST', body: JSON.stringify({ event }) }).catch(() => {});
+}
 export function getPromises() { return request<Promises>('/api/promises', ''); }
 type BriefingPromise = PromiseItem & { age_days: number; money: boolean };
 export type Briefing = {

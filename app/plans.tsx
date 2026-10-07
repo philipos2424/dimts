@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Linking, Platform, Pressable, ScrollView, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { useApp } from '../src/AppContext';
-import { ApiError, getBilling, openBillingPortal, startCheckout, type Billing, type Interval, type PlanId } from '../src/api';
+import { ApiError, getBilling, openBillingPortal, startCheckout, trackEvent, type Billing, type Interval, type PlanId } from '../src/api';
 import { COUNTRY_NAMES, canBuyHere, formatCredits, formatPrice } from '../src/billing';
 import { Banner } from '../src/components/Banner';
 import { Button } from '../src/components/Button';
@@ -95,6 +95,7 @@ export default function Plans() {
   const load = useCallback(() => getBilling().then(setBilling).catch(err => setError(err instanceof ApiError ? err.message : String(err))), []);
   // The session token is restored with userPhone; asking earlier reads as signed out.
   useEffect(() => { if (userPhone) load(); }, [userPhone, load]);
+  useEffect(() => { if (userPhone) trackEvent('paywall_viewed'); }, [userPhone]);
   // Polar's webhook lands moments after the redirect; check back a few times.
   useEffect(() => {
     if (params.checkout !== 'done' || !userPhone) return;

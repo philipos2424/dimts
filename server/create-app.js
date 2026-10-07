@@ -17,6 +17,7 @@ import { promisesRouter } from './routes/promises.js';
 import { recapRouter } from './routes/recap.js';
 import { askRouter } from './routes/ask.js';
 import { healthRouter } from './routes/health.js';
+import { eventsRouter } from './routes/events.js';
 import { briefingRouter, cronRouter } from './routes/briefing.js';
 import { myPrivacyRequestsRouter, privacyRequestsRouter } from './routes/privacy-requests.js';
 import { inboundRouter } from './routes/inbound.js';
@@ -46,6 +47,7 @@ export function createApp({ webRoot = fileURLToPath(new URL('../dist/', import.m
   });
   app.use('/api', apiRateLimit);
   app.use('/api/health', healthRouter);
+  app.use('/api/events', eventsRouter);
   app.use('/api/auth', authRouter);
   app.use('/api/notifications', notificationsRouter);
   app.use('/api/integrations/google', googleRouter);

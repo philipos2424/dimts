@@ -8,7 +8,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // past_due keeps the plan while Polar retries the card; it ends in canceled or active.
 const GRANTING = ['active', 'trialing', 'past_due'];
 
-function ownerOf(data) {
+export function ownerOf(data) {
   const id = data?.customer?.external_id ?? data?.metadata?.user_id;
   return UUID.test(id ?? '') ? id : null;
 }

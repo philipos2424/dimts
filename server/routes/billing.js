@@ -1,4 +1,5 @@
 import express from 'express';
+import { capture } from '../lib/analytics.js';
 import { config } from '../config.js';
 import { HttpError, resolveUser } from '../lib/users.js';
 import { audit } from '../lib/audit.js';
@@ -9,7 +10,7 @@ import { CREDIT_PACKS, INTERVALS, PAID_PLANS, affordableSeconds, callSurcharge, 
   catalogFor, displayCurrency, pick, planProductKey, priceRegion, PLAN_PRICES } from '../lib/pricing.js';
 import { polarProducts } from '../lib/polar-products.js';
 import { verifyWebhook } from '../lib/standard-webhooks.js';
-import { applyPolarEvent, assignNumberAfterUpgrade, billingState } from '../services/billing.js';
+import { applyPolarEvent, assignNumberAfterUpgrade, billingState, ownerOf } from '../services/billing.js';
 import { defer } from '../lib/defer.js';
 import { billingConfigured, createCheckout, createPortalSession } from '../services/polar.js';
 
@@ -76,6 +77,7 @@ billingRouter.post('/checkout', async (req, res, next) => {
       price = pick(CREDIT_PACKS[item].prices, currency);
     } else throw new HttpError(400, 'invalid_item');
     if (!billingConfigured()) throw new HttpError(503, 'billing_unavailable', 'Payments are not switched on yet.');
+    capture(user.id, 'checkout_started', { item, interval });
     const checkout = await createCheckout({ userId: user.id, productId: polarProducts()[key], currency: price.currency,
       ip: req.ip, ...returnUrls() });
     await audit({ userId: user.id, action: 'checkout_started', targetType: 'product', targetId: key, req });
@@ -104,6 +106,9 @@ polarWebhookRouter.post('/', async (req, res, next) => {
     }
     const outcome = await applyPolarEvent(req.get('webhook-id'), req.body);
     if (outcome === 'applied') defer(assignNumberAfterUpgrade(req.body), 'assign-number');
+    const type = req.body?.type, payer = ownerOf(req.body?.data);
+    if (outcome === 'applied' && payer && type === 'subscription.active') capture(payer, 'subscribed');
+    if (outcome === 'applied' && payer && type === 'order.paid' && req.body?.data?.billing_reason === 'purchase') capture(payer, 'credits_bought');
     res.status(202).json({ outcome });
   } catch (err) { next(err); }
 });
