@@ -7,7 +7,7 @@ import { recordingPolicy } from '../lib/recording-policy.js';
 import { hasAcceptedTerms } from '../lib/terms.js';
 import { PLAN_SECONDS_SQL } from './plan-usage.js';
 import { VOICEMAIL_MAX_SECONDS } from '../lib/recording-consent.js';
-import { TRIAL_DAYS, affordableSeconds, callSurcharge, onTrial, overageRate, planMinutes, planOf } from '../lib/pricing.js';
+import { TRIAL_CALL_GRACE_SECONDS, TRIAL_DAYS, affordableSeconds, callSurcharge, onTrial, overageRate, planMinutes, planOf } from '../lib/pricing.js';
 
 function limit(name, fallback) {
   const value = Number(process.env[name] ?? fallback);
@@ -36,12 +36,17 @@ async function callBudget(db, user, destination, direction, tier) {
   const ownPlanSeconds = Math.max(0, planMinutes(tier, user.phone, { trial, override }) * 60 - usage.plan_seconds);
   // Granted minutes are the founder's own decision, so the shared free pool does not limit them.
   const pooled = override == null && (tier === 'free' || trial);
-  const planSecondsLeft = pooled ? Math.min(ownPlanSeconds, Math.max(0, freePool)) : ownPlanSeconds;
+  const pooledSecondsLeft = pooled ? Math.min(ownPlanSeconds, Math.max(0, freePool)) : ownPlanSeconds;
   const surcharge = callSurcharge(user.phone, destination, direction);
+  // A trial call is never cut off when its minutes run out: with a minute left it may
+  // run to the grace length, paid from the shared pool, never from the owner's card.
+  const planSecondsLeft = trial && pooled && surcharge === 0 && pooledSecondsLeft >= 60
+    ? Math.max(pooledSecondsLeft, Math.min(TRIAL_CALL_GRACE_SECONDS, Math.max(0, freePool)))
+    : pooledSecondsLeft;
   const overage = overageRate(user.phone, destination, direction);
   const remaining = affordableSeconds({ planSecondsLeft, credits, surcharge, overage });
   if (remaining < 60) {
-    if (ownPlanSeconds >= 60 && planSecondsLeft < 60 && surcharge === 0) throw new HttpError(429, 'call_minutes_limit', 'Call minute limit reached.');
+    if (ownPlanSeconds >= 60 && pooledSecondsLeft < 60 && surcharge === 0) throw new HttpError(429, 'call_minutes_limit', 'Call minute limit reached.');
     throw new HttpError(402, 'credits_required', surcharge > 0
       ? `Calls to this country cost ${surcharge} credits a minute. Add credits to call.`
       : "You have used this month's minutes. Add credits or upgrade to keep calling.");

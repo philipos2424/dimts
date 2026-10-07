@@ -16,7 +16,7 @@ const COPY = {
   en: {
     current: 'Your plan', minutes: (used: number, total: number) => `${used} of ${total} minutes used this month`,
     trial: (days: number) => `Pro trial · ${days} ${days === 1 ? 'day' : 'days'} left`,
-    trialStart: 'Your free trial starts with your first call: 5 minutes of recorded calls with AI notes, for 21 days. No card needed.',
+    trialStart: 'Your free trial starts with your first call: 20 minutes of recorded calls with AI notes, for 21 days. A call is never cut off when the trial minutes run out. No card needed.',
     trialOver: 'Your trial has ended. Your calls and notes stay readable. Choose a plan to make new calls.',
     credits: 'Credits', renews: (d: string) => `Renews on ${d}`, ends: (d: string) => `Ends on ${d}, then returns to Free`,
     pastDue: 'Your last payment failed. Update your card to keep your plan.',
@@ -40,7 +40,7 @@ const COPY = {
   am: {
     current: 'የእርስዎ ዕቅድ', minutes: (used: number, total: number) => `በዚህ ወር ከ${total} ደቂቃ ${used} ተጠቅመዋል`,
     trial: (days: number) => `የፕሮ ሙከራ · ${days} ቀን ቀርቷል`,
-    trialStart: 'ነፃ ሙከራዎ በመጀመሪያ ጥሪዎ ይጀምራል፦ ለ21 ቀናት 5 ደቂቃ የተቀዳ ጥሪ ከAI ማስታወሻ ጋር።',
+    trialStart: 'ነፃ ሙከራዎ በመጀመሪያ ጥሪዎ ይጀምራል፦ ለ21 ቀናት 20 ደቂቃ የተቀዳ ጥሪ ከAI ማስታወሻ ጋር። የሙከራ ደቂቃዎ ሲያልቅ ጥሪ አይቋረጥም።',
     trialOver: 'ሙከራዎ አልቋል። ጥሪዎችዎና ማስታወሻዎችዎ ይቆያሉ። አዲስ ጥሪ ለማድረግ ዕቅድ ይምረጡ።',
     credits: 'ክሬዲት', renews: (d: string) => `${d} ላይ ይታደሳል`, ends: (d: string) => `${d} ላይ ያበቃል፣ ከዚያ ወደ ነፃ ይመለሳል`,
     pastDue: 'የመጨረሻው ክፍያ አልተሳካም። ዕቅድዎን ለማቆየት ካርድዎን ያዘምኑ።',
