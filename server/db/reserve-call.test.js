@@ -19,16 +19,16 @@ test('call reservations enforce idempotency, concurrency and minute budgets usin
     const pair = await Promise.all([reserve('request-one'), reserve('request-one')]);
     assert.equal(pair[0].call.id, pair[1].call.id);
     assert.equal(pair.filter(r => r.created).length, 1);
-    assert.equal(pair[0].call.max_duration_sec, 1800);
+    assert.equal(pair[0].call.max_duration_sec, 300, 'trial: 5 minutes');
     assert.equal(pair[0].call.twilio_account_sid, account);
     process.env.TWILIO_ACCOUNT_SID = 'AC' + 'd'.repeat(32);
     assert.equal((await reserve('request-one')).call.twilio_account_sid, account, 'retry retains original account');
     await assert.rejects(reserve('request-one', '+15555550103'), { code: 'request_key_reused' });
     await assert.rejects(reserve('request-one', '+15555550102', false), { code: 'request_key_reused' });
     await assert.rejects(reserve('request-two'), { code: 'call_in_progress' });
-    assert.equal(pair[0].call.plan_seconds, 1800, 'trial: a call is capped at 30 minutes');
+    assert.equal(pair[0].call.plan_seconds, 300, 'trial: 5 minutes');
     // A finished call counts what it lasted, not what it reserved.
-    await db.query("UPDATE calls SET status='completed',duration_sec=5940,plan_seconds=5940 WHERE id=$1", [pair[0].call.id]);
+    await db.query("UPDATE calls SET status='completed',duration_sec=240,plan_seconds=240 WHERE id=$1", [pair[0].call.id]);
     const second = await reserve('request-two');
     assert.equal(second.call.max_duration_sec, 60, 'cap uses remaining minutes');
     await db.query("UPDATE calls SET status='failed' WHERE id=$1", [second.call.id]);
@@ -42,7 +42,7 @@ test('call reservations enforce idempotency, concurrency and minute budgets usin
     // Idempotency lookup still works after a budget is exhausted.
     assert.equal((await reserve('request-two')).call.id, second.call.id);
     assert.equal((await db.query('SELECT count(*)::int AS n FROM calls')).rows[0].n, 2);
-    process.env.GLOBAL_CALL_MINUTES_PER_MONTH = '100'; // 60 seconds left in the shared free and trial pool
+    process.env.GLOBAL_CALL_MINUTES_PER_MONTH = '5'; // 60 seconds left in the shared free and trial pool
     const other = (await db.query("INSERT INTO users(phone) VALUES('+15555550104') RETURNING *")).rows[0];
     other.agent_number = '+15555550999';
     const inbound = () => db.transaction(tx => reserveCallInTransaction(tx, other, 'anonymous', true, 'incoming-CA_TEST',

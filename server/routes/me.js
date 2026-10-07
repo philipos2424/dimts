@@ -21,15 +21,12 @@ meRouter.post('/number', async (req, res, next) => {
     const user = await resolveUser(req);
     refuseForReviewDemo(user);
     if (user.agent_number) return res.json({ agent_number: user.agent_number });
-    // Each number costs about $1 a month whether or not it rings, so it comes with a paid plan.
-    if (planOf(user) === 'free') throw new HttpError(402, 'plan_required', 'A business number comes with Pro and Business.');
+    // Each number costs about $1 a month whether or not it rings, so it comes
+    // with a paid plan only; a trial does not include one.
+    if (planOf(user) === 'free' || onTrial(user)) throw new HttpError(402, 'plan_required', 'A business number comes with Pro and Business.');
     const voiceUrl = incomingVoiceUrl();
     if (!voiceUrl) throw new HttpError(503, 'routing_unavailable', 'Business-number routing is not configured yet.');
-    const claimed = await claimNumber(user.id, voiceUrl);
-    // A trial's number is held a week past the trial, then released unless they upgrade.
-    if (onTrial(user)) await query(`UPDATE users SET number_release_at = trial_ends_at + interval '7 days'
-      WHERE id=$1 AND tier='free'`, [user.id]);
-    res.json(claimed);
+    res.json(await claimNumber(user.id, voiceUrl));
   } catch (err) { next(err); }
 });
 

@@ -199,12 +199,13 @@ export function catalogFor(phone) {
 }
 
 /**
- * A new account tries Pro for 21 days, capped at 100 minutes, from its first
+ * A new account tries Pro for 21 days, capped at 5 minutes, from its first
  * call: a trial converts several times better than a permanent free tier, and
  * the cap bounds what a sign-up farm can cost.
  */
 export const TRIAL_DAYS = 21;
-export const TRIAL_MINUTES = 100;
+// Five minutes: enough to hear the notice and see real notes, cheap enough to give away.
+export const TRIAL_MINUTES = 5;
 export const onTrial = (user, now = Date.now()) => (user?.tier ?? 'free') === 'free'
   && !!user?.trial_ends_at && new Date(user.trial_ends_at).getTime() > now;
 export const planOf = user => (onTrial(user) ? 'pro' : PLANS[user?.tier] ? user.tier : 'free');
