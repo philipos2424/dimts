@@ -1,14 +1,11 @@
 import { useState } from 'react';
 import { Share } from 'react-native';
 import { getRecap, trackEvent } from '../api';
-
 import { Button } from './Button';
 import { Txt } from './Txt';
 
 // The one line the other person sees about Dimts: how a recap reaches new owners.
-export const RECAP_SIGNATURE = '
-
-— Notes by Dimts, the AI that remembers what was agreed on calls';
+export const RECAP_SIGNATURE = '\n\n— Notes by Dimts, the AI that remembers what was agreed on calls';
 
 /** Write a short "here's what we agreed" and hand it to the share sheet. */
 export function RecapButton({ callId }: { callId: string }) {
