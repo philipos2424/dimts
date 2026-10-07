@@ -28,7 +28,9 @@ export type Agreement = { kind: string; subject: string; value: string; said_by:
   quote: string; line: number; start: number | null };
 export type Conflict = { new_index: number; previous_call_id: string; previous_index: number; note: string };
 export type PromiseItem = { call_id: string; index: number; task: string; contact_id: string | null;
-  contact_name: string | null; phone: string; created_at: string };
+  contact_name: string | null; phone: string; created_at: string;
+  /** Deadline in the owner's local time: "2026-10-08T12:00" or "2026-10-09"; null when none was said. */
+  due: string | null; due_at: string | null; overdue: boolean };
 export type Promises = { you_owe: PromiseItem[]; waiting_on: PromiseItem[] };
 export type Citation = { call_id: string; contact_name: string | null; created_at: string; line: number; quote: string; start: number | null };
 export type AskDraft = { subject: string; body: string };
@@ -47,7 +49,7 @@ export type Briefing = {
   you_owe: BriefingPromise[]; waiting_on: BriefingPromise[];
   conflicts: { call_id: string; created_at: string; contact_name: string | null; count: number; note: string | null }[];
   next_moves: { call_id: string; created_at: string; contact_name: string | null; move: string }[];
-  totals: { you_owe: number; waiting_on: number; money: number; conflicts: number };
+  totals: { you_owe: number; waiting_on: number; money: number; conflicts: number; overdue?: number };
 };
 export function getBriefing() { return request<Briefing>('/api/briefing', ''); }
 export function setPromise(callId: string, index: number, status: 'open' | 'done' | 'dismissed') {
@@ -63,6 +65,10 @@ export function askQuestion(question: string, history: AskTurn[] = []) {
 export function getPerson(id: string) { return request<Person>(`/api/contacts/${encodeURIComponent(id)}`, ''); }
 export function renameContact(id: string, display_name: string, company: string, notes: string) {
   return request(`/api/contacts/${encodeURIComponent(id)}`, '', { method: 'PATCH', body: JSON.stringify({ display_name, company, notes }) });
+}
+/** The phone's IANA time zone, so the server reads "tomorrow at noon" in the owner's own time. */
+export function patchTimezone(timezone: string) {
+  return request<{ timezone: string }>('/api/me', '', { method: 'PATCH', body: JSON.stringify({ timezone }) });
 }
 export function patchLanguage(language: 'en' | 'am') {
   return request<{ language: string }>('/api/me', '', { method: 'PATCH', body: JSON.stringify({ language }) });
@@ -245,7 +251,7 @@ export function endOtherSessions(all = false) {
   return request<{ ended: number }>(`/api/me/sessions/revoke${all ? '?all=1' : ''}`, '', { method: 'POST' });
 }
 export function getMe() {
-  return request<{ phone: string; tier: string; agent_number: string | null; terms_required: boolean; language: 'en' | 'am'; retention_months: Retention; caller_id?: boolean; number_release_at?: string | null }>('/api/me', '');
+  return request<{ phone: string; tier: string; agent_number: string | null; terms_required: boolean; language: 'en' | 'am'; retention_months: Retention; timezone?: string | null; caller_id?: boolean; number_release_at?: string | null }>('/api/me', '');
 }
 export function startCallerId(method: 'call' | 'sms' = 'call') {
   return request<{ status: 'code_sent' | 'verified' }>('/api/me/caller-id/start', '', { method: 'POST', body: JSON.stringify({ method }) });

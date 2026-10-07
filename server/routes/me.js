@@ -80,6 +80,7 @@ meRouter.get('/', async (req, res, next) => {
       terms_required: !hasAcceptedTerms(user),
       language: user.language ?? 'en',
       retention_months: user.retention_months ?? null,
+      timezone: user.timezone ?? null,
       caller_id: !!user.caller_id_verified_at,
     });
   } catch (err) { next(err); }
@@ -128,17 +129,26 @@ meRouter.delete('/', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+/** An IANA zone that Intl and Postgres both understand, e.g. "America/New_York". */
+export function validTimezone(zone) {
+  if (typeof zone !== 'string' || !/^[A-Za-z0-9_+\-/]{1,64}$/.test(zone)) return false;
+  try { new Intl.DateTimeFormat('en-US', { timeZone: zone }); return true; } catch { return false; }
+}
+
 meRouter.patch('/', async (req, res, next) => {
   try {
     const user = await resolveUser(req);
     const body = req.body ?? {};
-    const setLanguage = 'language' in body, setRetention = 'retention_months' in body;
+    const setLanguage = 'language' in body, setRetention = 'retention_months' in body, setTimezone = 'timezone' in body;
     if (setLanguage && !['en', 'am'].includes(body.language)) throw new HttpError(400, 'invalid_language');
     if (setRetention && body.retention_months !== null && !RETENTION_MONTHS.includes(body.retention_months)) throw new HttpError(400, 'invalid_retention');
-    if (!setLanguage && !setRetention) throw new HttpError(400, 'nothing_to_change');
+    if (setTimezone && !validTimezone(body.timezone)) throw new HttpError(400, 'invalid_timezone');
+    if (!setLanguage && !setRetention && !setTimezone) throw new HttpError(400, 'nothing_to_change');
     const row = await queryOne(`UPDATE users SET language=CASE WHEN $2 THEN $3 ELSE language END,
-      retention_months=CASE WHEN $4 THEN $5::int ELSE retention_months END WHERE id=$1 RETURNING language,retention_months`,
-    [user.id, setLanguage, setLanguage ? body.language : null, setRetention, setRetention ? body.retention_months : null]);
+      retention_months=CASE WHEN $4 THEN $5::int ELSE retention_months END,
+      timezone=CASE WHEN $6 THEN $7 ELSE timezone END WHERE id=$1 RETURNING language,retention_months,timezone`,
+    [user.id, setLanguage, setLanguage ? body.language : null, setRetention, setRetention ? body.retention_months : null,
+      setTimezone, setTimezone ? body.timezone : null]);
     if (setRetention) await audit({ userId: user.id, action: 'retention_changed', targetType: 'retention', targetId: body.retention_months ?? 'off', req });
     res.json(row);
   } catch (err) { next(err); }

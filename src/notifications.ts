@@ -2,6 +2,7 @@ import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { captureSessionGuard, registerNotificationDevice, removeNotificationDevice } from './api';
+import { PROMISE_REMINDER } from './reminders';
 
 const preference = (phone: string) => `dimts.notifications.${phone}`;
 export async function notificationPreference(phone: string) {
@@ -36,9 +37,12 @@ export async function restoreIncomingNotifications(phone: string) {
 export async function observeIncomingNotifications(onCall: (id: string) => Promise<void>, onBilling: () => void = () => {}) {
   if (Platform.OS === 'web') return () => {};
   const Notifications = await import('expo-notifications');
-  Notifications.setNotificationHandler({ handleNotification: async () => ({
-    shouldPlaySound: false, shouldSetBadge: false, shouldShowBanner: false, shouldShowList: false,
-  }) });
+  // Incoming-call pushes are shown by the in-app briefing instead; a promise
+  // reminder is still shown as a banner while Dimts is open.
+  Notifications.setNotificationHandler({ handleNotification: async notification => {
+    const reminder = notification.request.content.data?.type === PROMISE_REMINDER;
+    return { shouldPlaySound: reminder, shouldSetBadge: false, shouldShowBanner: reminder, shouldShowList: reminder };
+  } });
   const seen = new Set<string>();
   async function respond(response: import('expo-notifications').NotificationResponse) {
     const request = response.notification.request, data = request.content.data;
@@ -49,11 +53,13 @@ export async function observeIncomingNotifications(onCall: (id: string) => Promi
       onBilling();
       return;
     }
-    if (data?.type !== 'incoming-call' || typeof data.callId !== 'string' ||
-        !/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(data.callId) || seen.has(request.identifier)) return;
+    // A promise reminder opens the call the promise was made on; the call is
+    // fetched with the owner's session, so a forged ID shows nothing.
+    const callId = data?.type === PROMISE_REMINDER ? data.call_id : data?.type === 'incoming-call' ? data.callId : null;
+    if (typeof callId !== 'string' || !/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(callId) || seen.has(request.identifier)) return;
     seen.add(request.identifier);
     await Notifications.clearLastNotificationResponseAsync().catch(() => {});
-    await onCall(data.callId);
+    await onCall(callId);
   }
   const listener = Notifications.addNotificationResponseReceivedListener(response => { void respond(response).catch(() => {}); });
   let last: import('expo-notifications').NotificationResponse | null;

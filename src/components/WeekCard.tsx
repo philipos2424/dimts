@@ -1,4 +1,5 @@
 import { useRouter } from 'expo-router';
+import { dueLabel } from '../reminderTime';
 import { Pressable, View } from 'react-native';
 import type { Briefing } from '../api';
 import { Card } from './Card';
@@ -27,6 +28,13 @@ export function WeekCard({ briefing }: { briefing: Briefing | null }) {
         <Txt size="caption" tone="muted">{briefing.calls_this_week} calls · {briefing.minutes_this_week} min</Txt>
       </View>
       {counts ? <Txt weight="bold">{counts}</Txt> : null}
+      {briefing.you_owe.filter(p => p.overdue).slice(0, 3).map(item => (
+        <Pressable key={`${item.call_id}-${item.index}`} accessibilityRole="link" onPress={() => router.push(`/call/${item.call_id}`)}
+          style={{ minHeight: 44, justifyContent: 'center' }}>
+          <Txt tone="danger" weight="bold">Overdue · {item.task}</Txt>
+          <Txt size="caption" tone="muted">{who(item.contact_name)}{item.due ? ` · was due ${dueLabel(item.due)?.replace(/^(Today|Yesterday)/, s => s.toLowerCase())}` : ''}</Txt>
+        </Pressable>
+      ))}
       {money.slice(0, 3).map(item => (
         <Pressable key={`${item.call_id}-${item.line}`} accessibilityRole="link" onPress={() => open(item.call_id, item.start)}
           style={{ minHeight: 44, justifyContent: 'center' }}>

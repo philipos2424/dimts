@@ -114,6 +114,7 @@ export async function processRecording(callId, { force = false, signal: callerSi
      SELECT c.id, c.user_id, c.recording_url, c.recording_sid, c.audio_object_key, c.contact_id, c.direction,c.voicemail,c.transcript,c.transcript_data,
             c.transcript_recording_url,c.language,c.language_probability,c.duration_sec,
             (SELECT u.language FROM users u WHERE u.id = c.user_id) AS owner_language,
+            (SELECT u.timezone FROM users u WHERE u.id = c.user_id) AS owner_timezone, c.created_at,
             k.display_name  AS contact_display_name,
             k.name_source   AS contact_name_source,
             k.name_confidence AS contact_name_confidence
@@ -165,7 +166,8 @@ export async function processRecording(callId, { force = false, signal: callerSi
     }
 
     await renew();
-    const summary = await summarize(result.text, { signal, language: call.owner_language });
+    const summary = await summarize(result.text, { signal, language: call.owner_language,
+      callTime: call.created_at, timezone: call.owner_timezone });
     const agreements = resolveAgreements(summary.agreements, result.text, transcriptTurns({
       transcript: result.text, transcript_data: result.raw, recording_url: call.recording_url,
       transcript_recording_url: call.recording_url, direction: call.direction, duration_sec: call.duration_sec,

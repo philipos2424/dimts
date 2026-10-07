@@ -8,6 +8,7 @@ import { BusinessNumber } from '../../src/components/BusinessNumber';
 import { Button } from '../../src/components/Button';
 import { CallCard } from '../../src/components/CallCard';
 import { PromisesStrip } from '../../src/components/PromisesStrip';
+import { syncPromiseReminders } from '../../src/reminders';
 import { Txt } from '../../src/components/Txt';
 import { space, useTheme } from '../../src/theme';
 import { useCalls } from '../../src/useCalls';
@@ -24,7 +25,7 @@ export default function Calls() {
   // Wait for the restored session; a request before it would fail silently.
   const loadPromises = useCallback(() => {
     if (!userPhone) return;
-    getPromises().then(setPromises).catch(() => {});
+    getPromises().then(next => { setPromises(next); syncPromiseReminders(next).catch(() => {}); }).catch(() => {});
   }, [userPhone]);
   useFocusEffect(loadPromises);
 

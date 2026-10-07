@@ -278,6 +278,8 @@ ALTER TABLE calls ADD COLUMN IF NOT EXISTS voicemail BOOLEAN NOT NULL DEFAULT fa
 ALTER TABLE users ADD COLUMN IF NOT EXISTS retention_months INT CHECK (retention_months IN (3,6,12,24));
 -- New accounts keep calls for a year unless they choose otherwise; existing accounts keep their choice.
 ALTER TABLE users ALTER COLUMN retention_months SET DEFAULT 12;
+-- IANA time zone from the owner's phone, so "tomorrow at noon" becomes the right moment.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS timezone TEXT;
 -- The owner's own mobile shown as caller ID once the carrier has verified it.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS caller_id_verified_at TIMESTAMPTZ;
 ALTER TABLE calls ADD COLUMN IF NOT EXISTS caller_id TEXT;

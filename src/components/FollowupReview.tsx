@@ -1,8 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
-import { Linking, Pressable, TextInput, View } from 'react-native';
-import { type Followups, type FollowupEvent, generateFollowups, saveFollowups, rejectFollowup, getFollowupEvents } from '../api';
-import { bookReviewedMeeting, getCalendarAction, reconcileMeeting, refreshFollowups, type CalendarAction } from '../api';
-import { createReviewedEmailDraft, getEmailAction, reconcileEmail, type EmailAction } from '../api';
+import { useRef, useState } from 'react';
+import { Pressable, TextInput, View } from 'react-native';
+import { type Followups, type FollowupEvent, generateFollowups, saveFollowups, rejectFollowup, getFollowupEvents, refreshFollowups } from '../api';
+import { addToCalendar, openInMailApp } from '../calendar';
 import { space, useTheme } from '../theme';
 import { Section } from './Section';
 import { Txt } from './Txt';
@@ -13,21 +12,7 @@ export function FollowupReview({ callId, initial }: { callId: string; initial: F
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [events, setEvents] = useState<FollowupEvent[] | null>(null);
-  const [booking, setBooking] = useState<CalendarAction | null>(null);
-  const [bookingLoaded, setBookingLoaded] = useState(false);
-  const [emailAction, setEmailAction] = useState<EmailAction | null>(null);
-  const [emailLoaded, setEmailLoaded] = useState(false);
   const running = useRef(false);
-  useEffect(() => {
-    let mounted = true;
-    getCalendarAction(callId).then(r => { if (mounted) { setBooking(r.action); setBookingLoaded(true); } })
-      .catch(() => { if (mounted) setMessage('Could not load booking status. Refresh before booking.'); });
-    getEmailAction(callId).then(r => { if (mounted) { setEmailAction(r.action); setEmailLoaded(true); } })
-      .catch(() => { if (mounted) setMessage('Could not load Gmail draft status. Refresh before creating a draft.'); });
-    return () => { mounted = false; };
-  }, [callId]);
-  const meetingLocked = !bookingLoaded || (booking && booking.status !== 'failed');
-  const emailLocked = !emailLoaded || (emailAction && emailAction.status !== 'failed');
   const run = async (action: () => Promise<void>) => {
     if (running.current) return;
     running.current = true;
@@ -57,75 +42,38 @@ export function FollowupReview({ callId, initial }: { callId: string; initial: F
   </View>;
   return <Section title="Follow-up drafts">
     <View style={{ gap: space.sm }}>
-      <Txt tone="muted">Review the facts before using these drafts. Opening another app does not send mail or confirm a booking.</Txt>
-      {emailAction && <View style={{ gap: space.xs }}>
-        <Txt weight="bold">{emailAction.status === 'confirmed' ? 'Draft created in Gmail' : emailAction.status === 'failed' ? 'Gmail draft failed' : 'Gmail draft awaiting confirmation'}</Txt>
-        <Txt>{emailAction.email.subject} · To: {emailAction.email.recipient}</Txt>
-        <Txt tone="muted">This action does not send email. Review and send it in Gmail.</Txt>
-        {emailAction.status === 'confirmed' ? <>
-          <Txt tone="muted">Draft ID: {emailAction.draft_id}</Txt>
-          {button('Open Gmail drafts', async () => { await Linking.openURL('https://mail.google.com/mail/#drafts'); })}
-        </> : <Txt tone="muted">{emailAction.error_code || 'Checking the provider result.'}</Txt>}
-        {(emailAction.status === 'pending' || emailAction.status === 'unknown') && button('Check Gmail draft result', async () => setEmailAction((await reconcileEmail(callId)).action))}
-      </View>}
-      {button('Refresh Gmail draft status', async () => { setEmailAction((await getEmailAction(callId)).action); setEmailLoaded(true); })}
-      {booking && <View style={{ gap: space.xs }}>
-        <Txt weight="bold">{booking.status === 'confirmed' ? 'Booked in Google Calendar' : booking.status === 'failed' ? 'Booking failed' : 'Booking result awaiting confirmation'}</Txt>
-        <Txt>{booking.meeting.title} · {booking.meeting.start} – {booking.meeting.end}</Txt>
-        {booking.status === 'confirmed' ? <>
-          <Txt tone="muted">Event ID: {booking.event_id}</Txt>
-          <Txt tone="muted">Saved to your primary calendar. No invitation was sent to the caller.</Txt>
-          {booking.event_url && button('Open booked event', async () => { await Linking.openURL(booking.event_url!); })}
-        </> : <Txt tone="muted">{booking.error_code || 'Checking the provider result.'} {booking.status !== 'failed' && 'Check this result before making another booking.'}</Txt>}
-        {(booking.status === 'pending' || booking.status === 'unknown') && button('Check booking result', async () => setBooking((await reconcileMeeting(callId)).action))}
-      </View>}
-      {button('Refresh booking status', async () => { setBooking((await getCalendarAction(callId)).action); setBookingLoaded(true); })}
+      <Txt tone="muted">Check the facts first. Nothing is sent or booked until you do it in your mail or calendar app.</Txt>
       {!draft && button(busy ? 'Preparing drafts…' : 'Prepare follow-ups', async () => setDraft(await generateFollowups(callId)))}
       {draft && !draft.email && !draft.meeting && <Txt>No email or agreed meeting found in this conversation.</Txt>}
       {draft?.email?.status === 'rejected' && <Txt tone="muted">Email proposal rejected.</Txt>}
-      {draft?.email && draft.email.status !== 'rejected' && !emailLocked && <>
+      {draft?.email && draft.email.status !== 'rejected' && <>
         {evidence(draft.email)}
         {field('Recipient email', draft.email.recipient, recipient => setDraft({ ...draft, email: { ...draft.email!, recipient } }))}
         {field('Subject', draft.email.subject, subject => setDraft({ ...draft, email: { ...draft.email!, subject } }))}
         {field('Email draft', draft.email.body, body => setDraft({ ...draft, email: { ...draft.email!, body } }), true)}
-        {button('Confirm and create draft in my Gmail', async () => {
+        {button('Open in mail app', async () => {
+          if (!draft.email?.subject || !draft.email.body) throw new Error('Enter a subject and message first.');
           const saved = await saveFollowups(callId, draft); setDraft(saved);
-          try { setEmailAction((await createReviewedEmailDraft(callId, saved.version!)).action); }
-          catch (err) { setEmailLoaded(false); throw err; }
-        })}
-        {button('Review in mail app', async () => {
-          if (!draft.email?.recipient || !draft.email.subject || !draft.email.body) throw new Error('Enter a recipient, subject and message first.');
-          const saved = await saveFollowups(callId, draft); setDraft(saved);
-          const email = saved.email!;
-          await Linking.openURL(`mailto:${encodeURIComponent(email.recipient)}?subject=${encodeURIComponent(email.subject)}&body=${encodeURIComponent(email.body)}`);
+          await openInMailApp(saved.email!);
         })}
         {button('Reject email proposal', async () => setDraft(await rejectFollowup(callId, 'email', draft.version)))}
       </>}
       {draft?.meeting?.status === 'rejected' && <Txt tone="muted">Meeting proposal rejected.</Txt>}
-      {draft?.meeting && draft.meeting.status !== 'rejected' && !meetingLocked && <>
+      {draft?.meeting && draft.meeting.status !== 'rejected' && <>
         {evidence(draft.meeting)}
         <Txt>Time mentioned: {draft.meeting.time_text || 'Not specified'}</Txt>
         {field('Meeting title', draft.meeting.title, title => setDraft({ ...draft, meeting: { ...draft.meeting!, title } }))}
         {field('Meeting notes', draft.meeting.notes, notes => setDraft({ ...draft, meeting: { ...draft.meeting!, notes } }), true)}
-        <Txt tone="muted">Confirm both times in UTC, for example 2026-10-02T14:00:00Z. UTC may differ from your local time.</Txt>
-        {field('Start (UTC)', draft.meeting.start, start => setDraft({ ...draft, meeting: { ...draft.meeting!, start } }))}
-        {field('End (UTC)', draft.meeting.end, end => setDraft({ ...draft, meeting: { ...draft.meeting!, end } }))}
-        {bookingLoaded && button('Confirm and book in my Google Calendar', async () => {
+        {button('Add to calendar', async () => {
+          if (!draft.meeting?.title) throw new Error('Enter a meeting title first.');
           const saved = await saveFollowups(callId, draft); setDraft(saved);
-          try { setBooking((await bookReviewedMeeting(callId, saved.version!)).action); }
-          catch (err) { setBookingLoaded(false); throw err; }
-        })}
-        {button('Review in Google Calendar', async () => {
-          if (!draft.meeting?.start || !draft.meeting.end || !draft.meeting.title) throw new Error('Enter a title and confirmed start and end times first.');
-          const saved = await saveFollowups(callId, draft); setDraft(saved);
-          const meeting = saved.meeting!;
-          const compact = (time: string) => time.replace(/[-:]/g, '');
-          await Linking.openURL(`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(meeting.title)}&details=${encodeURIComponent(meeting.notes)}&dates=${compact(meeting.start)}/${compact(meeting.end)}`);
+          // The phone's form shows the time to confirm; the draft time is only a starting point.
+          await addToCalendar(saved.meeting!);
         })}
         {button('Reject meeting proposal', async () => setDraft(await rejectFollowup(callId, 'meeting', draft.version)))}
       </>}
       {draft && button('Save edits', async () => { setDraft(await saveFollowups(callId, draft)); setMessage('Drafts saved.'); })}
-      {draft && !meetingLocked && !emailLocked && button('Regenerate from transcript (replaces saved drafts)', async () => setDraft(await refreshFollowups(callId, draft.version ?? 0)))}
+      {draft && button('Regenerate from transcript (replaces saved drafts)', async () => setDraft(await refreshFollowups(callId, draft.version ?? 0)))}
       {draft && button('Refresh review history', async () => setEvents(await getFollowupEvents(callId)))}
       {events?.map(event => <Txt key={event.version} tone="muted">
         {({ generated: 'Drafts prepared', regenerated: 'Drafts replaced from transcript', edited: 'Draft review saved', email_rejected: 'Email rejected', meeting_rejected: 'Meeting rejected' } as Record<string, string>)[event.kind] || event.kind}
