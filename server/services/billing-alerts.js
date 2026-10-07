@@ -54,7 +54,9 @@ export async function sendBalanceAlerts(userId, now = new Date()) {
     const month = currentMonth(now);
     const sent = [];
     const left = Math.max(0, Math.floor(state.minutes_included - state.minutes_used));
-    if (state.minutes_used >= state.minutes_included) {
+    // A Free account after its trial has no plan minutes to run low on.
+    if (state.minutes_included <= 0) { /* no minute alerts */ }
+    else if (state.minutes_used >= state.minutes_included) {
       if (await claim(userId, `minutes100:${month}`)) sent.push(['minutes100', t.minutes100()]);
     } else if (state.minutes_used >= state.minutes_included * 0.8) {
       if (await claim(userId, `minutes80:${month}`)) sent.push(['minutes80', t.minutes80(left)]);

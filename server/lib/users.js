@@ -19,7 +19,7 @@ export async function resolveUser(req) {
   if (!token) throw new HttpError(401, 'authentication_required');
   const hash = hashToken(token);
   const user = await queryOne(
-    `SELECT u.id, u.phone, u.tier, u.agent_number, u.terms_version, u.language, u.retention_months, u.caller_id_verified_at,
+    `SELECT u.id, u.phone, u.tier, u.agent_number, u.terms_version, u.language, u.retention_months, u.caller_id_verified_at, u.trial_ends_at, u.timezone,
             s.id AS session_id, (s.last_seen_at IS NULL OR s.last_seen_at < now() - interval '10 minutes') AS session_stale
        FROM sessions s
        JOIN users u ON u.id = s.user_id

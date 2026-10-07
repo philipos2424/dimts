@@ -93,10 +93,11 @@ test('balance alerts fire once per threshold, re-arm after a top-up, and stay qu
     await db.query("INSERT INTO notification_devices(user_id,session_hash,push_token) VALUES($1,$2,'ExponentPushToken[abcdefghijkl]')", [user.id, token]);
     const used = seconds => db.query(`INSERT INTO calls(user_id,user_phone,destination,status,duration_sec,plan_seconds,max_duration_sec)
       VALUES($1,'+12025550122','+12025550199','ready',$2,$2,$2)`, [user.id, seconds]);
-    await used(1500); // 25 of 30 free minutes
+    await db.query("UPDATE users SET tier='pro' WHERE id=$1", [user.id]);
+    await used(24600); // 410 of 500 Pro minutes
     assert.deepEqual(await sendBalanceAlerts(user.id), ['minutes80']);
     assert.deepEqual(await sendBalanceAlerts(user.id), [], 'once a month');
-    await used(300);
+    await used(5400);
     assert.deepEqual(await sendBalanceAlerts(user.id), ['minutes100']);
     await db.query(`INSERT INTO credit_ledger(user_id,amount_cents,reason,source_key)
       VALUES($1,1000,'purchase','alert-buy-1'),($1,-900,'call','alert-call-1')`, [user.id]);
@@ -107,11 +108,12 @@ test('balance alerts fire once per threshold, re-arm after a top-up, and stay qu
     assert.deepEqual(await sendBalanceAlerts(user.id), ['credits_low'], 're-armed by the second purchase');
     assert.equal(pushes.length, 4);
     assert.equal(pushes[0][0].to, 'ExponentPushToken[abcdefghijkl]');
-    assert.match(pushes[0][0].body, /5 minutes left/);
+    assert.match(pushes[0][0].body, /90 minutes left/);
     assert.deepEqual(pushes[0][0].data, { type: 'billing-minutes80' });
     const silent = await newUser('+12025550123');
+    await db.query("UPDATE users SET tier='pro' WHERE id=$1", [silent.id]);
     await db.query(`INSERT INTO calls(user_id,user_phone,destination,status,duration_sec,plan_seconds,max_duration_sec)
-      VALUES($1,'+12025550123','+12025550199','ready',1800,1800,1800)`, [silent.id]);
+      VALUES($1,'+12025550123','+12025550199','ready',30000,30000,30000)`, [silent.id]);
     assert.deepEqual(await sendBalanceAlerts(silent.id), ['minutes100']);
     assert.equal(pushes.length, 4, 'no device, no push');
   } finally { globalThis.fetch = realFetch; }

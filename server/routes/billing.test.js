@@ -43,7 +43,8 @@ const post = (path, body, headers = {}) => fetch(base + path, { method: 'POST', 
 test('the plans screen gets the price in the local currency for the verified number', async () => {
   const body = await (await fetch(`${base}/api/billing`)).json();
   assert.equal(body.tier, 'free');
-  assert.equal(body.minutes_included, 30);
+  assert.equal(body.minutes_included, 0, 'a free account that has not started its trial has no plan minutes yet');
+  assert.equal(body.trial_used, false);
   assert.equal(body.catalog.currency, 'gbp');
   assert.deepEqual(body.catalog.plans.find(p => p.id === 'pro').prices.month, { amount: 1600, currency: 'gbp' });
   assert.equal(body.purchasable, true);
@@ -91,7 +92,8 @@ test('the dialer quote says what a call will cost before it connects', async () 
   const uk = await (await fetch(`${base}/api/billing/quote?to=${encodeURIComponent('+33612345678')}`)).json();
   assert.equal(uk.pays_with, 'plan');
   assert.equal(uk.surcharge_cents_per_min, 0);
-  assert.equal(uk.plan_minutes_left, 500);
+  assert.equal(uk.plan_minutes_left, 300, 'a UK owner gets UK plan minutes');
+  assert.equal(uk.overage_cents_per_min, 3 + 2 + 4, 'UK owner calling France: base, UK leg, EU leg');
   const et = await (await fetch(`${base}/api/billing/quote?to=${encodeURIComponent('+251911234567')}`)).json();
   assert.equal(et.pays_with, 'credits');
   assert.equal(et.surcharge_cents_per_min, 50);

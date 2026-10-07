@@ -5,7 +5,7 @@ import { audit } from '../lib/audit.js';
 import { hit } from '../lib/rate-limit.js';
 import { canCall } from '../lib/destinations.js';
 import { normalizePhone } from '../lib/phone.js';
-import { CREDIT_PACKS, INTERVALS, PAID_PLANS, OVERAGE_CENTS_PER_MIN, affordableSeconds, callSurcharge,
+import { CREDIT_PACKS, INTERVALS, PAID_PLANS, affordableSeconds, callSurcharge, overageRate,
   catalogFor, displayCurrency, pick, planProductKey, priceRegion, PLAN_PRICES } from '../lib/pricing.js';
 import { polarProducts } from '../lib/polar-products.js';
 import { verifyWebhook } from '../lib/standard-webhooks.js';
@@ -33,15 +33,16 @@ billingRouter.get('/quote', async (req, res, next) => {
     const state = await billingState(user);
     const planSecondsLeft = Math.max(0, Math.floor((state.minutes_included - state.minutes_used) * 60));
     const surcharge = callSurcharge(user.phone, to);
+    const overage = overageRate(user.phone, to);
     res.json({
       to,
       surcharge_cents_per_min: surcharge,
-      overage_cents_per_min: OVERAGE_CENTS_PER_MIN,
+      overage_cents_per_min: overage,
       plan_minutes_left: Math.floor(planSecondsLeft / 60),
       credits_cents: state.credits_cents,
       // plan: covered by plan minutes; credits: some or all of it is paid from credits.
       pays_with: surcharge === 0 && planSecondsLeft >= 60 ? 'plan' : 'credits',
-      max_minutes: Math.floor(affordableSeconds({ planSecondsLeft, credits: state.credits_cents, surcharge }) / 60),
+      max_minutes: Math.floor(affordableSeconds({ planSecondsLeft, credits: state.credits_cents, surcharge, overage }) / 60),
     });
   } catch (err) { next(err); }
 });

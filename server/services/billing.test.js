@@ -73,8 +73,8 @@ test('credit packs add credits once; refunds take back their share; calls spend 
   assert.equal(await balance(), 1200, 'two started minutes, charged once');
   assert.equal((await db.query('SELECT plan_seconds FROM calls WHERE id=$1', [call.id])).rows[0].plan_seconds, 61);
 
-  // Plan minutes used up: a US call continues on credits at the overage rate.
-  await db.query("UPDATE calls SET plan_seconds=1800, duration_sec=1800 WHERE id=$1", [call.id]);
+  // The 100 trial minutes used up: a US call continues on credits at the overage rate.
+  await db.query("UPDATE calls SET plan_seconds=6000, duration_sec=6000 WHERE id=$1", [call.id]);
   const us = (await reserve('call-us-1', '+12025550199')).call;
   assert.equal(us.plan_seconds, 0);
   assert.equal(us.overage_cents, 3);

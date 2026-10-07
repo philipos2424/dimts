@@ -67,3 +67,26 @@ test('POLAR_PRODUCTS must name a product for every key', () => {
   const { credits_50, ...missing } = ids;
   assert.throws(() => polarProducts({ POLAR_PRODUCTS: JSON.stringify(missing) }), /credits_50/);
 });
+
+test('over-plan minutes cover UK and EU carrier costs; US calls keep the base rate', async () => {
+  const { overageRate, planMinutes } = await import('./pricing.js');
+  assert.equal(overageRate('+14155550100', '+14155550101'), 3);
+  assert.equal(overageRate('+447700900123', '+447700900124'), 7);
+  assert.equal(overageRate('+4915112345678', '+33612345678'), 11);
+  assert.equal(overageRate('+14155550100', '+4915112345678'), 7);
+  assert.equal(overageRate('+4915112345678', '+14155550100', 'inbound'), 7, 'inbound only prices the owner leg');
+  assert.deepEqual(['+14155550100', '+447700900123', '+4915112345678', '+971501234567'].map(p => planMinutes('pro', p)), [500, 300, 200, 500]);
+  assert.equal(planMinutes('business', '+33612345678'), 500);
+  assert.equal(planMinutes('free', '+33612345678'), 0, 'after the trial, Free is read-only');
+  assert.equal(planMinutes('pro', '+33612345678', { trial: true }), 100, 'the trial is capped everywhere');
+});
+
+test('a free account on its trial is treated as Pro until the trial ends', async () => {
+  const { onTrial, planOf } = await import('./pricing.js');
+  const later = new Date(Date.now() + 86_400_000).toISOString(), earlier = new Date(Date.now() - 1000).toISOString();
+  assert.equal(planOf({ tier: 'free', trial_ends_at: later }), 'pro');
+  assert.equal(planOf({ tier: 'free', trial_ends_at: earlier }), 'free');
+  assert.equal(planOf({ tier: 'free' }), 'free');
+  assert.equal(planOf({ tier: 'business', trial_ends_at: later }), 'business', 'paid plans ignore the trial');
+  assert.equal(onTrial({ tier: 'pro', trial_ends_at: later }), false);
+});

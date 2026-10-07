@@ -180,6 +180,9 @@ export type Interval = 'month' | 'year';
 export type Billing = {
   tier: PlanId;
   minutes_included: number;
+  /** Set while a free account is on its 21-day Pro trial. */
+  trial_ends_at?: string | null;
+  trial_used?: boolean;
   minutes_used: number;
   /** 1 credit = 1 US cent. */
   credits_cents: number;
@@ -192,6 +195,7 @@ export type Billing = {
     region: 'standard' | 'lite';
     currency: string;
     overage_cents_per_min: number;
+    overage_leg_extra_cents?: Record<string, number>;
     leg_surcharges: Record<string, number>;
     plans: { id: PlanId; minutes: number; features: string[]; prices: Record<Interval, Price> | null }[];
     credit_packs: { id: string; credits: number; price: Price }[];

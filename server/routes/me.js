@@ -9,7 +9,7 @@ import { hit } from '../lib/rate-limit.js';
 import { buildExport } from '../services/export-user.js';
 import { deleteAccount } from '../services/delete-account.js';
 import { liveSubscriptionIds } from '../services/billing.js';
-import { planOf } from '../lib/pricing.js';
+import { onTrial, planOf } from '../lib/pricing.js';
 import { revokeSubscription } from '../services/polar.js';
 import { RETENTION_MONTHS } from '../services/retention.js';
 import { refuseForReviewDemo } from '../lib/review-demo.js';
@@ -25,7 +25,11 @@ meRouter.post('/number', async (req, res, next) => {
     if (planOf(user) === 'free') throw new HttpError(402, 'plan_required', 'A business number comes with Pro and Business.');
     const voiceUrl = incomingVoiceUrl();
     if (!voiceUrl) throw new HttpError(503, 'routing_unavailable', 'Business-number routing is not configured yet.');
-    res.json(await claimNumber(user.id, voiceUrl));
+    const claimed = await claimNumber(user.id, voiceUrl);
+    // A trial's number is held a week past the trial, then released unless they upgrade.
+    if (onTrial(user)) await query(`UPDATE users SET number_release_at = trial_ends_at + interval '7 days'
+      WHERE id=$1 AND tier='free'`, [user.id]);
+    res.json(claimed);
   } catch (err) { next(err); }
 });
 

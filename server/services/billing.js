@@ -1,5 +1,5 @@
 import * as database from '../db/pool.js';
-import { CREDIT_PACKS, PLANS, planOf } from '../lib/pricing.js';
+import { CREDIT_PACKS, PLANS, onTrial, planMinutes, planOf } from '../lib/pricing.js';
 import { parsePlanKey, productKeyFor } from '../lib/polar-products.js';
 import { PLAN_SECONDS_SQL } from '../db/plan-usage.js';
 import { claimNumber, incomingVoiceUrl } from '../db/claim-number.js';
@@ -124,7 +124,9 @@ export async function billingState(user, db = database) {
   ]);
   return {
     tier,
-    minutes_included: PLANS[tier].minutes,
+    minutes_included: planMinutes(tier, user.phone, { trial: onTrial(user) }),
+    trial_ends_at: onTrial(user) ? new Date(user.trial_ends_at).toISOString() : null,
+    trial_used: !!user.trial_ends_at,
     minutes_used: Math.round(usage.seconds / 6) / 10,
     credits_cents: credits.cents,
     business_number: number?.agent_number ?? null,
