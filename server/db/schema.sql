@@ -351,3 +351,17 @@ CREATE TABLE IF NOT EXISTS provider_costs (
 );
 -- Our own estimate per finished call (carrier legs + recording + transcription), in micro-dollars.
 ALTER TABLE calls ADD COLUMN IF NOT EXISTS est_cost_micros BIGINT;
+
+-- Signed-in devices: listed in Settings, revocable one by one or all at once.
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS id UUID NOT NULL DEFAULT gen_random_uuid();
+CREATE UNIQUE INDEX IF NOT EXISTS sessions_id_idx ON sessions (id);
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS device_name TEXT;
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS sessions_user_idx ON sessions (user_id);
+-- Operator console (2026-10-07): why staff opened someone's details, from a fixed list.
+ALTER TABLE audit_events ADD COLUMN IF NOT EXISTS reason TEXT;
+CREATE INDEX IF NOT EXISTS audit_events_action_idx ON audit_events (action, created_at DESC);
+CREATE INDEX IF NOT EXISTS audit_events_created_idx ON audit_events (created_at);
+-- Launch sprint columns the console reads (same statements as launch-sprint; idempotent).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS timezone TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_ends_at TIMESTAMPTZ;

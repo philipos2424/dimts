@@ -1,0 +1,299 @@
+// Dimts operator console. Uses the session from signing in to the Dimts web
+// app on this origin; the server decides who is staff and logs every request.
+const main = document.getElementById('main');
+const tip = document.getElementById('tip');
+const token = (() => { try { return localStorage.getItem('dimts.session'); } catch { return null; } })();
+let reasons = [];
+
+const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+const int = value => Number(value ?? 0).toLocaleString('en-US');
+const pct = (part, whole) => (whole ? `${Math.round((part / whole) * 100)}%` : '—');
+const usd = cents => `$${(Number(cents ?? 0) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const micros = value => usd(Number(value ?? 0) / 1e4);
+const money = (minor, currency) => `${(Number(minor ?? 0) / 100).toFixed(2)} ${esc(String(currency).toUpperCase())}`;
+const amount = minor => (Number(minor ?? 0) / 100).toFixed(2);
+const day = iso => (iso ? new Date(iso).toISOString().slice(0, 10) : '—');
+const when = iso => (iso ? new Date(iso).toISOString().replace('T', ' ').slice(0, 16) : '—');
+const label = key => esc(String(key).replace(/_/g, ' '));
+
+async function api(path, options = {}) {
+  const response = await fetch(`/api/admin${path}`, {
+    ...options,
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw Object.assign(new Error(body.message || body.error || `HTTP ${response.status}`), { status: response.status, code: body.error });
+  return body;
+}
+
+function stop(message) {
+  main.innerHTML = `<div class="panel"><p>${message}</p></div>`;
+}
+
+const tile = (name, value, sub = '') => `<div class="tile"><div class="label">${esc(name)}</div><div class="value">${value}</div><div class="sub">${sub}</div></div>`;
+const table = (head, rows, numeric = []) => `<table><thead><tr>${head.map((h, i) => `<th class="${numeric.includes(i) ? 'n' : ''}">${esc(h)}</th>`).join('')}</tr></thead>
+  <tbody>${rows.length ? rows.map(r => `<tr>${r.map((c, i) => `<td class="${numeric.includes(i) ? 'n' : ''}">${c}</td>`).join('')}</tr>`).join('') : `<tr><td colspan="${head.length}" class="muted">None yet</td></tr>`}</tbody></table>`;
+const card = (title, body) => `<div class="card"><h3>${esc(title)}</h3>${body}</div>`;
+const kv = obj => table(['', 'Accounts'], Object.entries(obj ?? {}).sort((a, b) => b[1] - a[1]).map(([k, v]) => [label(k), int(v)]), [1]);
+
+/** Single-series bar chart: one hue, thin bars, 2px gaps, hover tooltip on a full-height hit target. */
+function bars(points, valueKey, unit) {
+  const w = 600, h = 160, pad = 18, n = points.length || 1;
+  const max = Math.max(1, ...points.map(p => p[valueKey]));
+  const step = (w - 2) / n, bw = Math.max(1, step - 2);
+  const marks = points.map((p, i) => {
+    const bh = Math.max(p[valueKey] ? 2 : 0, ((h - pad - 4) * p[valueKey]) / max);
+    const x = 1 + i * step, y = h - pad - bh;
+    return `<rect class="hit" x="${x}" y="0" width="${step}" height="${h - pad}" data-tip="${esc(p.day)}: ${int(p[valueKey])} ${esc(unit)}"></rect>
+      <rect class="bar" x="${x}" y="${y}" width="${bw}" height="${bh}" rx="${Math.min(2, bw / 2)}"></rect>`;
+  }).join('');
+  const first = points[0]?.day ?? '', last = points[points.length - 1]?.day ?? '';
+  const total = points.reduce((sum, p) => sum + p[valueKey], 0);
+  // Labels sit outside the stretched SVG so they never distort or collide with bars.
+  return `<div class="chart-meta"><span>${int(total)} total</span><span>peak ${int(max)}</span></div>
+    <svg class="chart" viewBox="0 0 ${w} ${h - pad + 1}" preserveAspectRatio="none" role="img" aria-label="${esc(unit)} per day: ${int(total)} total, peak ${int(max)}">
+    <line class="axis" x1="0" x2="${w}" y1="${h - pad}" y2="${h - pad}"></line>${marks}</svg>
+    <div class="chart-meta"><span>${esc(first)}</span><span>${esc(last)}</span></div>`;
+}
+
+document.addEventListener('mousemove', event => {
+  const target = event.target.closest?.('[data-tip]');
+  if (!target) { tip.hidden = true; return; }
+  tip.textContent = target.getAttribute('data-tip');
+  tip.hidden = false;
+  tip.style.left = `${Math.min(event.clientX + 12, window.innerWidth - tip.offsetWidth - 8)}px`;
+  tip.style.top = `${event.clientY + 14}px`;
+});
+
+async function showOverview() {
+  const [o, { cohorts }] = await Promise.all([api('/overview'), api('/cohorts')]);
+  document.getElementById('stamp').textContent = `Updated ${when(o.generated_at)} UTC`;
+  const r = o.revenue, c = o.calls_30d, u = o.unit_economics;
+  const paid = (o.accounts.by_plan.pro ?? 0) + (o.accounts.by_plan.business ?? 0);
+  const cost = u.carrier_billed_micros_30d || u.estimated_call_cost_micros_30d;
+  const margin = u.usd_net_revenue_cents_30d ? (u.usd_net_revenue_cents_30d - cost / 1e4) / u.usd_net_revenue_cents_30d : null;
+  main.innerHTML = `
+    <h2>Customers</h2>
+    <div class="tiles">
+      ${tile('Active accounts', int(o.accounts.total), `${int(o.accounts.deleted)} deleted`)}
+      ${tile('Paying customers', int(r.paying_users), `${int(paid)} on a paid tier`)}
+      ${tile('MRR (list, USD)', usd(r.mrr_usd_cents), `ARPPU ${usd(r.arppu_usd_cents)}`)}
+      ${tile('Monthly active (called)', int(o.active.calls.d30), `WAU ${int(o.active.calls.d7)} · DAU ${int(o.active.calls.d1)}`)}
+      ${tile('Opened the app (30d)', int(o.active.app.d30), `stickiness ${pct(o.active.calls.d1, o.active.calls.d30)} DAU/MAU`)}
+      ${tile('Activation (call in 7 days)', pct(o.activation.activated, o.activation.cohort), `${int(o.activation.cohort)} sign-ups · median ${int(o.activation.median_hours)}h to first call`)}
+      ${tile('Trial → paid', pct(o.trial.converted_after_end, o.trial.ended), `${int(o.trial.active)} on trial now · ${int(o.trial.started)} started`)}
+      ${tile('Churn (30 days)', r.churn_rate_30d ? `${(r.churn_rate_30d * 100).toFixed(1)}%` : '0%', `${int(r.cancelling)} cancelling · ${int(r.past_due)} past due`)}
+      ${tile('Gross margin (USD, 30d)', margin == null ? '—' : `${Math.round(margin * 100)}%`, `net ${usd(u.usd_net_revenue_cents_30d)} · cost ${micros(cost)}`)}
+    </div>
+    <div class="grid2">
+      ${card('New sign-ups per day (90 days)', bars(o.signups_daily, 'n', 'sign-ups'))}
+      ${card('Connected calls per day (30 days)', bars(o.calls_daily, 'connected', 'calls'))}
+      ${card('Call minutes per day (30 days)', bars(o.calls_daily, 'minutes', 'minutes'))}
+      ${card('Accounts by plan', kv(o.accounts.by_plan))}
+      ${card('Accounts by market', kv(o.accounts.by_region))}
+    </div>
+    <h2>Retention: weekly sign-up cohorts, share with a connected call in each week</h2>
+    <div class="card cohort">${cohortTable(cohorts)}</div>
+    <h2>Calls (30 days)</h2>
+    <div class="tiles">
+      ${tile('Calls', int(c.total), `${int(c.minutes)} minutes · avg ${Math.round(c.avg_sec / 6) / 10} min`)}
+      ${tile('Connected', pct(c.connected, c.total), `${int(c.missed)} missed`)}
+      ${tile('Notes delivered', pct(c.ready, c.connected), `${int(c.failed)} failed`)}
+      ${tile('Inbound share', pct(c.inbound, c.total), `${int(c.voicemails)} voicemails`)}
+      ${tile('Press-1 consent calls', int(c.press1), `${int(c.press1_declined)} declined recording`)}
+      ${tile('Amharic calls', int(c.amharic), pct(c.amharic, c.total))}
+    </div>
+    <h2>Revenue and costs (30 days)</h2>
+    <div class="grid2">
+      ${card('Payments (Polar, before fees)', table(['Currency', 'Type', 'Orders', 'Gross', 'Tax', 'Refunded'],
+        r.payments_30d.map(p => [esc(p.currency.toUpperCase()), p.credits ? 'credits' : 'plans', int(p.orders), amount(p.gross), amount(p.tax), amount(p.refunded)]), [2, 3, 4, 5]))}
+      ${card('Active plans', kv(r.plans))}
+      ${card('Credits (1 credit = 1¢)', table(['', 'Credits'], [
+        ['Outstanding balance (liability)', int(o.credits.outstanding)], ['Bought, 30 days', int(o.credits.bought_30d)],
+        ['Used on calls, 30 days', int(o.credits.used_30d)], ['Granted by staff, 30 days', int(o.credits.granted_30d)]], [1]))}
+      ${card('Carrier cost by country (Telnyx bills)', table(['Country', 'Records', 'Minutes', 'Cost'],
+        u.carrier_by_country.map(row => [row.country_code ? `+${esc(row.country_code)}` : '—', int(row.records), int(row.minutes), micros(row.micros)]), [1, 2, 3])
+        + `<p class="muted small">Our per-call estimate: ${micros(u.estimated_call_cost_micros_30d)}. Fixed costs (Vercel, Supabase, AI plans) not included.</p>`)}
+    </div>
+    <h2>Feature adoption (active accounts)</h2>
+    <div class="grid2">
+      ${card('Features', table(['Feature', 'Accounts', 'Share'], [
+        ['Business number', int(o.accounts.with_business_number), pct(o.accounts.with_business_number, o.accounts.total)],
+        ['Own caller ID verified', int(o.adoption.caller_id), pct(o.adoption.caller_id, o.accounts.total)],
+        ['Google Calendar', int(o.adoption.calendar), pct(o.adoption.calendar, o.accounts.total)],
+        ['Gmail drafts', int(o.adoption.gmail), pct(o.adoption.gmail, o.accounts.total)],
+        ['Push notifications', int(o.adoption.push), pct(o.adoption.push, o.accounts.total)],
+        ['Amharic notes', int(o.adoption.amharic), pct(o.adoption.amharic, o.accounts.total)],
+        ['On current terms', int(o.adoption.terms_current), pct(o.adoption.terms_current, o.accounts.total)]], [1, 2]))}
+      ${card('Call retention chosen', table(['Keep calls', 'Accounts'], [
+        ['3 months', int(o.adoption.keep_3)], ['6 months', int(o.adoption.keep_6)], ['12 months (default)', int(o.adoption.keep_12)],
+        ['24 months', int(o.adoption.keep_24)], ['Until deleted', int(o.adoption.keep_forever)]], [1]))}
+      ${card('Most active accounts (30 days)', table(['Account', 'Market', 'Plan', 'Calls', 'Minutes'],
+        o.top_accounts.map(a => [`<code>${esc(a.id.slice(0, 8))}</code> ${esc(a.phone)}`, esc(a.region), esc(a.tier), int(a.calls), int(a.minutes)]), [3, 4]))}
+    </div>`;
+}
+
+function cohortTable(rows) {
+  const width = Math.max(1, ...rows.map(r => r.weeks.length));
+  const head = ['Week of', 'Sign-ups', ...Array.from({ length: width }, (_, k) => `W${k}`)];
+  const body = rows.map(r => `<tr><td>${esc(r.week)}</td><td class="n">${int(r.size)}</td>${Array.from({ length: width }, (_, k) => {
+    if (k >= r.weeks.length) return '<td class="c"></td>';
+    const share = r.size ? r.weeks[k] / r.size : 0;
+    const step = share === 0 ? 0 : Math.min(5, 1 + Math.floor(share * 5));
+    return `<td class="c h${step}" data-tip="${esc(r.week)} · week ${k}: ${int(r.weeks[k])} of ${int(r.size)}">${r.size ? `${Math.round(share * 100)}%` : ''}</td>`;
+  }).join('')}</tr>`).join('');
+  return `<table><thead><tr>${head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${body || `<tr><td class="muted" colspan="3">No sign-ups in these weeks</td></tr>`}</tbody></table>`;
+}
+
+const STATUS = { ok: ['✓', 'OK'], warn: ['!', 'Warning'], fail: ['✕', 'Action needed'], info: ['i', 'Info'] };
+
+async function showCompliance() {
+  const { checks, generated_at: at } = await api('/compliance');
+  document.getElementById('stamp').textContent = `Checked ${when(at)} UTC`;
+  const failing = checks.filter(c => c.status === 'fail').length;
+  main.innerHTML = `<h2>Legal and privacy checks</h2>
+    <p class="muted">Each line tests a promise from our privacy policy, terms or recording law against live data. ${failing ? `<strong class="err">${failing} need action.</strong>` : 'Nothing needs action.'}</p>
+    <div class="card">${checks.map(c => `<div class="check">
+      <span class="status ${c.status}"><span aria-hidden="true">${STATUS[c.status][0]}</span> ${STATUS[c.status][1]}</span>
+      <div><strong>${esc(c.title)}</strong><br><span class="small">Rule: ${esc(c.rule)}</span></div>
+      <div class="count">${int(c.count)}</div>
+      <div class="meta">${esc(c.source)}</div>
+      ${c.action ? `<div class="act">${esc(c.action)}</div>` : ''}
+    </div>`).join('')}</div>
+    <p class="muted small">Not checked here (outside the code): provider DPAs, lawyer review, Ethiopia and Germany/Austria counsel questions. See docs/legal/dpa-checklist.md.</p>`;
+}
+
+const reasonSelect = id => `<select id="${id}"><option value="">Reason…</option>${reasons.map(r => `<option value="${esc(r)}">${label(r)}</option>`).join('')}</select>`;
+
+async function showCustomers(state = { q: '', plan: '', page: 0 }) {
+  main.innerHTML = `<h2>Customers</h2>
+    <div class="toolbar">
+      <input id="q" placeholder="Full number, last 4 digits or account ID" value="${esc(state.q)}" size="34">
+      <select id="plan">${['', 'trial', 'free', 'pro', 'business', 'deleted'].map(p => `<option value="${p}" ${p === state.plan ? 'selected' : ''}>${p ? label(p) : 'All plans'}</option>`).join('')}</select>
+      <button class="btn primary" id="go">Search</button>
+    </div>
+    <div id="detail"></div><div class="card" id="list"><p class="muted">Loading…</p></div>`;
+  const run = () => showCustomers({ q: document.getElementById('q').value, plan: document.getElementById('plan').value, page: 0 });
+  document.getElementById('go').onclick = run;
+  document.getElementById('q').onkeydown = e => { if (e.key === 'Enter') run(); };
+  const result = await api(`/customers?q=${encodeURIComponent(state.q)}&plan=${encodeURIComponent(state.plan)}&page=${state.page}`);
+  const list = document.getElementById('list');
+  list.innerHTML = table(['Account', 'Number', 'Market', 'Plan', 'Signed up', 'Last seen', 'Calls 30d', 'Min 30d', 'Credits', 'Subscription'],
+    result.customers.map(c => [`<code>${esc(c.id.slice(0, 8))}</code>`, esc(c.phone), esc(c.region),
+      c.deleted_at ? '<span class="pill">deleted</span>' : (c.tier === 'free' && c.trial_ends_at && new Date(c.trial_ends_at) > new Date() ? 'trial' : esc(c.tier)),
+      day(c.created_at), day(c.last_seen_at), int(c.calls_30d), int(c.minutes_30d), int(c.credits), esc(c.subscription ?? '—')]), [6, 7, 8])
+    + `<div class="row">${state.page ? '<button class="btn" id="prev">Previous</button>' : ''}${result.has_more ? '<button class="btn" id="next">Next</button>' : ''}
+      <span class="muted small">Click a row to open an account. Opening is logged and shown to the customer.</span></div>`;
+  [...list.querySelectorAll('tbody tr')].forEach((tr, i) => {
+    const customer = result.customers[i];
+    if (!customer) return;
+    tr.classList.add('click');
+    tr.onclick = () => askReason(customer);
+  });
+  document.getElementById('prev')?.addEventListener('click', () => showCustomers({ ...state, page: state.page - 1 }));
+  document.getElementById('next')?.addEventListener('click', () => showCustomers({ ...state, page: state.page + 1 }));
+}
+
+function askReason(customer) {
+  const detail = document.getElementById('detail');
+  detail.innerHTML = `<div class="panel"><strong>Open account ${esc(customer.id.slice(0, 8))} (${esc(customer.phone)})</strong>
+    <div class="row">${reasonSelect('open-reason')}<button class="btn primary" id="open">Open</button><button class="btn" id="cancel">Cancel</button></div>
+    <p class="muted small">The customer will see “Dimts staff viewed your account” in their activity log.</p></div>`;
+  document.getElementById('cancel').onclick = () => { detail.innerHTML = ''; };
+  document.getElementById('open').onclick = () => {
+    const reason = document.getElementById('open-reason').value;
+    if (reason) openCustomer(customer.id, reason).catch(fail);
+  };
+  detail.scrollIntoView({ behavior: 'smooth' });
+}
+
+async function openCustomer(id, reason) {
+  const c = await api(`/customers/${id}?reason=${encodeURIComponent(reason)}`);
+  const detail = document.getElementById('detail');
+  detail.innerHTML = `<div class="panel">
+    <div class="row"><strong>Account <code>${esc(c.id)}</code></strong><button class="btn" id="close">Close</button></div>
+    <div class="tiles">
+      ${tile('Number', `<span id="phone">${esc(c.phone)}</span>`, esc(c.region))}
+      ${tile('Plan', esc(c.tier), c.trial_ends_at ? `trial ends ${day(c.trial_ends_at)}` : '')}
+      ${tile('Credits', int(c.credits.balance), '1 credit = 1¢')}
+      ${tile('Signed up', day(c.created_at), c.deleted_at ? `deleted ${day(c.deleted_at)}` : `terms ${esc(c.terms_version ?? 'not accepted')}`)}
+      ${tile('Devices', int(c.devices.sessions), `last seen ${day(c.devices.last_seen_at)}`)}
+      ${tile('Privacy requests', int(c.privacy_requests.open), `${int(c.privacy_requests.total)} total`)}
+    </div>
+    <div class="row">${reasonSelect('act-reason')}
+      <button class="btn" id="reveal" ${c.deleted_at ? 'disabled' : ''}>Reveal full number</button>
+      <input id="credits" type="number" min="1" max="5000" placeholder="Credits" size="8">
+      <button class="btn" id="grant" ${c.deleted_at ? 'disabled' : ''}>Grant credits</button>
+      <span id="act-msg" class="small"></span></div>
+    <div class="grid2">
+      ${card('Usage by month', table(['Month', 'Calls', 'Inbound', 'Minutes', 'Est. cost'],
+        c.usage_by_month.map(m => [esc(m.month), int(m.calls), int(m.inbound), int(m.minutes), micros(m.cost_micros)]), [1, 2, 3, 4]))}
+      ${card('Call outcomes (90 days)', table(['Status', 'Calls'], c.calls_by_status_90d.map(s => [esc(s.status), int(s.n)]), [1]))}
+      ${card('Subscriptions', table(['Product', 'Status', 'Period end', 'Cancelling'],
+        c.subscriptions.map(s => [esc(s.product_key), esc(s.status), day(s.current_period_end), s.cancel_at_period_end ? 'yes' : 'no'])))}
+      ${card('Payments', table(['Date', 'Product', 'Amount', 'Refunded'],
+        c.payments.map(p => [day(p.paid_at), esc(p.product_key), money(p.total_amount, p.currency), money(p.refunded_amount, p.currency)]), [2, 3]))}
+      ${card('Credit ledger', table(['Date', 'Reason', 'Credits'], c.credits.entries.map(e => [day(e.created_at), esc(e.reason), int(e.amount_cents)]), [2]))}
+      ${card('Settings', table(['', ''], [['Business number', c.has_business_number ? 'yes' : 'no'], ['Own caller ID', c.caller_id_verified_at ? 'verified' : 'no'],
+        ['Keeps calls', c.retention_months ? `${c.retention_months} months` : 'until deleted'], ['Notes language', esc(c.language)],
+        ['Time zone', esc(c.timezone ?? '—')], ['Google', esc(c.google.map(g => g.kind).join(', ') || 'not connected')]]))}
+      ${card('Account activity (security log)', table(['When', 'Action'], c.activity.map(a => [when(a.created_at), label(a.action)])))}
+    </div></div>`;
+  const msg = document.getElementById('act-msg');
+  const actReason = () => {
+    const value = document.getElementById('act-reason').value;
+    if (!value) { msg.textContent = 'Choose a reason first.'; msg.className = 'small err'; }
+    return value;
+  };
+  document.getElementById('close').onclick = () => { detail.innerHTML = ''; };
+  document.getElementById('reveal').onclick = async () => {
+    const why = actReason(); if (!why) return;
+    try {
+      const { phone } = await api(`/customers/${id}/reveal-phone`, { method: 'POST', body: JSON.stringify({ reason: why }) });
+      document.getElementById('phone').textContent = phone;
+      msg.textContent = 'Revealed and logged.'; msg.className = 'small';
+    } catch (err) { msg.textContent = err.message; msg.className = 'small err'; }
+  };
+  document.getElementById('grant').onclick = async () => {
+    const why = actReason(); if (!why) return;
+    const credits = Number(document.getElementById('credits').value);
+    try {
+      const { balance } = await api(`/customers/${id}/credits`, { method: 'POST', body: JSON.stringify({ reason: why, credits }) });
+      msg.textContent = `Granted. New balance ${int(balance)}.`; msg.className = 'small';
+    } catch (err) { msg.textContent = err.message; msg.className = 'small err'; }
+  };
+}
+
+async function showAccess() {
+  const { events } = await api('/access-log');
+  main.innerHTML = `<h2>Staff access log</h2>
+    <p class="muted">Every console request, newest first. Kept for one year with the rest of the activity log.</p>
+    <div class="card">${table(['When (UTC)', 'Staff', 'Action', 'Account', 'Reason'],
+      events.map(e => [when(e.created_at), esc(e.staff), label(e.action.replace(/^admin_/, '')),
+        e.target_id ? `<code>${esc(String(e.target_id).slice(0, 8))}</code>` : '', e.reason ? label(e.reason) : '']))}</div>`;
+}
+
+function fail(err) {
+  if (err.status === 404) return stop('This account is not on the staff list. Ask the owner to add your number to <code>ADMIN_PHONES</code>.');
+  if (err.status === 403 && err.code === 'reauth_required') return stop(`${esc(err.message)} <a href="/settings">Sign out in Settings</a>, sign in again, then reload this page.`);
+  stop(`<span class="err">${esc(err.message)}</span>`);
+}
+
+const views = { overview: showOverview, customers: () => showCustomers(), compliance: showCompliance, access: showAccess };
+async function show(name) {
+  document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === name));
+  main.innerHTML = '<p class="muted">Loading…</p>';
+  try { await views[name](); } catch (err) { fail(err); }
+}
+
+if (!token) {
+  stop('Sign in to the <a href="/">Dimts web app</a> in this browser with your staff number, then come back to <code>/admin/</code>.');
+} else {
+  api('/me').then(me => {
+    reasons = me.reasons;
+    const tabs = document.getElementById('tabs');
+    tabs.hidden = false;
+    tabs.querySelectorAll('button').forEach(b => { b.onclick = () => show(b.dataset.tab); });
+    show('overview');
+  }).catch(fail);
+}

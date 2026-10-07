@@ -13,6 +13,12 @@ const ACTION_LABELS: Record<string, string> = {
   data_exported: 'Downloaded your data', call_deleted: 'Deleted a call', contact_deleted: 'Deleted a contact',
   privacy_request_received: 'Received a privacy request', account_deleted: 'Deleted the account',
   call_auto_deleted: 'Deleted an old call automatically', retention_changed: 'Changed how long calls are kept',
+  staff_viewed_account: 'Dimts staff viewed your account details', staff_viewed_phone: 'Dimts staff viewed your phone number',
+  credits_granted: 'Dimts added credits to your account',
+};
+const REASONS: Record<string, string> = {
+  support_request: 'to answer your request', billing_issue: 'to fix a billing problem', fraud_or_abuse: 'to investigate abuse',
+  legal_request: 'for a legal request', security_incident: 'for a security investigation',
 };
 
 export function DataControls() {
@@ -66,7 +72,7 @@ export function DataControls() {
       </Pressable>
       {activity?.map((event, index) => (
         <View key={`${event.created_at}-${index}`} style={{ flexDirection: 'row', justifyContent: 'space-between', gap: space.md }}>
-          <Txt>{ACTION_LABELS[event.action] ?? event.action}</Txt>
+          <Txt>{ACTION_LABELS[event.action] ?? event.action}{event.reason && REASONS[event.reason] ? ` ${REASONS[event.reason]}` : ''}</Txt>
           <Txt tone="muted" size="caption">{new Date(event.created_at).toLocaleString()}</Txt>
         </View>
       ))}

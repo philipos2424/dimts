@@ -33,5 +33,13 @@ export async function expireOldCalls({ limit = 200 } = {}) {
       console.error('[retention] skipped a call', err?.code ?? err?.message);
     }
   }
-  return { deleted, skipped };
+  const auditExpired = await expireAuditEvents();
+  return { deleted, skipped, auditExpired };
+}
+
+/** The privacy policy keeps activity-log entries for one year. */
+export async function expireAuditEvents() {
+  const { rows } = await database.query(`DELETE FROM audit_events WHERE id IN (
+    SELECT id FROM audit_events WHERE created_at < now() - interval '1 year' LIMIT 5000) RETURNING id`);
+  return rows.length;
 }

@@ -101,7 +101,7 @@ meRouter.post('/terms', async (req, res, next) => {
 meRouter.get('/activity', async (req, res, next) => {
   try {
     const user = await resolveUser(req);
-    const { rows } = await query(`SELECT action,target_type,target_id,created_at FROM audit_events
+    const { rows } = await query(`SELECT action,target_type,target_id,reason,created_at FROM audit_events
       WHERE user_id=$1 ORDER BY created_at DESC, id DESC LIMIT 200`, [user.id]);
     res.json({ events: rows });
   } catch (err) { next(err); }
