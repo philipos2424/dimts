@@ -34,7 +34,8 @@ export async function expireOldCalls({ limit = 200 } = {}) {
     }
   }
   const forgotten = await forgetOldContacts({ limit });
-  return { deleted, skipped, forgotten };
+  const auditExpired = await expireAuditEvents();
+  return { deleted, skipped, forgotten, auditExpired };
 }
 
 /**
@@ -54,5 +55,12 @@ export async function forgetOldContacts({ limit = 200 } = {}) {
   for (const { id, user_id: userId } of rows) {
     await audit({ userId, action: 'contact_auto_deleted', targetType: 'contact', targetId: id });
   }
+  return rows.length;
+}
+
+/** The privacy policy keeps activity-log entries for one year. */
+export async function expireAuditEvents() {
+  const { rows } = await database.query(`DELETE FROM audit_events WHERE id IN (
+    SELECT id FROM audit_events WHERE created_at < now() - interval '1 year' LIMIT 5000) RETURNING id`);
   return rows.length;
 }

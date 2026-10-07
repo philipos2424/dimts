@@ -10,12 +10,12 @@
   "functions": {
     "api/index.js": {
       "maxDuration": 300,
-      "includeFiles": "server/db/supabase-ca.crt"
+      "includeFiles": "server/{db/supabase-ca.crt,admin/**}"
     }
   },
   "routes": [
     {
-      "src": "/(?:api|twiml|webhooks|oauth)(?:/.*)?",
+      "src": "/(?:api|twiml|webhooks|oauth|admin)(?:/.*)?",
       "dest": "/api/index"
     },
     {

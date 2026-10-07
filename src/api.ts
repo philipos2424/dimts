@@ -269,7 +269,7 @@ export function stopCallerId() {
 export function acceptTerms(version: string) {
   return request<{ accepted_at: string }>('/api/me/terms', '', { method: 'POST', body: JSON.stringify({ version }) });
 }
-export type ActivityEvent = { action: string; target_type: string | null; target_id: string | null; created_at: string };
+export type ActivityEvent = { action: string; target_type: string | null; target_id: string | null; reason?: string | null; created_at: string };
 export function getActivity() {
   return request<{ events: ActivityEvent[] }>('/api/me/activity', '').then(r => r.events);
 }
