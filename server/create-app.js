@@ -25,6 +25,7 @@ import { inboundRouter } from './routes/inbound.js';
 import { billingRouter, polarWebhookRouter } from './routes/billing.js';
 import { adminApiRouter, adminPageRouter } from './routes/admin.js';
 import { twimlRouter, webhooksRouter } from './routes/webhooks.js';
+import { minimeRouter, minimeWebhookRouter } from './routes/minime.js';
 import { apiRateLimit } from './lib/rate-limit.js';
 import { securityHeaders, WEB_SHELL_CSP } from './lib/security-headers.js';
 import { safeError } from './lib/log-safe.js';
@@ -71,6 +72,7 @@ export function createApp({ webRoot = fileURLToPath(new URL('../dist/', import.m
   app.use('/api/ask', askRouter);
   app.use('/api/briefing', briefingRouter);
   app.use('/api/cron', cronRouter);
+  app.use('/api/minime', minimeRouter);
   app.use('/api/me/privacy-requests', myPrivacyRequestsRouter);
   app.use('/api/me', meRouter);
   app.use('/api/privacy-requests', privacyRequestsRouter);
@@ -79,6 +81,7 @@ export function createApp({ webRoot = fileURLToPath(new URL('../dist/', import.m
   app.use('/twiml/incoming', inboundRouter);
   app.use('/twiml', twimlRouter);
   app.use('/webhooks/polar', polarWebhookRouter);
+  app.use('/webhooks/minime', minimeWebhookRouter);
   app.use('/webhooks', webhooksRouter);
 
   if (existsSync(webRoot)) {

@@ -391,3 +391,29 @@ CREATE TABLE IF NOT EXISTS admin_challenges (
   kind TEXT NOT NULL CHECK (kind IN ('register','login')),
   expires_at TIMESTAMPTZ NOT NULL DEFAULT now() + interval '5 minutes'
 );
+-- MiniMe link (2026-10-08): send what the owner promised "on Telegram" through their MiniMe.
+CREATE TABLE IF NOT EXISTS minime_links (
+  user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  business_id TEXT NOT NULL,
+  business_name TEXT,
+  auto_send BOOLEAN NOT NULL DEFAULT true,
+  linked_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS minime_link_tokens (
+  token_hash TEXT PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  expires_at TIMESTAMPTZ NOT NULL DEFAULT now() + interval '15 minutes'
+);
+CREATE TABLE IF NOT EXISTS telegram_sends (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  call_id UUID NOT NULL UNIQUE REFERENCES calls(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  request TEXT NOT NULL,
+  draft TEXT NOT NULL,
+  evidence JSONB NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('sending','sent','waiting','failed')),
+  error TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS telegram_sends_user_idx ON telegram_sends (user_id, created_at DESC);

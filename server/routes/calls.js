@@ -201,6 +201,8 @@ callsRouter.get('/:id', async (req, res, next) => {
     const { transcript_data, transcript_recording_url, consent_scope, audio_object_key, ...detail } = call;
     detail.capture = captureState({ ...call, has_audio: !!(call.recording_url || audio_object_key) });
     detail.conflicts = await resolveConflicts(user.id, call);
+    detail.telegram_send = await queryOne(`SELECT request, draft, status, updated_at FROM telegram_sends
+      WHERE call_id=$1 AND user_id=$2`, [call.id, user.id]);
     res.set('Cache-Control','private, no-store').json({
       ...detail,
       recording_authorized: hasRecordingAuthorization(call),
