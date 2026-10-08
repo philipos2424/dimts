@@ -171,6 +171,7 @@ export type CallDetail = CallSummary & {
   key_points: string[] | null;
   error: string | null;
   followups: Followups | null;
+  telegram_send?: TelegramSend | null;
   conflicts?: ResolvedConflict[];
   capture?: Capture;
 };
@@ -317,6 +318,16 @@ export function confirmGoogleConnection(code: string) {
 export function disconnectGoogle(kind: GoogleKind) {
   return request(`/api/integrations/google/${kind}`, '', { method: 'DELETE' });
 }
+
+/** MiniMe (Telegram business assistant) sends what the owner promised "on Telegram". */
+export type MiniMeStatus = { available: boolean; linked: boolean; business_name?: string | null; auto_send?: boolean };
+export type TelegramSend = { request: string; draft: string; status: 'sending' | 'sent' | 'waiting' | 'failed'; updated_at: string };
+export function getMiniMeStatus() { return request<MiniMeStatus>('/api/minime', ''); }
+export function startMiniMeLink() { return request<{ url: string }>('/api/minime/link', '', { method: 'POST' }); }
+export function setMiniMeAutoSend(auto_send: boolean) {
+  return request<MiniMeStatus>('/api/minime', '', { method: 'PATCH', body: JSON.stringify({ auto_send }) });
+}
+export function disconnectMiniMe() { return request<MiniMeStatus>('/api/minime', '', { method: 'DELETE' }); }
 
 function publicErrorMessage(status: number, body: string): string {
   // Only map known error codes. Never display raw provider responses or a

@@ -1,5 +1,12 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
+const keyOf = secret => secret.startsWith('whsec_') ? Buffer.from(secret.slice(6), 'base64') : Buffer.from(secret, 'utf8');
+
+/** Sign an outgoing request the way verifyWebhook checks it (used for MiniMe). */
+export function signWebhook(secret, id, timestamp, body) {
+  return `v1,${createHmac('sha256', keyOf(secret)).update(`${id}.${timestamp}.`).update(body).digest('base64')}`;
+}
+
 /**
  * Verify a Standard Webhooks signature (https://www.standardwebhooks.com/), as
  * Polar sends them. Polar secrets made since 8 September 2026 are `whsec_` +

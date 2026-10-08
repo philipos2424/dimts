@@ -33,6 +33,7 @@ export async function scrubCall(tx, current) {
     WHERE id=$1 RETURNING *`,
   [current.id, providerStatus, recordingAccount(current)]);
   await tx.query('DELETE FROM followup_events WHERE call_id=$1', [current.id]);
+  await tx.query('DELETE FROM telegram_sends WHERE call_id=$1', [current.id]);
   await tx.query('DELETE FROM promise_states WHERE call_id=$1', [current.id]);
   await tx.query('DELETE FROM call_notifications WHERE call_id=$1', [current.id]);
   await tx.query("UPDATE calendar_actions SET meeting='{}'::jsonb WHERE call_id=$1", [current.id]);
