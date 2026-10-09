@@ -11,9 +11,18 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            server/package-lock.json
       - run: npm ci
       - run: npm ci --prefix server
       - run: npm test --prefix server
+      - run: npm run client:test
+      - run: npm run dependencies:test
+      - run: npm run reminders:test
+      - run: npm run typecheck
+      - name: Web export smoke build
+        run: npx expo export --platform web --output-dir dist-ci
       # node-forge (inside Expo's CLI, build tooling only) has no patched release yet;
       # raise this back to high once one ships.
       - run: npm audit --audit-level=critical
