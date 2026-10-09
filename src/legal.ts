@@ -38,7 +38,7 @@ export const SUBPROCESSORS: LegalSection[] = [
   { heading: 'Vercel · EU (Frankfurt)', body: 'Application hosting. Data passes through while the app runs.' },
   { heading: 'Telnyx · United States', body: 'Phone numbers, connecting calls and sign-in codes. Recordings are held only until they are copied to our EU storage, then deleted. Standard Contractual Clauses.' },
   { heading: 'ElevenLabs · United States', body: 'Speech-to-text from call audio. Standard Contractual Clauses.' },
-  { heading: 'OpenAI · United States', body: 'Summaries, names and suggested next steps from transcript text. Not used to train models. Standard Contractual Clauses.' },
+  { heading: 'Ollama · United States', body: 'Summaries, names and suggested next steps from transcript text, using an open model hosted by Ollama, mainly in the United States (sometimes Europe or Singapore when busy). Ollama does not log, keep or train on it. Standard Contractual Clauses.' },
   { heading: 'Expo · United States', body: 'Push notifications: a device token and notification text with no call content. Standard Contractual Clauses.' },
   { heading: 'Polar', body: 'Payments, as merchant of record: billing details only.' },
   { heading: 'Google · only if you connect it', body: 'Calendar events and Gmail drafts that you approve, under your own Google account terms.' },
