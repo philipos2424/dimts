@@ -70,56 +70,95 @@ document.addEventListener('mousemove', event => {
   tip.style.top = `${event.clientY + 14}px`;
 });
 
-async function showOverview() {
-  const [o, { cohorts }] = await Promise.all([api('/overview'), api('/cohorts')]);
-  document.getElementById('stamp').textContent = `Updated ${when(o.generated_at)} UTC`;
-  const r = o.revenue, c = o.calls_30d, u = o.unit_economics;
-  const paid = (o.accounts.by_plan.pro ?? 0) + (o.accounts.by_plan.business ?? 0);
-  const cost = u.carrier_billed_micros_30d || u.estimated_call_cost_micros_30d;
-  const margin = u.usd_net_revenue_cents_30d ? (u.usd_net_revenue_cents_30d - cost / 1e4) / u.usd_net_revenue_cents_30d : null;
+// The period every trend view uses; remembered per browser.
+const RANGES = [7, 30, 90];
+let range = RANGES.includes(Number(store.get('dimts.admin.range'))) ? Number(store.get('dimts.admin.range')) : 30;
+const stamp = text => { document.getElementById('stamp').textContent = text; };
+
+const STATUS_TEXT = { ok: ['✓', 'OK'], warn: ['!', 'Warning'], fail: ['✕', 'Action needed'], info: ['i', 'Info'] };
+const statusPill = status => `<span class="status ${status}"><span aria-hidden="true">${STATUS_TEXT[status][0]}</span> ${STATUS_TEXT[status][1]}</span>`;
+
+function kpiValue(k, value) {
+  if (k.unit === 'usd_cents') return usd(value);
+  if (k.unit === 'rate') return `${(value * 100).toFixed(1)}%`;
+  return int(value);
+}
+
+/** "▲ 12% better than the previous 30 days": direction, size and judgement, never colour alone. */
+function delta(k) {
+  if (k.unit === 'rate') {
+    const diff = (k.now - k.before) * 100;
+    if (Math.abs(diff) < 0.05) return '<span class="delta flat">no change</span>';
+    const good = k.better === 'down' ? diff < 0 : diff > 0;
+    return `<span class="delta ${good ? 'good' : 'bad'}">${diff > 0 ? '▲' : '▼'} ${Math.abs(diff).toFixed(1)} pts · ${good ? 'better' : 'worse'}</span>`;
+  }
+  if (!k.before) return k.now ? '<span class="delta flat">new this period</span>' : '<span class="delta flat">no change</span>';
+  const change = (k.now - k.before) / k.before;
+  if (Math.abs(change) < 0.005) return '<span class="delta flat">no change</span>';
+  const good = k.better === 'down' ? change < 0 : change > 0;
+  return `<span class="delta ${good ? 'good' : 'bad'}">${change > 0 ? '▲' : '▼'} ${Math.abs(Math.round(change * 100))}% · ${good ? 'better' : 'worse'}</span>`;
+}
+
+async function showToday() {
+  const t = await api(`/today?days=${range}`);
+  stamp(`Updated ${when(t.generated_at)} UTC · auto-refresh`);
+  const headline = { ok: 'All systems normal', warn: 'Running, with warnings', fail: 'Needs action now' }[t.status];
+  main.innerHTML = `
+    <div class="banner ${t.status}">${statusPill(t.status)} <strong>${headline}</strong>
+      <span class="muted small">${t.attention.length ? `${t.attention.length} item${t.attention.length > 1 ? 's' : ''} below` : 'Nothing needs you right now.'}</span></div>
+    ${t.attention.length ? `<h2>Needs attention</h2><div class="card">${t.attention.map(c => `<div class="check">
+      ${statusPill(c.status)}<div><strong>${esc(c.title)}</strong><br><span class="small">${esc(c.detail ?? '')}</span></div>
+      <div class="count">${esc(c.value)}</div>${c.action ? `<div class="act">${esc(c.action)}</div>` : ''}</div>`).join('')}</div>` : ''}
+    <h2>What changed: last ${t.changes.days} days vs the ${t.changes.days} before</h2>
+    <div class="tiles">${t.changes.kpis.map(k => tile(k.title, kpiValue(k, k.now), `${delta(k)}<br>before: ${kpiValue(k, k.before)}`)).join('')}</div>
+    <h2>Service health</h2>
+    <div class="tiles health">${t.health.map(c => tile(c.title, esc(c.value), statusPill(c.status))).join('')}</div>`;
+}
+
+let overviewCache = null;
+async function getOverview() {
+  if (!overviewCache || Date.now() - overviewCache.at > 60_000) overviewCache = { at: Date.now(), data: await api('/overview') };
+  return overviewCache.data;
+}
+
+/** Horizontal funnel: each step's bar is its share of sign-ups; the weakest step is named, not just coloured. */
+function funnelChart(f) {
+  // Fixed proportions (the SVG is capped in CSS) so text stays readable at any window width.
+  const top = Math.max(1, f.steps[0].n), w = 760, labelW = 180, barMax = 340, rowH = 34;
+  const rows = f.steps.map((s, i) => {
+    const bw = Math.max(s.n ? 3 : 0, barMax * s.n / top), y = i * rowH;
+    const weakest = s.id === f.bottleneck;
+    return `<text class="flabel" x="0" y="${y + 22}">${esc(s.title)}</text>
+      <rect class="bar${weakest ? ' weak' : ''}" x="${labelW}" y="${y + 7}" width="${bw}" height="22" rx="3" data-tip="${esc(s.title)}: ${int(s.n)}"></rect>
+      <text class="fvalue" x="${labelW + bw + 8}" y="${y + 22}">${int(s.n)}${s.from_previous == null ? '' : ` · ${Math.round(s.from_previous * 100)}% of previous step`}${weakest ? ' · biggest drop' : ''}</text>`;
+  }).join('');
+  return `<svg class="funnel" viewBox="0 0 ${w} ${f.steps.length * rowH}" role="img" aria-label="Sign-up funnel">${rows}</svg>
+    <p class="muted small">Each step counts people who also passed every step before it. ${int(f.paying_any)} of these accounts pay in total.</p>`;
+}
+
+async function showGrowth() {
+  const [o, { cohorts }, f] = await Promise.all([getOverview(), api('/cohorts'), api(`/funnel?days=${range}`)]);
+  stamp(`Updated ${when(o.generated_at)} UTC`);
   main.innerHTML = `
     <h2>Customers</h2>
     <div class="tiles">
       ${tile('Active accounts', int(o.accounts.total), `${int(o.accounts.deleted)} deleted`)}
-      ${tile('Paying customers', int(r.paying_users), `${int(paid)} on a paid tier`)}
-      ${tile('MRR (list, USD)', usd(r.mrr_usd_cents), `ARPPU ${usd(r.arppu_usd_cents)}`)}
       ${tile('Monthly active (called)', int(o.active.calls.d30), `WAU ${int(o.active.calls.d7)} · DAU ${int(o.active.calls.d1)}`)}
-      ${tile('Opened the app (30d)', int(o.active.app.d30), `stickiness ${pct(o.active.calls.d1, o.active.calls.d30)} DAU/MAU`)}
+      ${o.active.app.d30 || !o.active.calls.d30
+        ? tile('Opened the app (30d)', int(o.active.app.d30), `stickiness ${pct(o.active.calls.d1, o.active.calls.d30)} DAU/MAU`)
+        : tile('Opened the app (30d)', '—', 'tracked from the next app release')}
       ${tile('Activation (call in 7 days)', pct(o.activation.activated, o.activation.cohort), `${int(o.activation.cohort)} sign-ups · median ${int(o.activation.median_hours)}h to first call`)}
       ${tile('Trial → paid', pct(o.trial.converted_after_end, o.trial.ended), `${int(o.trial.active)} on trial now · ${int(o.trial.started)} started`)}
-      ${tile('Churn (30 days)', r.churn_rate_30d ? `${(r.churn_rate_30d * 100).toFixed(1)}%` : '0%', `${int(r.cancelling)} cancelling · ${int(r.past_due)} past due`)}
-      ${tile('Gross margin (USD, 30d)', margin == null ? '—' : `${Math.round(margin * 100)}%`, `net ${usd(u.usd_net_revenue_cents_30d)} · cost ${micros(cost)}`)}
     </div>
+    <h2>Where people drop off: accounts created in the last ${f.days} days</h2>
+    <div class="card">${funnelChart(f)}</div>
     <div class="grid2">
       ${card('New sign-ups per day (90 days)', bars(o.signups_daily, 'n', 'sign-ups'))}
-      ${card('Connected calls per day (30 days)', bars(o.calls_daily, 'connected', 'calls'))}
-      ${card('Call minutes per day (30 days)', bars(o.calls_daily, 'minutes', 'minutes'))}
       ${card('Accounts by plan', kv(o.accounts.by_plan))}
       ${card('Accounts by market', kv(o.accounts.by_region))}
     </div>
     <h2>Retention: weekly sign-up cohorts, share with a connected call in each week</h2>
     <div class="card cohort">${cohortTable(cohorts)}</div>
-    <h2>Calls (30 days)</h2>
-    <div class="tiles">
-      ${tile('Calls', int(c.total), `${int(c.minutes)} minutes · avg ${Math.round(c.avg_sec / 6) / 10} min`)}
-      ${tile('Connected', pct(c.connected, c.total), `${int(c.missed)} missed`)}
-      ${tile('Notes delivered', pct(c.ready, c.connected), `${int(c.failed)} failed`)}
-      ${tile('Inbound share', pct(c.inbound, c.total), `${int(c.voicemails)} voicemails`)}
-      ${tile('Press-1 consent calls', int(c.press1), `${int(c.press1_declined)} declined recording`)}
-      ${tile('Amharic calls', int(c.amharic), pct(c.amharic, c.total))}
-    </div>
-    <h2>Revenue and costs (30 days)</h2>
-    <div class="grid2">
-      ${card('Payments (Polar, before fees)', table(['Currency', 'Type', 'Orders', 'Gross', 'Tax', 'Refunded'],
-        r.payments_30d.map(p => [esc(p.currency.toUpperCase()), p.credits ? 'credits' : 'plans', int(p.orders), amount(p.gross), amount(p.tax), amount(p.refunded)]), [2, 3, 4, 5]))}
-      ${card('Active plans', kv(r.plans))}
-      ${card('Credits (1 credit = 1¢)', table(['', 'Credits'], [
-        ['Outstanding balance (liability)', int(o.credits.outstanding)], ['Bought, 30 days', int(o.credits.bought_30d)],
-        ['Used on calls, 30 days', int(o.credits.used_30d)], ['Granted by staff, 30 days', int(o.credits.granted_30d)]], [1]))}
-      ${card('Carrier cost by country (Telnyx bills)', table(['Country', 'Records', 'Minutes', 'Cost'],
-        u.carrier_by_country.map(row => [row.country_code ? `+${esc(row.country_code)}` : '—', int(row.records), int(row.minutes), micros(row.micros)]), [1, 2, 3])
-        + `<p class="muted small">Our per-call estimate: ${micros(u.estimated_call_cost_micros_30d)}. Fixed costs (Vercel, Supabase, AI plans) not included.</p>`)}
-    </div>
     <h2>Feature adoption (active accounts)</h2>
     <div class="grid2">
       ${card('Features', table(['Feature', 'Accounts', 'Share'], [
@@ -135,6 +174,67 @@ async function showOverview() {
         ['24 months', int(o.adoption.keep_24)], ['Until deleted', int(o.adoption.keep_forever)]], [1]))}
       ${card('Most active accounts (30 days)', table(['Account', 'Market', 'Plan', 'Calls', 'Minutes'],
         o.top_accounts.map(a => [`<code>${esc(a.id.slice(0, 8))}</code> ${esc(a.phone)}`, esc(a.region), esc(a.tier), int(a.calls), int(a.minutes)]), [3, 4]))}
+    </div>`;
+}
+
+async function showRevenue() {
+  const o = await getOverview();
+  stamp(`Updated ${when(o.generated_at)} UTC · last 30 days`);
+  const r = o.revenue, u = o.unit_economics;
+  const paid = (o.accounts.by_plan.pro ?? 0) + (o.accounts.by_plan.business ?? 0);
+  const cost = u.carrier_billed_micros_30d || u.estimated_call_cost_micros_30d;
+  const margin = u.usd_net_revenue_cents_30d ? (u.usd_net_revenue_cents_30d - cost / 1e4) / u.usd_net_revenue_cents_30d : null;
+  main.innerHTML = `
+    <h2>Revenue (last 30 days)</h2>
+    <div class="tiles">
+      ${tile('MRR (list, USD)', usd(r.mrr_usd_cents), `ARPPU ${usd(r.arppu_usd_cents)}`)}
+      ${tile('Paying customers', int(r.paying_users), `${int(paid)} on a paid tier`)}
+      ${tile('Churn (30 days)', r.churn_rate_30d ? `${(r.churn_rate_30d * 100).toFixed(1)}%` : '0%', `${int(r.cancelling)} cancelling · ${int(r.past_due)} past due`)}
+      ${tile('Gross margin (USD)', margin == null ? '—' : `${Math.round(margin * 100)}%`, `net ${usd(u.usd_net_revenue_cents_30d)} · cost ${micros(cost)}`)}
+      ${tile('Credits outstanding', int(o.credits.outstanding), 'prepaid, owed as calls')}
+    </div>
+    <div class="grid2">
+      ${card('Payments (Polar, before fees)', table(['Currency', 'Type', 'Orders', 'Gross', 'Tax', 'Refunded'],
+        r.payments_30d.map(p => [esc(p.currency.toUpperCase()), p.credits ? 'credits' : 'plans', int(p.orders), amount(p.gross), amount(p.tax), amount(p.refunded)]), [2, 3, 4, 5]))}
+      ${card('Active plans', kv(r.plans))}
+      ${card('Credits (1 credit = 1¢)', table(['', 'Credits'], [
+        ['Outstanding balance (liability)', int(o.credits.outstanding)], ['Bought, 30 days', int(o.credits.bought_30d)],
+        ['Used on calls, 30 days', int(o.credits.used_30d)], ['Granted by staff, 30 days', int(o.credits.granted_30d)]], [1]))}
+      ${card('Carrier cost by country (Telnyx bills)', table(['Country', 'Records', 'Minutes', 'Cost'],
+        u.carrier_by_country.map(row => [row.country_code ? `+${esc(row.country_code)}` : '—', int(row.records), int(row.minutes), micros(row.micros)]), [1, 2, 3])
+        + `<p class="muted small">Our per-call estimate: ${micros(u.estimated_call_cost_micros_30d)}. Fixed costs (Vercel, Supabase, AI plans) not included.</p>`)}
+    </div>`;
+}
+
+async function showOperations() {
+  const x = await api(`/operations?days=${range}`);
+  stamp(`Updated ${when(x.generated_at)} UTC`);
+  const c = x.outcomes;
+  main.innerHTML = `
+    <h2>Calls: last ${x.days} days</h2>
+    <div class="tiles">
+      ${tile('Calls', int(c.total), `${int(c.minutes)} minutes · avg ${Math.round(c.avg_sec / 6) / 10} min`)}
+      ${tile('Connected', pct(c.connected, c.total), `${int(c.unanswered)} unanswered`)}
+      ${tile('Notes delivered', pct(c.ready, c.connected), 'of connected calls')}
+      ${tile('Our failure rate', pct(c.failed, c.total), `${int(c.failed)} failed after connecting`)}
+      ${tile('Inbound share', pct(c.inbound, c.total), `${int(c.voicemails)} voicemails`)}
+      ${tile('Amharic calls', int(c.amharic), pct(c.amharic, c.total))}
+    </div>
+    <div class="grid2">
+      ${card('Our failures per day', bars(x.daily, 'failed', 'failed calls'))}
+      ${card('Unanswered per day (busy, no answer, missed)', bars(x.daily, 'unanswered', 'unanswered calls'))}
+      ${card('Why calls failed', table(['Reason', 'Calls'], x.failure_reasons.map(r => [esc(r.reason), int(r.n)]), [1])
+        + '<p class="muted small">Grouped from error codes. The original messages are not shown: they can quote what a provider received.</p>')}
+      ${card('Outbound calls by country called', table(['Country', 'Calls', 'Our failures', 'Unanswered'],
+        x.by_destination.map(d => [d.country_code === 'other' ? 'Other' : `+${esc(d.country_code)}`, int(d.calls), pct(d.failed, d.calls), pct(d.unanswered, d.calls)]), [1, 2, 3]))}
+    </div>
+    <h2>Capacity and queues (now)</h2>
+    <div class="tiles">
+      ${tile('Calls live now', int(x.queue.live), 'ringing or connected')}
+      ${tile('Notes being made', int(x.queue.processing), 'transcription and AI')}
+      ${tile('Business numbers free', int(x.numbers.free), `${int(x.numbers.assigned)} assigned · ${int(x.numbers.total)} held`)}
+      ${tile('Numbers cost', usd(x.numbers.monthly_cost_usd * 100), 'per month, about $1 each')}
+      ${tile('Press-1 consent asked', int(x.consent.asked), `${int(x.consent.declined)} declined recording`)}
     </div>`;
 }
 
@@ -330,6 +430,7 @@ async function passkeySignIn() {
 function signInScreen(message = '') {
   document.getElementById('tabs').hidden = true;
   document.getElementById('signout').hidden = true;
+  document.getElementById('range').hidden = true;
   main.innerHTML = `<div class="signin">
     <h2>Staff sign-in</h2>
     ${passkeysWork()
@@ -366,9 +467,14 @@ function fail(err) {
   stop(`<span class="err">${esc(err.message)}</span>`);
 }
 
-const views = { overview: showOverview, customers: () => showCustomers(), compliance: showCompliance, access: showAccess };
+const views = { today: showToday, growth: showGrowth, revenue: showRevenue, operations: showOperations,
+  customers: () => showCustomers(), compliance: showCompliance, access: showAccess };
+let current = 'today';
 async function show(name) {
+  current = name;
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === name));
+  // The period only matters on views that show trends.
+  document.getElementById('range').hidden = !['today', 'growth', 'operations'].includes(name);
   main.innerHTML = '<p class="muted">Loading…</p>';
   try { await views[name](); } catch (err) { fail(err); }
 }
@@ -385,14 +491,20 @@ async function start() {
     }
   }
   if (!me) return signInScreen();
+  // Today is the screen left open on a desk: keep it current while visible.
+  clearInterval(start.timer);
+  start.timer = setInterval(() => { if (current === 'today' && document.visibilityState === 'visible' && token) showToday().catch(fail); }, 60_000);
   reasons = me.reasons;
   const tabs = document.getElementById('tabs');
   tabs.hidden = false;
   tabs.querySelectorAll('button').forEach(b => { b.onclick = () => show(b.dataset.tab); });
   const signout = document.getElementById('signout');
   signout.hidden = false;
-  signout.onclick = () => { store.set('dimts.admin', null); token = null; signInScreen(); };
-  await show('overview');
+  signout.onclick = () => { store.set('dimts.admin', null); token = null; clearInterval(start.timer); signInScreen(); };
+  const picker = document.getElementById('range');
+  picker.value = String(range);
+  picker.onchange = () => { range = Number(picker.value); store.set('dimts.admin.range', String(range)); show(current); };
+  await show('today');
   if (!me.passkeys.length && passkeysWork()) {
     main.insertAdjacentHTML('afterbegin', setupBanner());
     document.getElementById('add-passkey').onclick = async () => {

@@ -218,3 +218,52 @@ test('a passkey stops working when its owner leaves the staff list or the signat
   const unknown = await api('/api/admin/passkeys/login', null, { method: 'POST', body: { id: 'x', response: { clientDataJSON: clientData('never-issued') } } });
   assert.equal(unknown.status, 400);
 });
+
+test('Today: health checks with actions, and this period against the one before', async () => {
+  const staff = await signedIn('+15555550100');
+  const owner = (await db.query("INSERT INTO users(phone, created_at) VALUES('+15555551201', now() - interval '40 days') RETURNING id")).rows[0];
+  await db.query(`INSERT INTO calls(user_id,user_phone,destination,status,duration_sec,created_at) VALUES
+    ($1,'+15555551201','+15555559999','ready',120,now()-interval '2 days'),
+    ($1,'+15555551201','+15555559999','ready',60,now()-interval '3 days'),
+    ($1,'+15555551201','+15555559999','ready',60,now()-interval '10 days')`, [owner.id]);
+  await db.query(`INSERT INTO calls(user_id,user_phone,destination,status,processing_requested_at,created_at)
+    VALUES($1,'+15555551201','+15555559999','processing',now()-interval '1 hour',now()-interval '1 hour')`, [owner.id]);
+  const { status, body } = await api('/api/admin/today?days=7', staff.token);
+  assert.equal(status, 200);
+  const stuck = body.health.find(c => c.id === 'stuck');
+  assert.equal(stuck.status, 'fail'); assert.ok(stuck.action);
+  assert.ok(body.attention.some(c => c.id === 'stuck'), 'failing checks are listed first under attention');
+  assert.equal(body.health.find(c => c.id === 'numbers').status, 'warn', 'an empty number pool is a warning');
+  const connected = body.changes.kpis.find(k => k.id === 'connected');
+  assert.ok(connected.now >= 2); assert.ok(connected.before >= 1);
+  assert.equal(body.changes.kpis.find(k => k.id === 'failure_rate').better, 'down');
+  assert.equal((await api('/api/admin/today?days=13', staff.token)).body.changes.days, 30, 'unknown ranges fall back to 30 days');
+});
+
+test('Funnel finds the step that loses the most people', async () => {
+  const staff = await signedIn('+15555550100');
+  const ids = [];
+  for (let i = 0; i < 4; i++) ids.push((await db.query(`INSERT INTO users(phone, terms_accepted_at, created_at)
+    VALUES($1, now(), now() - interval '1 day') RETURNING id`, [`+1555555130${i}`])).rows[0].id);
+  for (let k = 0; k < 3; k++) await db.query(`INSERT INTO calls(user_id,user_phone,destination,status,duration_sec) VALUES($1,'+15555551300','+15555559999','ready',60)`, [ids[0]]);
+  const { body } = await api('/api/admin/funnel?days=7', staff.token);
+  const step = id => body.steps.find(s => s.id === id);
+  assert.ok(step('signed_up').n >= 4); assert.ok(step('first_call').n >= 1); assert.ok(step('habit').n >= 1);
+  assert.ok(body.bottleneck, 'a bottleneck is named');
+});
+
+test('Operations reports failure categories and countries, never error text or dialed numbers', async () => {
+  const staff = await signedIn('+15555550100');
+  const owner = (await db.query("INSERT INTO users(phone) VALUES('+15555551401') RETURNING id")).rows[0];
+  await db.query(`INSERT INTO calls(user_id,user_phone,destination,status,error,direction) VALUES
+    ($1,'+15555551401','+447700900555','failed','ElevenLabs transcription failed: speaker said the secret price',  'outbound'),
+    ($1,'+15555551401','+447700900556','failed','Call no-answer','outbound')`, [owner.id]);
+  const { status, body, text } = await api('/api/admin/operations?days=30', staff.token);
+  assert.equal(status, 200);
+  assert.ok(!text.includes('secret price') && !text.includes('+447700900555') && !text.includes('ElevenLabs transcription failed'));
+  assert.ok(body.failure_reasons.some(r => r.reason === 'Transcription'));
+  assert.ok(body.failure_reasons.some(r => r.reason === 'No answer'));
+  const uk = body.by_destination.find(r => r.country_code === '44');
+  assert.equal(uk.calls, 2); assert.equal(uk.failed, 1); assert.equal(uk.unanswered, 1);
+  assert.equal(body.daily.length, 30);
+});

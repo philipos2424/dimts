@@ -19,11 +19,12 @@ import { recordingAuthorizationSql } from '../lib/recording-policy.js';
 import { adminPhones, maskPhone, regionOf } from '../lib/admin.js';
 
 // The App Store review account and staff's own accounts are not customers.
-const demo = () => [reviewDemoPhone(), ...adminPhones()].filter(Boolean);
+export const excludedPhones = () => [reviewDemoPhone(), ...adminPhones()].filter(Boolean);
+const demo = excludedPhones;
 const num = value => Number(value ?? 0);
 // A call counts as "used" once someone spoke: it connected, or a caller left a voicemail.
-const CONNECTED = '(c.duration_sec > 0 OR c.voicemail)';
-const PAYING = "('active','trialing','past_due')";
+export const CONNECTED = '(c.duration_sec > 0 OR c.voicemail)';
+export const PAYING = "('active','trialing','past_due')";
 const CHURNED = "('canceled','unpaid','revoked','incomplete_expired')";
 
 /** List price of a subscription per month in US cents, from its Polar product key (e.g. pro_year_lite). */

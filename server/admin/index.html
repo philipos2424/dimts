@@ -12,11 +12,19 @@
   <header class="top">
     <div class="brand"><span class="mark">ድምፅ</span> Dimts <span class="muted">Console</span></div>
     <nav id="tabs" class="tabs" hidden>
-      <button data-tab="overview" class="on">Overview</button>
+      <button data-tab="today" class="on">Today</button>
+      <button data-tab="growth">Growth</button>
+      <button data-tab="revenue">Revenue</button>
+      <button data-tab="operations">Operations</button>
       <button data-tab="customers">Customers</button>
       <button data-tab="compliance">Compliance</button>
       <button data-tab="access">Access log</button>
     </nav>
+    <select id="range" aria-label="Period" hidden>
+      <option value="7">Last 7 days</option>
+      <option value="30">Last 30 days</option>
+      <option value="90">Last 90 days</option>
+    </select>
     <span id="stamp" class="muted small"></span>
     <button id="signout" class="btn" hidden>Sign out</button>
   </header>

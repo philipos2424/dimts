@@ -46,13 +46,38 @@ customer who needs help with a specific call can share it from the app.
 
 ## Pages
 
-- **Overview.** Customer, call, revenue and cost measurements (definitions below).
+Built around four operator questions: is it healthy, what changed, where is
+the bottleneck, and what should someone do now. The period picker (7, 30 or
+90 days) drives Today, Growth's funnel and Operations.
+
+- **Today** (opens first, refreshes every minute). An overall status, then a
+  *Needs attention* list (failing checks first, each with what to do), then
+  *What changed*: eight key numbers against the previous period, with
+  direction and "better/worse" in words. Then live service health:
+  - Database and Telnyx balance (warning below `TELNYX_LOW_BALANCE_USD`, default $20; failing below $5).
+  - AI keys, calls stuck making notes for 15+ minutes, our call failures in 24 hours.
+  - Free business numbers, and a roll-up of the Compliance checks.
+- **Growth.** Customers and activity, a strict sign-up funnel (each step
+  counts only people who passed every step before; the biggest drop is named),
+  sign-ups, plans, markets, weekly retention cohorts, feature adoption.
+- **Revenue.** MRR, paying customers, churn, gross margin, credit liability,
+  payments, plans, carrier cost by country.
+- **Operations.**
+  - Call outcomes, our failures and unanswered calls per day.
+  - *Why calls failed*, grouped into fixed categories. The stored error text
+    is never shown, because it can quote what a provider received.
+  - Outcomes by country called (country code only), queues, the number pool
+    and its cost, and press-1 consent.
 - **Customers.** Search and open an account with a reason. Reveal the full
   number or grant goodwill credits (at most 5,000 credits, or $50, per grant;
   20 grants per staff member per day).
 - **Compliance.** Live checks of our legal promises, each with its source and
   what to do when it fails.
 - **Access log.** Every staff request: who, when, which account and why.
+
+**"Our failures" vs "unanswered":** busy, no-answer and cancelled calls are the
+other person's choice and count as *unanswered*. Every other failure is ours to
+fix.
 
 ## Measurement definitions
 
