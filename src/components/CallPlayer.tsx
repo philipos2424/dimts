@@ -78,6 +78,9 @@ function Playback({ source, retry, seekRequest }: { source: AudioSource; retry: 
   const seekQueue = useRef<Promise<void>>(Promise.resolve());
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const [positionMessage, setPositionMessage] = useState('');
+  // iPhone Safari does not load audio until a tap starts playback, so on the
+  // web Play stays enabled before the recording has loaded.
+  const [requested, setRequested] = useState(Platform.OS !== 'web');
   const loaded = status.isLoaded && Number.isFinite(status.duration) && status.duration > 0;
   useEffect(() => {
     if (!loaded || status.error || !seekRequest || lastSeek.current === seekRequest.sequence) return;
@@ -98,10 +101,10 @@ function Playback({ source, retry, seekRequest }: { source: AudioSource; retry: 
     });
   }, [loaded, status.error, seekRequest, player]);
   useEffect(() => {
-    if (loaded || status.error) return;
+    if (loaded || status.error || !requested) return;
     const timer = setTimeout(() => setError('This recording is taking too long to load. Try again.'), 60_000);
     return () => clearTimeout(timer);
-  }, [loaded, status.error]);
+  }, [loaded, status.error, requested]);
 
   async function act(work: () => void | Promise<void>) {
     setBusy(true); setError('');
@@ -114,8 +117,10 @@ function Playback({ source, retry, seekRequest }: { source: AudioSource; retry: 
   return <>
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
       <Control label="Back 15 seconds" disabled={disabled} onPress={() => act(() => player.seekTo(Math.max(0, status.currentTime - 15)))} />
-      <Control label={status.playing ? t('pause') : t('play')} disabled={disabled} onPress={() => act(async () => {
-        if (status.playing) player.pause();
+      <Control label={status.playing ? t('pause') : t('play')} disabled={loaded ? disabled : busy || !!status.error} onPress={() => act(async () => {
+        setRequested(true);
+        if (!loaded) player.play();
+        else if (status.playing) player.pause();
         else {
           if (status.didJustFinish || status.currentTime >= status.duration) await player.seekTo(0);
           player.play();
@@ -129,7 +134,7 @@ function Playback({ source, retry, seekRequest }: { source: AudioSource; retry: 
       style={{ height: 4, backgroundColor: c.line, borderRadius: radius.pill, overflow: 'hidden' }}>
       <View style={{ width: `${progress * 100}%`, height: '100%', backgroundColor: c.brand }} />
     </View>
-    <Txt size="caption" tone="muted">{!loaded ? 'Loading recording…' :
+    <Txt size="caption" tone="muted">{!loaded ? (requested ? 'Loading recording…' : 'Tap Play to load the recording.') :
       status.isBuffering ? 'Buffering…' : `${audioClock(status.currentTime)} / ${audioClock(status.duration)}`}</Txt>
     {positionMessage ? <Txt size="caption" tone="muted" accessibilityLiveRegion="polite">{positionMessage}</Txt> : null}
     {(error || status.error) && <>
