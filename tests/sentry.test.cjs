@@ -64,3 +64,27 @@ test('Expo source-map steps are opt-in and never put the auth token in app confi
     assert.doesNotMatch(JSON.stringify(config), /private-token/);
   }
 });
+
+test('app hook preserves clean bounded frames and matching bundle Debug IDs on every platform', () => {
+  const debug_id = '11111111-1111-4111-8111-111111111111';
+  for (const platform of ['ios', 'android', 'web']) {
+    const app = load('https://abcdef@o123.ingest.de.sentry.io/456', platform);
+    app.initSentry();
+    const filename = platform === 'ios' ? 'app:///main.jsbundle'
+      : platform === 'android' ? 'app:///index.android.bundle' : 'app:///_expo/static/js/web/entry-abcdef.js';
+    const frames = Array.from({ length: 55 }, () => ({ filename, function: 'App.render', lineno: 1,
+      colno: 1024, in_app: true, vars: { token: 'SECRET' }, context_line: 'SECRET',
+      pre_context: ['SECRET'], post_context: ['SECRET'], module_metadata: { token: 'SECRET' } }));
+    frames.push({ filename: 'C:\\Users\\Private\\dimts\\src\\sentry.ts?token=SECRET', function: 'initSentry' });
+    frames.push({ filename: 'https://private.test/transcript?token=SECRET', function: 'anonymous.SECRET' });
+    const clean = app.initialized[0].beforeSend({ message: 'SECRET', stacktrace: { frames },
+      debug_meta: { images: [{ type: 'sourcemap', code_file: `${filename}?token=SECRET`, debug_id, debug_file: 'SECRET' }] } });
+    assert.equal(clean.message, '[redacted]');
+    assert.equal(clean.stacktrace.frames.length, 50);
+    assert.deepEqual(clean.stacktrace.frames[0], { filename, function: 'App.render', lineno: 1, colno: 1024, in_app: true });
+    assert.deepEqual(clean.stacktrace.frames[48], { filename: 'src/sentry.ts', function: 'initSentry' });
+    assert.deepEqual(clean.stacktrace.frames[49], { filename: '[redacted]' });
+    assert.deepEqual(clean.debug_meta, { images: [{ type: 'sourcemap', code_file: filename, debug_id }] });
+    assert.doesNotMatch(JSON.stringify(clean), /SECRET|Private|private\.test|Users/);
+  }
+});

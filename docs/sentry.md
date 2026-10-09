@@ -36,7 +36,7 @@ HTTP statuses). All other message text is replaced with `[redacted]`.
 The server also reuses `maskPhones` before handing an error to the SDK.
 
 Request bodies/headers/URLs, phone numbers, transcripts, summaries, audio
-URLs, extras, contexts, breadcrumbs, source/stack frames and arbitrary
+URLs, extras, contexts, breadcrumbs, stack locals/source context and arbitrary
 exception fields are discarded. Key-name filtering alone is insufficient:
 providers can echo a whole transcript inside an ordinary `Error.message`.
 
@@ -44,10 +44,21 @@ providers can echo a whole transcript inside an ordinary `Error.message`.
 logs, automatic sessions and client reports are disabled. App native crash
 reporting is deliberately disabled because native events can bypass the JS
 `beforeSend` filter. Monitoring covers JS errors and server failures; it does
-not provide native crash reports or stack traces. Source-map build wiring is
-present per Expo's guide, but the current metadata-only events have no stacks
-to symbolicate. Keep this limitation when investigating redacted events: use
-the call ID and stage to inspect the protected application data.
+not provide native crash reports. JS stacks retain at most 50 frames per event,
+with only filename, identifier-like function, line, column and in-app flag.
+Paths are limited to application/package sources and Expo/Hermes bundles;
+machine prefixes, queries and fragments are removed, unknown paths redacted.
+Function names are limited to 80 characters and sanitized paths to 247.
+
+Source-map images retain only type `sourcemap`, UUID Debug IDs and sanitized
+code paths matching retained frames. Canonical `app:///` paths are preserved.
+The same path sanitizer is used for frames and images: Sentry Relay derives
+`abs_path` from `filename` when absent, preserving the exact match required by
+[Sentry's troubleshooting guide](https://docs.sentry.io/platforms/javascript/sourcemaps/troubleshooting_js/).
+See [Relay's normalization](https://github.com/getsentry/relay/blob/master/relay-event-normalization/src/stacktrace.rs).
+Uploaded artifacts must contain the corresponding Debug IDs and be uploaded
+before errors occur. Live symbolication still needs verification after an
+authorized release; the tests use a local transport and send no live events.
 
 Server captures are flushed with a bounded timeout through the existing
 `defer` / Vercel `waitUntil` path. Monitoring failures never replace the
