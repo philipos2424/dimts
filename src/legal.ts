@@ -11,7 +11,7 @@ export const RECORDING_NOTICE = 'This call is recorded and summarized by Dimts A
  */
 export const AI_PROVIDERS = [
   { name: 'ElevenLabs', gets: 'call audio', does: 'turns speech into text' },
-  { name: 'OpenAI', gets: 'call transcripts', does: 'writes your notes, answers and drafts' },
+  { name: 'Ollama', gets: 'call transcripts', does: 'writes your notes, answers and drafts with an open AI model' },
 ];
 
 export const EMERGENCY_NOTICE = 'Dimts is not for emergency calls. It cannot reach 911, 112, 999 or other emergency numbers. Use your phone’s own dialler.';
@@ -51,7 +51,7 @@ export const SUBPROCESSORS: LegalSection[] = [
   { heading: 'Vercel · EU (Frankfurt)', body: 'Application hosting. Data passes through while the app runs.' },
   { heading: 'Telnyx · United States', body: 'Phone numbers, connecting calls and sign-in codes. Recordings are held only until they are copied to our EU storage, then deleted. Standard Contractual Clauses.' },
   { heading: 'ElevenLabs · United States', body: 'Speech-to-text from call audio. Not used to train models. Standard Contractual Clauses.' },
-  { heading: 'OpenAI · United States', body: 'Summaries, names, suggested next steps and answers from transcript text. Not stored by OpenAI and not used to train models. Standard Contractual Clauses.' },
+  { heading: 'Ollama · United States', body: 'Summaries, names, suggested next steps and answers from transcript text, using an open model hosted by Ollama, mainly in the United States (sometimes Europe or Singapore when busy). Ollama does not log, keep or train on it. Standard Contractual Clauses.' },
   { heading: 'Expo · United States', body: 'Push notifications: a device token and notification text with no call content. Standard Contractual Clauses.' },
   { heading: 'Polar', body: 'Payments, as merchant of record: billing details only.' },
   { heading: 'Google · only if you connect it', body: 'Calendar events and Gmail drafts that you approve, under your own Google account terms.' },
