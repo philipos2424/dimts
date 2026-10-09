@@ -7,6 +7,7 @@ export const RECORDING_NOTICE = 'This call is recorded and summarized by Dimts A
 /**
  * Every third party that receives call content, named before the first call
  * (App Store guideline 5.1.2(i)). Keep in step with SUBPROCESSORS below and
+ * DISCLOSED in server/services/health.js (the health check fails if they drift) and
  * docs/legal/subprocessors.md.
  */
 export const AI_PROVIDERS = [
