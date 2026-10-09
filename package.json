@@ -6,6 +6,7 @@
     "@expo-google-fonts/fraunces": "^0.4.1",
     "@expo-google-fonts/inter": "^0.4.2",
     "@react-native-async-storage/async-storage": "2.2.0",
+    "@sentry/react-native": "~7.11.0",
     "decode-uri-component": "file:vendor/decode-uri-component-compat",
     "expo": "~57.0.26",
     "expo-asset": "~57.0.16",
@@ -33,7 +34,7 @@
     "typescript": "~6.0.3"
   },
   "scripts": {
-    "client:test": "node --test tests/api-timeout.test.cjs",
+    "client:test": "node --test tests/api-timeout.test.cjs tests/sentry.test.cjs",
     "dependencies:test": "node --test tests/dependency-compat.test.cjs",
     "start": "expo start",
     "android": "expo start --android",
@@ -41,7 +42,9 @@
     "web": "expo start --web",
     "server": "node --env-file=.env server/dev.js",
     "server:test": "npm test --prefix server",
-    "reminders:test": "node --experimental-strip-types --test tests/reminders.test.mjs"
+    "reminders:test": "node --experimental-strip-types --test tests/reminders.test.mjs",
+    "test": "npm run client:test && npm run dependencies:test && npm run reminders:test && npm run server:test",
+    "typecheck": "tsc --noEmit"
   },
   "private": true,
   "overrides": {

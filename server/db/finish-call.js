@@ -1,3 +1,4 @@
+import { captureCallFailure } from '../lib/sentry.js';
 import { query, queryOne } from './pool.js';
 import { estimateCallCost } from '../lib/pricing.js';
 import { defer } from '../lib/defer.js';
@@ -40,6 +41,9 @@ export async function finishCall(call, seconds, status, month) {
   const connected = status === 'completed' && seconds > 0;
   const finished = await queryOne(FINISH_CALL_SQL, [call.id, seconds, connected,
     `Dial ${status}`, call.direction === 'inbound' ? 'missed' : 'failed', month]);
+  if (finished && !connected && call.direction !== 'inbound' && !call.deleted_at && call.status !== 'ready') {
+    captureCallFailure(new Error('Call failed'), { callId: call.id, userId: call.user_id, stage: 'call' });
+  }
   if (finished && connected) {
     // Our side of the ledger: what this call cost, for unit economics.
     const cost = estimateCallCost({ ownerPhone: call.user_phone, otherPhone: call.destination, direction: call.direction,

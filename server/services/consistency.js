@@ -1,3 +1,4 @@
+import { captureCallFailure } from '../lib/sentry.js';
 import { query, queryOne } from '../db/pool.js';
 import { completeJson } from './llm.js';
 
@@ -45,6 +46,7 @@ export async function checkConsistency(callId, { signal } = {}) {
     await query('UPDATE calls SET conflicts=$2 WHERE id=$1 AND deleted_at IS NULL', [call.id, JSON.stringify(conflicts)]);
     return conflicts;
   } catch (err) {
+    captureCallFailure(err, { callId, stage: 'consistency' });
     console.error('[consistency] check failed for call', callId, err?.message);
     return [];
   }

@@ -1,3 +1,4 @@
+import { captureCallFailure } from '../lib/sentry.js';
 import { query, queryOne } from '../db/pool.js';
 import { defer } from '../lib/defer.js';
 import { fetchRecording } from './originate.js';
@@ -17,6 +18,7 @@ export async function archiveAudio(call, bytes) {
     const stored = await headAudio(key);
     if (stored?.size !== expected) throw new Error('Stored audio size does not match');
   } catch (err) {
+    captureCallFailure(err, { callId: call.id, userId: call.user_id, stage: 'archive' });
     console.error('[archive] upload failed for call', call.id, err?.message);
     await queryOne(`UPDATE calls SET provider_archive_status='upload_failed'
       WHERE id=$1 AND audio_object_key IS NULL RETURNING id`, [call.id]);
@@ -41,6 +43,7 @@ export async function removeArchivedFromProvider(callId) {
     RETURNING *`, [callId]);
   if (!call) return 'skipped';
   const result = await deleteProviderRecording(call);
+  if (result.status !== 'confirmed') captureCallFailure(new Error(), { callId, userId: call.user_id, stage: 'archive_remove' });
   const status = result.status === 'confirmed' ? 'removed' : 'unknown';
   await queryOne(`UPDATE calls SET provider_archive_status=$2 WHERE id=$1 AND audio_object_key IS NOT NULL RETURNING id`, [callId, status]);
   return status;
@@ -48,7 +51,10 @@ export async function removeArchivedFromProvider(callId) {
 
 async function retryUpload(call) {
   const response = await fetchRecording(call.recording_url, { channels: recordingChannels(call), recordingSid: call.recording_sid });
-  if (!response.ok) return 'upload_failed';
+  if (!response.ok) {
+    captureCallFailure(new Error(`Could not download recording (HTTP ${response.status})`), { callId: call.id, userId: call.user_id, stage: 'recording_fetch' });
+    return 'upload_failed';
+  }
   return archiveAudio(call, new Uint8Array(await response.arrayBuffer()));
 }
 
@@ -66,5 +72,8 @@ export async function scheduleArchiveRetries(userId) {
   const { rows: uploads } = await query(`SELECT id,user_id,recording_url,recording_sid,voicemail FROM calls WHERE user_id=$1 AND deleted_at IS NULL
     AND audio_object_key IS NULL AND recording_url IS NOT NULL AND provider_archive_status='upload_failed'
     AND status IN ('ready','failed') ORDER BY created_at LIMIT 1`, [userId]);
-  for (const call of uploads) defer(retryUpload(call), `archive-retry:${call.id}`);
+  for (const call of uploads) defer(retryUpload(call).catch(err => {
+    captureCallFailure(err, { callId: call.id, userId: call.user_id, stage: 'archive' });
+    throw err;
+  }), `archive-retry:${call.id}`);
 }

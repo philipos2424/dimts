@@ -1,4 +1,5 @@
 import express from 'express';
+import { captureCallFailure } from '../lib/sentry.js';
 import twilio from 'twilio';
 import { config } from '../config.js';
 import { query, queryOne } from '../db/pool.js';
@@ -199,6 +200,7 @@ webhooksRouter.post('/call-status', async (req, res) => {
         `UPDATE calls SET status = 'failed', error = $2 WHERE id = $1`,
         [call.id, `Call ${CallStatus}`]
       );
+      captureCallFailure(new Error('Call failed'), { callId: call.id, userId: call.user_id, stage: 'call' });
     }
   }
 

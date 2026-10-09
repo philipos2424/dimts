@@ -1,4 +1,5 @@
 import express from 'express';
+import { captureCallFailure } from './lib/sentry.js';
 import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
 import { authRouter } from './routes/auth.js';
@@ -107,6 +108,7 @@ export function createApp({ webRoot = fileURLToPath(new URL('../dist/', import.m
    */
   app.use((err, _req, res, _next) => {
     const status = err?.status ?? 500;
+    if (status >= 500) captureCallFailure(err, { stage: 'server' });
     if (status >= 500) console.error('[error]', safeError(err));
     if (err?.retryAfter) res.set('Retry-After', String(err.retryAfter));
 

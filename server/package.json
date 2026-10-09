@@ -11,8 +11,10 @@
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.8",
+    "@sentry/node": "^11.6.0",
     "@simplewebauthn/server": "^13.3.3",
     "@vercel/functions": "^2.0.0",
+    "dimts": "file:..",
     "express": "^5.1.0",
     "google-auth-library": "^11.1.0",
     "openai": "^4.104.0",

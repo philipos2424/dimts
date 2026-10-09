@@ -1,3 +1,4 @@
+import { captureCallFailure } from '../lib/sentry.js';
 import { query } from './pool.js';
 export const EXPIRE_PROCESSING_SQL = `UPDATE calls SET status='failed',
   error='The recording is saved, but call notes did not finish. Retry processing to continue.',
@@ -11,5 +12,7 @@ export async function expireProcessing(userId) {
   await query(`UPDATE calls SET processing_requested_at=now() WHERE user_id=$1
     AND status='processing' AND recording_url IS NOT NULL
     AND processing_until IS NULL AND processing_requested_at IS NULL`, [userId]);
-  return query(EXPIRE_PROCESSING_SQL, [userId]);
+  const result = await query(EXPIRE_PROCESSING_SQL + ' RETURNING id', [userId]);
+  for (const row of result.rows) captureCallFailure(new Error('Processing lease expired'), { callId: row.id, userId, stage: 'processing_timeout' });
+  return result;
 }

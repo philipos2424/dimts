@@ -13,6 +13,9 @@ import { AppLockGate } from '../src/AppLock';
 import { IncomingBriefing } from '../src/components/IncomingBriefing';
 import { IncomingNotificationObserver } from '../src/components/IncomingNotificationObserver';
 import { font, useTheme } from '../src/theme';
+import { initSentry, wrapWithSentry } from '../src/sentry';
+
+initSentry();
 
 const PUBLIC = new Set(['privacy', 'terms', 'privacy-request', 'subprocessors']);
 
@@ -73,7 +76,7 @@ function Gate() {
   );
 }
 
-export default function RootLayout() {
+function RootLayout() {
   const { c } = useTheme();
   // The plugin embeds these at build time; loading them here also covers
   // Expo Go during development.
@@ -98,3 +101,5 @@ export default function RootLayout() {
     </SafeAreaProvider>
   );
 }
+
+export default wrapWithSentry(RootLayout);
