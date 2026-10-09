@@ -9,7 +9,7 @@ import {
 } from '../services/admin-metrics.js';
 import { funnel, operations, rangeOf, today } from '../services/admin-ops.js';
 import {
-  authenticationOptions, finishAuthentication, finishRegistration, listPasskeys, registrationOptions, removePasskey,
+  authenticationOptions, finishAuthentication, finishRegistration, finishSetup, listPasskeys, registrationOptions, removePasskey, setupOptions,
 } from '../services/admin-passkeys.js';
 
 /**
@@ -54,6 +54,20 @@ adminApiRouter.post('/passkeys/login/options', async (req, res, next) => {
   try {
     await hit(`admin-passkey-ip:${req.ip}`, 30, 3600);
     res.json(await authenticationOptions());
+  } catch (err) { next(err); }
+});
+// One-time setup link: the first passkey without a text or call. The secret is checked before anything else.
+adminApiRouter.post('/setup/options', async (req, res, next) => {
+  try {
+    await hit(`admin-setup-ip:${req.ip}`, 20, 3600);
+    res.json(await setupOptions(req.body?.setup));
+  } catch (err) { next(err); }
+});
+adminApiRouter.post('/setup', async (req, res, next) => {
+  try {
+    await hit(`admin-setup-ip:${req.ip}`, 20, 3600);
+    const { token } = await finishSetup(req.body?.setup, req.body?.credential, req);
+    res.json({ token });
   } catch (err) { next(err); }
 });
 adminApiRouter.post('/passkeys/login', async (req, res, next) => {

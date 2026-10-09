@@ -386,15 +386,15 @@ const b64 = {
 const post = (path, body) => api(path, { method: 'POST', body: JSON.stringify(body ?? {}) });
 const passkeysWork = () => !!window.PublicKeyCredential && !!navigator.credentials;
 
-async function addPasskey() {
-  const options = await post('/passkeys/register/options');
+/** Ask the device for a new passkey; returns it as the JSON the server verifies. */
+async function newPasskey(options) {
   const credential = await navigator.credentials.create({ publicKey: {
     ...options,
     challenge: b64.dec(options.challenge),
     user: { ...options.user, id: b64.dec(options.user.id) },
     excludeCredentials: (options.excludeCredentials ?? []).map(c => ({ ...c, id: b64.dec(c.id) })),
   } });
-  await post('/passkeys/register', {
+  return {
     id: credential.id, rawId: b64.enc(credential.rawId), type: credential.type,
     authenticatorAttachment: credential.authenticatorAttachment ?? undefined,
     clientExtensionResults: credential.getClientExtensionResults(),
@@ -403,6 +403,39 @@ async function addPasskey() {
       attestationObject: b64.enc(credential.response.attestationObject),
       transports: credential.response.getTransports?.() ?? [],
     },
+  };
+}
+
+async function addPasskey() {
+  await post('/passkeys/register', await newPasskey(await post('/passkeys/register/options')));
+}
+
+/** The one-time setup link: first passkey and first sign-in in one step, no text or call. */
+async function setupWithLink(setup) {
+  const credential = await newPasskey(await post('/setup/options', { setup }));
+  const { token: session } = await post('/setup', { setup, credential });
+  store.set('dimts.admin', session);
+  token = session;
+}
+
+function setupScreen(setup) {
+  document.getElementById('tabs').hidden = true;
+  document.getElementById('signout').hidden = true;
+  document.getElementById('range').hidden = true;
+  main.innerHTML = `<div class="signin">
+    <h2>Set up your staff sign-in</h2>
+    <p class="small">This one-time link adds Face ID or your fingerprint as your way into the console. No text message or call.</p>
+    ${passkeysWork()
+      ? '<button class="btn primary big" id="setup-go">Set up Face ID or fingerprint</button>'
+      : '<p class="err">This browser cannot use passkeys. Open the link in a current Chrome, Safari, Edge or Firefox.</p>'}
+    <p id="setup-msg" class="small muted"></p></div>`;
+  document.getElementById('setup-go')?.addEventListener('click', async () => {
+    const msg = document.getElementById('setup-msg');
+    msg.textContent = 'Waiting for your device…'; msg.className = 'small muted';
+    try { await setupWithLink(setup); await start(); } catch (err) {
+      msg.textContent = err.status === 404 ? 'This setup link is not valid.' : err.name === 'NotAllowedError' ? 'Cancelled. Press the button to try again.' : err.message;
+      msg.className = 'small err';
+    }
   });
 }
 
@@ -481,6 +514,12 @@ async function show(name) {
 
 /** Try the console session first, then the app's; whichever the server accepts wins. */
 async function start() {
+  // A setup link carries its secret after '#', which browsers never send; clear it from the address bar at once.
+  const setup = new URLSearchParams(location.hash.slice(1)).get('setup');
+  if (setup) {
+    history.replaceState(null, '', location.pathname);
+    return setupScreen(setup);
+  }
   let me = null;
   for (const key of ['dimts.admin', 'dimts.session']) {
     token = store.get(key);
