@@ -8,12 +8,10 @@
 import { config } from '../config.js';
 import { query } from '../db/pool.js';
 import { telnyxRequest } from '../lib/telnyx-rest.js';
+import { DISCLOSED } from '../lib/disclosed-providers.js';
 
 const LOW_BALANCE_USD = () => Number(process.env.TELNYX_LOW_BALANCE_USD ?? 20);
 const FAILED_CALLS_ALERT = () => Number(process.env.FAILED_CALLS_ALERT ?? 3);
-// The providers users agree to before their first call (AI_PROVIDERS in
-// src/legal.ts). Sending call content anywhere else breaks that consent.
-export const DISCLOSED = { llm: 'openai', transcription: 'elevenlabs' };
 
 async function check(name, run) {
   try { return { name, ...(await run()) }; }
