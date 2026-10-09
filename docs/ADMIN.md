@@ -13,9 +13,20 @@ Written for the Dimts founder and anyone given staff access. Branch
 
 ## Signing in
 
-- **First time on a device:** sign in to `https://dimts.vercel.app` with your
-  staff number (one text code), open `/admin/` and press **Set up Face ID or
-  fingerprint**.
+- **First time, with no text or call (one-time setup link):**
+  1. Generate a secret: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`.
+  2. Set `ADMIN_SETUP_TOKEN=<staff phone>:<secret>` in Vercel (Production) and redeploy.
+  3. Open `https://dimts.vercel.app/admin/#setup=<secret>` and press **Set up Face ID or fingerprint**.
+
+  How the link stays safe:
+  - It works once: its use is recorded in the audit log and checked before every use.
+  - It only works for a number on `ADMIN_PHONES`.
+  - The secret sits after `#`, so browsers never send it to the server or its logs, and the page clears it from the address bar.
+
+  For a lost device, set a new secret: each value is a new one-time link. Delete the variable when you don't need it.
+- **First time, the other way:** sign in to `https://dimts.vercel.app` with your
+  staff number (one text or call code), open `/admin/` and press **Set up Face
+  ID or fingerprint**.
 - **After that:** open `/admin/` and press **Sign in with Face ID or
   fingerprint**. No code. The passkey syncs through iCloud Keychain or Google
   Password Manager, so it also works on your other devices signed in to the

@@ -267,3 +267,20 @@ test('Operations reports failure categories and countries, never error text or d
   assert.equal(uk.calls, 2); assert.equal(uk.failed, 1); assert.equal(uk.unanswered, 1);
   assert.equal(body.daily.length, 30);
 });
+
+test('a one-time setup link adds the first passkey and signs in, with no text or call; it works once', async () => {
+  const secret = 'a'.repeat(64);
+  process.env.ADMIN_SETUP_TOKEN = `+15555550100:${secret}`;
+  assert.equal((await api('/api/admin/setup/options', null, { method: 'POST', body: { setup: 'b'.repeat(64) } })).status, 404, 'a wrong secret looks like nothing is there');
+  webauthn.challenge = 'setup-challenge';
+  const options = await api('/api/admin/setup/options', null, { method: 'POST', body: { setup: secret } });
+  assert.equal(options.status, 200); assert.equal(options.body.challenge, 'setup-challenge');
+  const done = await api('/api/admin/setup', null, { method: 'POST', body: { setup: secret, credential: { id: 'credential-abc', response: { clientDataJSON: clientData('setup-challenge') } } } });
+  assert.equal(done.status, 200); assert.match(done.body.token, /^[a-f0-9]{64}$/);
+  assert.equal((await api('/api/admin/overview', done.body.token)).status, 200, 'the link signs the founder straight in');
+  const again = await api('/api/admin/setup/options', null, { method: 'POST', body: { setup: secret } });
+  assert.equal(again.status, 410); assert.equal(again.body.error, 'link_used');
+  process.env.ADMIN_SETUP_TOKEN = `+15555550888:${'c'.repeat(64)}`;
+  assert.equal((await api('/api/admin/setup/options', null, { method: 'POST', body: { setup: 'c'.repeat(64) } })).status, 404, 'only numbers on the staff list');
+  delete process.env.ADMIN_SETUP_TOKEN;
+});
