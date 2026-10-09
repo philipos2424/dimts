@@ -7,6 +7,7 @@ import { HttpError } from '../lib/users.js';
 import {
   accessLog, cohorts, compliance, customerDetail, customerPhone, customers, grantCredits, overview,
 } from '../services/admin-metrics.js';
+import { funnel, operations, rangeOf, today } from '../services/admin-ops.js';
 import {
   authenticationOptions, finishAuthentication, finishRegistration, listPasskeys, registrationOptions, removePasskey,
 } from '../services/admin-passkeys.js';
@@ -33,6 +34,9 @@ adminApiRouter.get('/me', handler('signed_in', async (_req, staff) => ({
   reasons: ACCESS_REASONS, staff_id: staff.id, passkeys: await listPasskeys(staff),
 })));
 adminApiRouter.get('/overview', handler('viewed_overview', () => overview()));
+adminApiRouter.get('/today', handler('viewed_today', req => today(rangeOf(req.query.days))));
+adminApiRouter.get('/funnel', handler('viewed_funnel', req => funnel(rangeOf(req.query.days))));
+adminApiRouter.get('/operations', handler('viewed_operations', req => operations(rangeOf(req.query.days))));
 adminApiRouter.get('/cohorts', handler('viewed_cohorts', async () => ({ cohorts: await cohorts() })));
 adminApiRouter.get('/compliance', handler('viewed_compliance', () => compliance()));
 adminApiRouter.get('/customers', handler('searched_customers', req => customers({
