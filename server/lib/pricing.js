@@ -15,7 +15,8 @@ import { callingCode } from './destinations.js';
 
 /** Minutes reset on the first of each month (UTC), on monthly and yearly plans alike. */
 export const PLANS = {
-  free: { minutes: 30, features: ['notes', 'agreements', 'ask'] },
+  // After the trial, Free keeps every past call readable and askable; new calls need a plan.
+  free: { minutes: 0, features: ['notes', 'agreements', 'ask'] },
   pro: { minutes: 500, features: ['notes', 'agreements', 'ask', 'recaps', 'promises', 'memory_check', 'business_number', 'google'] },
   business: { minutes: 1500, features: ['notes', 'agreements', 'ask', 'recaps', 'promises', 'memory_check', 'business_number', 'google', 'priority_support'] },
 };
@@ -24,6 +25,22 @@ export const INTERVALS = ['month', 'year'];
 
 /** Credits per minute once plan minutes are used up (covers both cheap legs and the AI). */
 export const OVERAGE_CENTS_PER_MIN = 3;
+
+/**
+ * UK and EU legs cost us 2.5 and 5 times a US leg (pricing.js LEG_COST_MICROS),
+ * so over-plan minutes add this much per leg ringing there. A UK-to-UK minute
+ * is 7 credits against about 4.7 cents of cost; EU-to-EU is 11 against 8.7.
+ */
+export const OVERAGE_LEG_EXTRA_CENTS = { 44: 2, eea: 4 };
+
+/**
+ * Plan minutes depend on where the owner's number is, for the same reason:
+ * most of an owner's calls ring phones in their own country.
+ */
+export const REGIONAL_MINUTES = {
+  uk: { pro: 300, business: 900 },
+  eea: { pro: 200, business: 500 },
+};
 
 /**
  * Credits per minute for one leg ringing a number in this country. Set above
@@ -53,6 +70,27 @@ export function legSurcharge(number) {
  */
 export function callSurcharge(ownerPhone, otherPhone, direction = 'outbound') {
   return legSurcharge(ownerPhone) + (direction === 'inbound' ? 0 : legSurcharge(otherPhone));
+}
+
+function legRegion(number) {
+  const code = callingCode(number);
+  if (code === '44') return '44';
+  return code && EEA_CODES.has(code) ? 'eea' : null;
+}
+
+/** Over-plan credits a minute for this call: the base rate plus each UK or EU leg. */
+export function overageRate(ownerPhone, otherPhone, direction = 'outbound') {
+  const extra = number => OVERAGE_LEG_EXTRA_CENTS[legRegion(number)] ?? 0;
+  return OVERAGE_CENTS_PER_MIN + extra(ownerPhone) + (direction === 'inbound' ? 0 : extra(otherPhone));
+}
+
+/** Monthly plan minutes for this owner: fewer where calls cost us more. */
+export function planMinutes(tier, ownerPhone, { trial = false, override = null } = {}) {
+  // Granted by hand (scripts/grant-minutes.js): wins over the plan and the trial.
+  if (Number.isInteger(override) && override >= 0) return override;
+  if (trial) return TRIAL_MINUTES;
+  const region = { 44: 'uk', eea: 'eea' }[legRegion(ownerPhone)];
+  return REGIONAL_MINUTES[region]?.[tier] ?? PLANS[tier]?.minutes ?? PLANS.free.minutes;
 }
 
 /** Credits a finished call costs. Credits are charged per started minute, like the carriers bill us. */
@@ -149,11 +187,12 @@ export function catalogFor(phone) {
     region,
     currency,
     overage_cents_per_min: OVERAGE_CENTS_PER_MIN,
+    overage_leg_extra_cents: OVERAGE_LEG_EXTRA_CENTS,
     // Calling code → credits a minute for each leg in that country.
     leg_surcharges: LEG_SURCHARGE_CENTS,
     plans: Object.entries(PLANS).map(([id, plan]) => ({
       id,
-      minutes: plan.minutes,
+      minutes: planMinutes(id, phone),
       features: plan.features,
       prices: id === 'free' ? null : Object.fromEntries(INTERVALS.map(i => [i, pick(PLAN_PRICES[region][id][i], currency)])),
     })),
@@ -161,7 +200,21 @@ export function catalogFor(phone) {
   };
 }
 
-export const planOf = user => (PLANS[user?.tier] ? user.tier : 'free');
+/**
+ * A new account tries Pro for 21 days, capped at 20 minutes, from its first
+ * call: a trial converts several times better than a permanent free tier, and
+ * the cap bounds what one account can cost (about $0.45 in the US). The
+ * shared monthly pool (GLOBAL_CALL_MINUTES_PER_MONTH) bounds all trials together.
+ */
+export const TRIAL_DAYS = 21;
+// Twenty minutes: two or three real calls, so the memory across calls can show itself.
+export const TRIAL_MINUTES = 20;
+// A trial call that starts with minutes left may finish, up to this long. Cutting a
+// first call off mid-sentence, with the owner's customer on the line, loses the user.
+export const TRIAL_CALL_GRACE_SECONDS = 15 * 60;
+export const onTrial = (user, now = Date.now()) => (user?.tier ?? 'free') === 'free'
+  && !!user?.trial_ends_at && new Date(user.trial_ends_at).getTime() > now;
+export const planOf = user => (onTrial(user) ? 'pro' : PLANS[user?.tier] ? user.tier : 'free');
 
 /**
  * What one minute of one leg costs us, in micro-dollars, before the actual

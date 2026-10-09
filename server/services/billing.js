@@ -1,13 +1,14 @@
 import * as database from '../db/pool.js';
-import { CREDIT_PACKS, PLANS, planOf } from '../lib/pricing.js';
+import { CREDIT_PACKS, PLANS, onTrial, planMinutes, planOf } from '../lib/pricing.js';
 import { parsePlanKey, productKeyFor } from '../lib/polar-products.js';
 import { PLAN_SECONDS_SQL } from '../db/plan-usage.js';
+import { claimNumber, incomingVoiceUrl } from '../db/claim-number.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // past_due keeps the plan while Polar retries the card; it ends in canceled or active.
 const GRANTING = ['active', 'trialing', 'past_due'];
 
-function ownerOf(data) {
+export function ownerOf(data) {
   const id = data?.customer?.external_id ?? data?.metadata?.user_id;
   return UUID.test(id ?? '') ? id : null;
 }
@@ -94,6 +95,21 @@ export function applyPolarEvent(webhookId, event) {
   });
 }
 
+/**
+ * A paid plan includes a business number, so hand it over as soon as the
+ * subscription lands rather than waiting for the owner to find the button.
+ * Runs after the webhook is acknowledged; if it fails, the button still works.
+ */
+export async function assignNumberAfterUpgrade(event, db = database, claim = claimNumber) {
+  if (!String(event?.type ?? '').startsWith('subscription.')) return null;
+  const userId = ownerOf(event.data);
+  const voiceUrl = incomingVoiceUrl();
+  if (!userId || !voiceUrl) return null;
+  const user = await db.queryOne('SELECT id, tier, agent_number FROM users WHERE id=$1 AND deleted_at IS NULL', [userId]);
+  if (!user || planOf(user) === 'free' || user.agent_number) return null;
+  return claim(user.id, voiceUrl);
+}
+
 /** Plan, minutes and credits as the app shows them. */
 export async function billingState(user, db = database) {
   const tier = planOf(user);
@@ -108,7 +124,9 @@ export async function billingState(user, db = database) {
   ]);
   return {
     tier,
-    minutes_included: PLANS[tier].minutes,
+    minutes_included: planMinutes(tier, user.phone, { trial: onTrial(user), override: user.minutes_override ?? null }),
+    trial_ends_at: onTrial(user) ? new Date(user.trial_ends_at).toISOString() : null,
+    trial_used: !!user.trial_ends_at,
     minutes_used: Math.round(usage.seconds / 6) / 10,
     credits_cents: credits.cents,
     business_number: number?.agent_number ?? null,

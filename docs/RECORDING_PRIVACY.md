@@ -42,7 +42,11 @@ investigation; the service does not guess which resource to delete.
   does not claim to wipe old database pages, operator backups, AI-provider logs
   or externally stored recordings. Before deployment, the operator must define
   backup expiry and ensure restoring a backup cannot restore deleted content.
-  No deployment backup policy has been verified yet.
+  No deployment backup policy has been verified yet. Since the security
+  hardening (see `SECURITY.md`), recordings, transcripts and notes are
+  encrypted with keys held outside the database, so backup copies are
+  unreadable on their own; content written before `encrypt-existing.js` ran
+  stays readable in older backups until they expire.
 
 ## Twilio receipt semantics
 

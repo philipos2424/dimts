@@ -1,11 +1,16 @@
 import { isE164 } from './phone.js';
 import { recordingPolicy } from './recording-policy.js';
 import { polarProducts } from './polar-products.js';
+import { validateKeyring } from './field-crypto.js';
+import { isEuDsn } from './sentry-privacy.cjs';
 
 // Validate before listening or migrating. Error messages name settings only;
 // never include database URLs, tokens or other configured values.
 export function validateDeployment(env = process.env) {
   recordingPolicy(env);
+  for (const name of ['SENTRY_DSN', 'EXPO_PUBLIC_SENTRY_DSN']) {
+    if (env[name] && !isEuDsn(env[name])) throw new Error(`Invalid ${name}: use a Sentry EU project DSN`);
+  }
   const required = name => { if (!env[name]?.trim()) throw new Error(`Set ${name}`); return env[name]; };
   const match = (name, pattern) => { if (!pattern.test(required(name))) throw new Error(`Invalid ${name}`); };
   function url(name, protocols) {
@@ -18,6 +23,9 @@ export function validateDeployment(env = process.env) {
   if (!['postgres:','postgresql:'].includes(database.protocol)) throw new Error('Invalid DATABASE_URL');
   const origin = url('PUBLIC_BASE_URL',['https:']);
   if (origin.pathname !== '/' || origin.search || /^(localhost|127\.|0\.|\[::1\])/i.test(origin.hostname)) throw new Error('Invalid PUBLIC_BASE_URL');
+  // Call content is encrypted with keys that never enter the database.
+  try { validateKeyring(env); } catch (err) { throw new Error(err.message); }
+  if (required('AUDIT_SALT').length < 32) throw new Error('AUDIT_SALT must have at least 32 characters');
   if (env.SKIP_TWILIO_SIGNATURE_CHECK === 'true') throw new Error('Production requires Twilio signature checks');
   if (env.CARRIER === 'telnyx') {
     match('TELNYX_ACCOUNT_SID',/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);

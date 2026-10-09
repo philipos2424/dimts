@@ -15,7 +15,14 @@ Return JSON:
            rest of what was discussed,
   next_moves: 2-4 short imperative suggestions for what the User should do
               next, ordered by importance,
-  action_items: [{task, owner}] - things someone explicitly committed to,
+  action_items: [{task, owner, due}] - things someone explicitly committed to.
+                due is when it must be done, in the User's local time:
+                "YYYY-MM-DDTHH:MM" when a clear time was said ("by noon
+                tomorrow", "at 15:00 Friday"), "YYYY-MM-DD" when only a day
+                was said or the time is ambiguous ("by Friday", "at 5"),
+                null when no deadline was said. Work out relative days
+                ("tomorrow", "next Monday", "end of the week" = Friday) from
+                the call date given before the transcript.
   key_points: [strings] - facts worth remembering, such as figures, names,
               dates and constraints,
   agreements: [{kind, subject, value, said_by, source_lines}] - specific
@@ -83,8 +90,8 @@ export function parseSummary(content) {
     action_items: actionItems
       .map((item) =>
         typeof item === 'string'
-          ? { task: item, owner: null }
-          : { task: item?.task ?? '', owner: item?.owner ?? null }
+          ? { task: item, owner: null, due: null }
+          : { task: item?.task ?? '', owner: item?.owner ?? null, due: cleanDue(item?.due) }
       )
       .filter((item) => item.task),
     key_points: (Array.isArray(data.key_points) ? data.key_points : [])
@@ -103,16 +110,41 @@ export function preserveTimeAmbiguity(summary, transcript) {
       ? { ...item, value: clean(item.value) } : item)) };
 }
 
-export async function summarize(transcript, { language, ...options } = {}) {
-  const numbered = transcript.split('\n').map((line, i) => `[${i + 1}] ${line}`).join('\n');
+const DUE = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?$/;
+
+/** A real calendar date (and time), or null: the model's due dates are checked, never trusted. */
+export function cleanDue(value) {
+  const m = typeof value === 'string' ? DUE.exec(value.trim()) : null;
+  if (!m) return null;
+  const [, y, mo, d, h = '00', mi = '00'] = m;
+  const date = new Date(Date.UTC(+y, +mo - 1, +d, +h, +mi));
+  const real = date.getUTCFullYear() === +y && date.getUTCMonth() === +mo - 1 && date.getUTCDate() === +d
+    && date.getUTCHours() === +h && date.getUTCMinutes() === +mi;
+  return real ? value.trim() : null;
+}
+
+/** "Call date: Wednesday 7 October 2026 at 14:30", in the owner's time zone, so relative deadlines resolve. */
+export function callDateLine(callTime, timezone) {
+  if (!callTime) return null;
+  let zone = 'UTC';
+  try { if (timezone) { new Intl.DateTimeFormat('en-GB', { timeZone: timezone }); zone = timezone; } } catch { /* stored zones are validated; fall back */ }
+  const when = new Intl.DateTimeFormat('en-GB', { timeZone: zone, weekday: 'long', day: 'numeric', month: 'long',
+    year: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(callTime));
+  return `Call date: ${when} (the User's local time)`;
+}
+
+export async function summarize(transcript, { language, callTime, timezone, ...options } = {}) {
+  const dateLine = callDateLine(callTime, timezone);
+  const numbered = (dateLine ? `${dateLine}\n\n` : '') + transcript.split('\n').map((line, i) => `[${i + 1}] ${line}`).join('\n');
   const result = parseSummary(await completeJson(summaryPrompt(language), numbered, {
     type: 'object', additionalProperties: false,
     properties: {
       summary: { type: 'string' },
       next_moves: { type: 'array', items: { type: 'string' } },
       action_items: { type: 'array', items: { type: 'object',
-        properties: { task: { type: 'string' }, owner: { type: ['string', 'null'], enum: ['User', 'Caller', null] } },
-        required: ['task', 'owner'], additionalProperties: false } },
+        properties: { task: { type: 'string' }, owner: { type: ['string', 'null'], enum: ['User', 'Caller', null] },
+          due: { type: ['string', 'null'] } },
+        required: ['task', 'owner', 'due'], additionalProperties: false } },
       key_points: { type: 'array', items: { type: 'string' } },
       agreements: { type: 'array', items: { type: 'object', additionalProperties: false,
         properties: { kind: { type: 'string' }, subject: { type: 'string' }, value: { type: 'string' },

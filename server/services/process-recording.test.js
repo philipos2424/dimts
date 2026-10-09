@@ -9,6 +9,11 @@ const touched = [];
 const transcriptions = [];
 const updates = [];
 let claimed = false;
+let errorAt;
+const failures = [];
+mock.module('../lib/sentry.js', { namedExports: {
+  captureCallFailure: (error, metadata) => failures.push({ error, metadata }),
+}});
 
 mock.module('../db/pool.js', {
   namedExports: {
@@ -25,14 +30,14 @@ mock.module('../db/pool.js', {
 
 mock.module('./originate.js', {
   namedExports: {
-    fetchRecording: async () => ({ ok: true, blob: async () => new Blob(['x']) }),
+    fetchRecording: async () => { if (errorAt === 'recording_fetch') throw new Error('PRIVATE'); return { ok: true, blob: async () => new Blob(['x']) }; },
     isE164: () => true,
   },
 });
 
 mock.module('./transcribe.js', {
   namedExports: {
-    transcribe: async (_audio, options) => { transcriptions.push(options); return ({
+    transcribe: async (_audio, options) => { transcriptions.push(options); if (errorAt === 'transcription') throw new Error('PRIVATE'); return ({
       text: 'Caller: hi this is Phili from Amax\nUser: hello',
       language: 'eng',
       languageProbability: 0.99,
@@ -43,18 +48,19 @@ mock.module('./transcribe.js', {
 
 mock.module('./summarize.js', {
   namedExports: {
-    summarize: async () => ({
+    summarize: async () => { if (errorAt === 'summary') throw new Error('PRIVATE'); return ({
       summary: 'Pricing discussion.',
       next_moves: ['Send pricing'],
       action_items: [],
       key_points: [],
-    }),
+    }); },
   },
 });
 
 mock.module('./identify.js', {
   namedExports: {
     identifyCaller: async () => {
+      identifyCalls += 1;
       if (identifyThrows) throw new Error('openai is down');
       return identity;
     },
@@ -69,6 +75,7 @@ mock.module('../db/contacts.js', {
   },
 });
 
+let identifyCalls = 0;
 const { processRecording } = await import('./process-recording.js');
 
 test.beforeEach(() => {
@@ -82,7 +89,10 @@ test.beforeEach(() => {
     contact_name_confidence: null,
   };
   identity = { name: 'Phili', company: 'Amax', confidence: 0.92 };
+  errorAt = undefined;
+  failures.length = 0;
   identifyThrows = false;
+  identifyCalls = 0;
   adopted.length = 0;
   touched.length = 0;
   transcriptions.length = 0;
@@ -107,6 +117,7 @@ test('does not overwrite a name the user set', async () => {
 
   assert.equal(adopted.length, 0);
   assert.deepEqual(touched, ['c1'], 'still records that we spoke');
+  assert.equal(identifyCalls, 0, 'no model call for a name that cannot change');
 });
 
 test('skips naming below the confidence floor', async () => {
@@ -153,4 +164,36 @@ test('interrupted processing releases its lease and keeps a recoverable error', 
   assert.match(failed.sql, /processing_token = NULL/);
   assert.match(failed.sql, /processing_token = \$3/);
   assert.doesNotMatch(failed.sql, /recording_url\s*=/);
+});
+
+test('with encryption keys set, the transcript, raw response and summary are stored sealed for the owner', async () => {
+  const { randomBytes } = await import('node:crypto');
+  const { openValue } = await import('../lib/field-crypto.js');
+  process.env.DATA_ENCRYPTION_KEYS = `t1:${randomBytes(32).toString('base64')}`;
+  try {
+    call = { ...call, id: '0b3f2b6e-1111-4111-8111-111111111111', user_id: '0b3f2b6e-2222-4222-8222-222222222222' };
+    await processRecording(call.id);
+    const final = updates.find(u => /status = 'ready'/.test(u.sql));
+    const [, transcript, raw, summary] = final.params;
+    assert.ok(transcript.startsWith('dmt1.') && !transcript.includes('Phili'));
+    assert.equal(openValue(transcript), 'Caller: hi this is Phili from Amax\nUser: hello');
+    assert.deepEqual(openValue(JSON.parse(raw)), {});
+    assert.equal(openValue(summary), 'Pricing discussion.');
+    assert.ok(transcript.includes(call.user_id) && transcript.includes(call.id), 'bound to this owner and call');
+  } finally { delete process.env.DATA_ENCRYPTION_KEYS; }
+});
+
+for (const stage of ['recording_fetch', 'transcription', 'summary']) {
+  test(stage + ' failure reports call metadata and still persists failure/rethrows', async () => {
+    errorAt = stage;
+    await assert.rejects(processRecording(call.id), /PRIVATE/);
+    assert.equal(failures.length, 1);
+    assert.equal(failures[0].metadata.callId, call.id);
+    assert.equal(failures[0].metadata.stage, stage);
+    assert.ok(updates.some(update => update.sql.includes("status = 'failed'")));
+  });
+}
+test('successful processing emits no failure event', async () => {
+  await processRecording(call.id);
+  assert.equal(failures.length, 0);
 });

@@ -4,6 +4,7 @@ import { HttpError, resolveUser } from '../lib/users.js';
 import { deleteContact } from '../services/delete-account.js';
 import { audit } from '../lib/audit.js';
 import { listPromises } from './promises.js';
+import { sealText } from '../lib/field-crypto.js';
 
 export const contactsRouter = express.Router();
 const escape = (text) => String(text ?? '').replace(/\\/g, '\\\\')
@@ -26,10 +27,12 @@ contactsRouter.patch('/:id', async (req, res) => {
       typeof company !== 'string' || company.length > 200 || typeof notes !== 'string' || notes.length > 5000) {
     throw new HttpError(400, 'invalid_contact', 'Enter a name and keep notes under 5000 characters.');
   }
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.params.id)) throw new HttpError(404, 'contact_not_found');
   const row = await queryOne(`UPDATE contacts SET display_name = $3, company = $4,
     notes = $5, name_source = 'user' WHERE id = $1 AND user_id = $2
     RETURNING id, phone, display_name, company, notes, name_source, last_call_at`,
-  [req.params.id, user.id, display_name.trim(), company.trim(), notes.trim()]);
+  [req.params.id, user.id, display_name.trim(), company.trim(),
+    notes.trim() ? sealText(notes.trim(), { userId: user.id, rowId: req.params.id, field: 'contacts:notes' }) : '']);
   if (!row) throw new HttpError(404, 'contact_not_found');
   res.json(row);
 });

@@ -2,13 +2,13 @@
 
 > **DRAFT. Requires review by a qualified lawyer before the EU launch.**
 > The app shows this text from `src/legal.ts`. Keep the two in sync.
-> Version `2026-10-05` (matches `TERMS_VERSION`).
+> Version `2026-10-07` (matches `TERMS_VERSION`).
 
 ## Who we are
 Dimts is an AI assistant for business phone calls. For your account data,
 Dimts is the **controller**. For the people you speak with, **you** are the
-controller, and Dimts processes their data on your instructions as your
-**processor**.
+controller: you decide to record them and need a lawful basis for it, and
+Dimts processes their data only on your instructions as your **processor**.
 
 ## What we collect
 - Your phone number and account settings.
@@ -34,11 +34,15 @@ controller, and Dimts processes their data on your instructions as your
 - **Contract**, for providing the service to you.
 - **Legitimate interests**, for security logs and for measuring how the
   service is used.
-- **Your instructions as controller**, for the people you call.
+- For the people you call, **you** choose the basis as controller: usually
+  your **legitimate interest** in an accurate record of business calls, or
+  their **consent** where local law requires it (Dimts asks every person to
+  press 1 on calls to or from Germany, Austria and the Gulf).
 
 We do not sell your data or use it for advertising. We do not train AI models
 on your calls, and we do not identify people by their voice. Questions you ask about your calls are answered and then
 discarded; we do not store them.
+Our transcription and AI providers process call audio and transcripts only to return a result to us and may not use them to train their models. Unless a zero-retention agreement is in place, they may keep them for a limited period (typically up to 30 days) to detect abuse, then delete them.
 
 ## Recording notice
 Every recorded call begins with: *"This call is recorded and summarized by
@@ -60,10 +64,13 @@ recorded if either declines.
 See the [list of subprocessors](subprocessors.md).
 
 ## How long we keep it
-Until you delete it, or for the period you choose in Settings (3, 6, 12 or
-24 months), after which calls are deleted automatically. You can delete a
+For 12 months, unless you choose another period in Settings (3, 6 or 24
+months, or until you delete them), after which calls are deleted
+automatically. You can delete a
 call, a contact or your whole account in Settings. Deleted recordings are
-removed from our storage and from our call provider.
+removed from our storage and from our call provider. Encrypted database
+backups expire on their own schedule; deleted content in them cannot be read
+without keys held outside the database.
 Activity-log entries are kept for one year and contain no call content.
 
 ## Your rights
@@ -75,9 +82,19 @@ Activity-log entries are kept for one year and contain no call content.
 - **Complaints:** contact `privacy@dimts.app` or your local data protection authority.
 
 ## Security
-- Encryption in transit (TLS) and at rest (AES-256).
-- Per-account access control and rate limiting.
-- Private storage that only our server can read.
+- Encryption in transit (TLS).
+- Call recordings, transcripts, summaries, drafts and contact notes are
+  encrypted before they are stored, with a key unique to your account
+  (AES-256-GCM). The master keys are kept outside the database, so a copy of
+  the database or its backups alone does not reveal any conversation.
+  Short structured notes (agreements, next steps) are protected by the
+  storage provider's disk encryption only.
+- Private storage that only our server can read, per-account access control
+  and rate limiting.
+- An optional app lock (Face ID, fingerprint or passcode) that also hides
+  calls in the app switcher.
+- A list of every signed-in device, a warning when a new device signs in,
+  and one tap to sign out everywhere.
 - A user-visible activity log.
 - Staff access: our support tools do not show calls, transcripts, notes or
   contacts. Staff see account, usage and billing details only to help you,

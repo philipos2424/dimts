@@ -1,3 +1,4 @@
+import { captureCallFailure } from '../lib/sentry.js';
 import express from 'express';
 import { pipeline } from 'node:stream/promises';
 import { config } from '../config.js';
@@ -43,15 +44,16 @@ const LIST_COLUMNS = `
 async function reapStaleCalls(userId) {
   await expireRecordingWait(userId);
   await expireProcessing(userId);
-  await query(
+  const stale = await query(
     `UPDATE calls
         SET status = 'failed',
             error = COALESCE(error, 'No answer - call timed out')
       WHERE user_id = $1
         AND status IN ('initiating', 'ringing')
-        AND created_at < now() - ($2 || ' minutes')::interval`,
+        AND created_at < now() - ($2 || ' minutes')::interval RETURNING id`,
     [userId, String(config.staleCallMinutes)]
   );
+  for (const row of stale.rows) captureCallFailure(new Error('Call timed out'), { callId: row.id, userId, stage: 'call' });
 }
 
 callsRouter.post('/', async (req, res, next) => {
@@ -108,6 +110,7 @@ callsRouter.post('/', async (req, res, next) => {
         sid,
       ]);
     } catch (err) {
+      captureCallFailure(err, { callId: call.id, userId: user.id, stage: 'originate' });
       // Keep the row so the failure is visible in Recents rather than the
       // call vanishing with only a toast.
       await query(

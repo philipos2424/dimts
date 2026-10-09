@@ -29,7 +29,7 @@ const call = async (userId, months) => (await db.query(`INSERT INTO calls(user_i
 
 test('the owner chooses how long calls are kept; only allowed periods are accepted and the change is audited', async () => {
   const o = await signedIn('+15555550901');
-  assert.equal((await api('/api/me', o.token)).body.retention_months, null);
+  assert.equal((await api('/api/me', o.token)).body.retention_months, 12, 'new accounts keep calls for a year');
   assert.equal((await api('/api/me', o.token, { method: 'PATCH', body: { retention_months: 5 } })).status, 400);
   const saved = await api('/api/me', o.token, { method: 'PATCH', body: { retention_months: 6 } });
   assert.equal(saved.status, 200); assert.equal(saved.body.retention_months, 6); assert.equal(saved.body.language, 'en');
@@ -42,13 +42,29 @@ test('the owner chooses how long calls are kept; only allowed periods are accept
 test('the daily sweep deletes only calls past their owner\'s period, and only with the cron secret', async () => {
   const keeps = await signedIn('+15555550902'), limited = await signedIn('+15555550903');
   await db.query('UPDATE users SET retention_months=3 WHERE id=$1', [limited.id]);
+  await db.query('UPDATE users SET retention_months=NULL WHERE id=$1', [keeps.id]);
   const old = await call(limited.id, 4), recent = await call(limited.id, 1), forever = await call(keeps.id, 30);
   assert.equal((await fetch(origin + '/api/cron/retention')).status, 401);
   const result = await fetch(origin + '/api/cron/retention', { headers: { Authorization: 'Bearer retention-cron-secret-123' } }).then(r => r.json());
-  assert.deepEqual(result, { deleted: 1, skipped: 0, auditExpired: 0, numbers: { released: 0 }, costs: { skipped: 'telnyx_not_configured' } });
+  assert.deepEqual(result, { deleted: 1, skipped: 0, forgotten: 0, auditExpired: 0, numbers: { released: 0 }, costs: { skipped: 'telnyx_not_configured' } });
   const rows = Object.fromEntries((await db.query('SELECT id, deleted_at, transcript FROM calls WHERE id = ANY($1)', [[old, recent, forever]])).rows.map(r => [r.id, r]));
   assert.ok(rows[old].deleted_at); assert.equal(rows[old].transcript, null);
   assert.equal(rows[recent].deleted_at, null); assert.equal(rows[forever].deleted_at, null);
   const audited = (await db.query("SELECT target_id FROM audit_events WHERE user_id=$1 AND action='call_auto_deleted'", [limited.id])).rows;
   assert.deepEqual(audited.map(r => r.target_id), [old]);
+});
+
+test('contacts the AI created are forgotten once their calls are past the period; contacts the owner edited stay', async () => {
+  const o = await signedIn('+15555550904');
+  await db.query('UPDATE users SET retention_months=3 WHERE id=$1', [o.id]);
+  const contact = async (phone, source, months) => (await db.query(`INSERT INTO contacts(user_id,phone,display_name,name_source,last_call_at)
+    VALUES($1,$2,'Name',$3,now()-make_interval(months=>$4)) RETURNING id`, [o.id, phone, source, months])).rows[0].id;
+  const stale = await contact('+15555550911', 'extracted', 5), edited = await contact('+15555550912', 'user', 5);
+  const fresh = await contact('+15555550913', 'extracted', 1), linked = await contact('+15555550914', 'extracted', 5);
+  await db.query(`INSERT INTO calls(user_id,user_phone,destination,status,direction,contact_id) VALUES($1,'+1','+15555550914','ready','outbound',$2)`, [o.id, linked]);
+  const result = await fetch(origin + '/api/cron/retention', { headers: { Authorization: 'Bearer retention-cron-secret-123' } }).then(r => r.json());
+  assert.equal(result.forgotten, 1);
+  const left = (await db.query('SELECT id FROM contacts WHERE user_id=$1', [o.id])).rows.map(r => r.id).sort();
+  assert.deepEqual(left, [edited, fresh, linked].sort());
+  assert.equal((await db.query("SELECT count(*)::int n FROM audit_events WHERE action='contact_auto_deleted' AND target_id=$1", [stale])).rows[0].n, 1);
 });

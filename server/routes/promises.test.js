@@ -51,3 +51,33 @@ test('marking a promise done hides it; reopening brings it back; other people ca
   await api(`/api/promises/${id}/0`, o.token, 'POST', { status: 'open' });
   assert.equal((await api('/api/promises', o.token)).body.you_owe.length, 1);
 });
+
+test('a promise past its deadline is overdue and comes first; deadlines are read in the owner time zone', async () => {
+  const o = await signedIn('+15555551077');
+  // Nairobi has no daylight saving, so the expected instants never drift.
+  await db.query("UPDATE users SET timezone='Africa/Nairobi' WHERE id=$1", [o.id]);
+  const day = offset => new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
+  await call(o, [
+    { task: 'Send the contract', owner: 'User', due: `${day(3)}T12:00` },
+    { task: 'Pay the deposit', owner: 'User', due: day(-2) },
+    { task: 'Call the bank', owner: 'User', due: null },
+    { task: 'Garbage due', owner: 'User', due: 'tomorrow' },
+  ]);
+  const { body } = await api('/api/promises', o.token);
+  assert.deepEqual(body.you_owe.map(p => [p.task, p.overdue]),
+    [['Pay the deposit', true], ['Send the contract', false], ['Call the bank', false], ['Garbage due', false]]);
+  const contract = body.you_owe.find(p => p.task === 'Send the contract');
+  assert.equal(contract.due, `${day(3)}T12:00`);
+  // Noon in Nairobi (UTC+3) is 09:00 UTC.
+  assert.equal(contract.due_at, `${day(3)}T09:00:00.000Z`);
+  // A bare date is due at the end of that day: midnight Nairobi, 21:00 UTC the same day.
+  assert.equal(body.you_owe[0].due_at, `${day(-2)}T21:00:00.000Z`);
+});
+
+test('the app can set the owner time zone; nonsense is refused', async () => {
+  const o = await signedIn('+15555551078');
+  const ok = await api('/api/me', o.token, 'PATCH', { timezone: 'Europe/London' });
+  assert.equal(ok.status, 200); assert.equal(ok.body.timezone, 'Europe/London');
+  assert.equal((await api('/api/me', o.token, 'PATCH', { timezone: 'Mars/Olympus' })).status, 400);
+  assert.equal((await api('/api/me', o.token, 'PATCH', { timezone: "UTC'; DROP TABLE users;--" })).status, 400);
+});

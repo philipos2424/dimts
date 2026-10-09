@@ -8,7 +8,9 @@ import React, {
   useState,
 } from 'react';
 import { type Key, type Lang, translate } from './i18n';
-import { acceptTerms as acceptTermsApi, ApiError, getMe, logout, patchLanguage, setApiSession } from './api';
+import { AppState as AppLifecycle } from 'react-native';
+import { acceptTerms as acceptTermsApi, ApiError, getMe, getPromises, logout, patchLanguage, patchTimezone, setApiSession } from './api';
+import { syncPromiseReminders } from './reminders';
 import { TERMS_VERSION } from './legal';
 import { readSession, storeSession } from './session';
 
@@ -35,6 +37,18 @@ type AppState = {
 
 const AppContext = createContext<AppState | null>(null);
 
+/** Promise deadlines are read in the owner's time zone; keep the server's copy in step with the phone. */
+function syncTimezone(stored: string | null | undefined) {
+  let zone: string | undefined;
+  try { zone = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { return; }
+  if (zone && zone !== stored) patchTimezone(zone).catch(() => {});
+}
+
+/** Reschedule promise reminders: on sign-in and whenever the app comes back to the foreground. */
+function refreshReminders() {
+  getPromises().then(syncPromiseReminders).catch(() => {});
+}
+
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
   const [lang, setLangState] = useState<Lang>('en');
@@ -56,6 +70,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           setApiSession(token);
           try {
             const me = await getMe(); setPhoneState(me.phone); setTermsRequired(me.terms_required);
+            syncTimezone(me.timezone);
             // The server's language is the account's; the device follows it.
             if (me.language === 'am' || me.language === 'en') setLangState(me.language);
           }
@@ -74,6 +89,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
     })();
   }, []);
+
+  // Reminders follow the latest promises: after sign-in and each return to the app.
+  useEffect(() => {
+    if (!userPhone) return;
+    refreshReminders();
+    const sub = AppLifecycle.addEventListener('change', state => { if (state === 'active') refreshReminders(); });
+    return () => sub.remove();
+  }, [userPhone]);
 
   const setLang = useCallback((next: Lang) => {
     setLangState(next);
@@ -100,6 +123,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     try {
       const me = await getMe();
       setTermsRequired(me.terms_required);
+      syncTimezone(me.timezone);
       if (me.language === 'am' || me.language === 'en') setLangState(me.language);
     } catch { setTermsRequired(true); }
     setPhoneState(phone);

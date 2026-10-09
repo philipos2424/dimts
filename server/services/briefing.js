@@ -6,10 +6,10 @@ const MONEY = /(\d|[$€£]|\bbirr\b|ብር|\bpay|\bpaid|\bowe|invoice|deposit|b
 const DAY = 86_400_000;
 
 const ageDays = (date, now) => Math.max(0, Math.floor((now - new Date(date)) / DAY));
-// Money items first, then the oldest: the longer a promise waits, the more it slips.
+// Overdue first, then money, then the oldest: the longer a promise waits, the more it slips.
 const rank = (items, now) => items
   .map(item => ({ ...item, age_days: ageDays(item.created_at, now), money: MONEY.test(item.task ?? '') }))
-  .sort((a, b) => Number(b.money) - Number(a.money) || b.age_days - a.age_days);
+  .sort((a, b) => Number(b.overdue) - Number(a.overdue) || Number(b.money) - Number(a.money) || b.age_days - a.age_days);
 
 /**
  * What needs attention this week, built only from facts already stored on the
@@ -57,7 +57,8 @@ export async function weeklyBriefing(userId, now = new Date()) {
     waiting_on: waitingOn.slice(0, 5),
     conflicts: conflicts.map(row => ({ ...row, count: Number(row.count) })),
     next_moves: nextMoves.filter(row => row.move),
-    totals: { you_owe: youOwe.length, waiting_on: waitingOn.length, money: money.length, conflicts: conflicts.length },
+    totals: { you_owe: youOwe.length, waiting_on: waitingOn.length, money: money.length, conflicts: conflicts.length,
+      overdue: youOwe.filter(p => p.overdue).length },
   };
 }
 

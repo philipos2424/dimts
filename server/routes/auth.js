@@ -1,4 +1,5 @@
 import express from 'express';
+import { capture } from '../lib/analytics.js';
 import { randomBytes } from 'node:crypto';
 import { query, queryOne } from '../db/pool.js';
 import { config } from '../config.js';
@@ -7,6 +8,8 @@ import { canCall, signupCountryCode } from '../lib/destinations.js';
 import { hashToken, HttpError, resolveUser } from '../lib/users.js';
 import { checkPhoneCode, sendPhoneCode } from '../services/verify-phone.js';
 import { audit } from '../lib/audit.js';
+import { defer } from '../lib/defer.js';
+import { sendNewSignInNotification } from '../services/sign-in-alert.js';
 import { hit } from '../lib/rate-limit.js';
 import { hasAcceptedTerms } from '../lib/terms.js';
 import { checkReviewDemoCode, isReviewDemo } from '../lib/review-demo.js';
@@ -57,17 +60,32 @@ authRouter.post('/verify', async (req, res) => {
   const user = await queryOne(
     `INSERT INTO users (phone) VALUES ($1)
      ON CONFLICT (phone) DO UPDATE SET phone = EXCLUDED.phone
-     RETURNING id, phone, tier, terms_version`, [phone]
+     RETURNING id, phone, tier, terms_version, (xmax = 0) AS created`, [phone]
   );
   if (demo) await resetReviewDemo(user);
+  if (user.created && !demo) defer(capture(user.id, 'signed_up', { country: signupCountryCode(phone) ?? 'other' }), 'analytics');
   const token = randomBytes(32).toString('hex');
+  const device = deviceName(req);
   await query(
-    `INSERT INTO sessions (token_hash, user_id, expires_at)
-     VALUES ($1, $2, now() + interval '30 days')`, [hashToken(token), user.id]
+    `INSERT INTO sessions (token_hash, user_id, expires_at, device_name, last_seen_at)
+     VALUES ($1, $2, now() + interval '30 days', $3, now())`, [hashToken(token), user.id, device]
   );
   await audit({ userId: user.id, action: 'signed_in', req });
+  if (!demo) defer(sendNewSignInNotification(user.id, hashToken(token), device), `new-sign-in:${user.id}`);
   res.set('Cache-Control', 'no-store').json({ token, phone: user.phone, terms_required: !hasAcceptedTerms(user) });
 });
+
+/** A short label for Settings › Signed-in devices; the app sends its own, browsers get one from the user agent. */
+export function deviceName(req) {
+  const sent = req.body?.device;
+  if (typeof sent === 'string' && sent.trim()) return sent.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 60);
+  const agent = req.get('user-agent') ?? '';
+  const os = /iPhone|iPad/.test(agent) ? 'iPhone' : /Android/.test(agent) ? 'Android' : /Mac OS X/.test(agent) ? 'Mac'
+    : /Windows/.test(agent) ? 'Windows' : /Linux/.test(agent) ? 'Linux' : null;
+  const browser = /Edg\//.test(agent) ? 'Edge' : /Chrome\//.test(agent) ? 'Chrome' : /Firefox\//.test(agent) ? 'Firefox'
+    : /Safari\//.test(agent) ? 'Safari' : null;
+  return [browser, os].filter(Boolean).join(' on ') || 'Unknown device';
+}
 
 authRouter.post('/logout', async (req, res) => {
   const user = await resolveUser(req);

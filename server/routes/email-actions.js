@@ -4,6 +4,7 @@ import * as database from '../db/pool.js';
 import { resolveUser, HttpError } from '../lib/users.js';
 import { validateReviewedFollowups } from '../services/followups.js';
 import { createGmailDraft, findGmailDraft } from '../services/gmail.js';
+import { sealJson } from '../lib/field-crypto.js';
 
 export const emailActionsRouter = Router();
 function receipt(action) {
@@ -46,7 +47,8 @@ emailActionsRouter.post('/:id/followups/email/action', async (req, res) => {
       VALUES($1,$2,$3,$4,$5,$6,'pending',$7,$8,now()+interval '2 minutes')
       ON CONFLICT(call_id) DO UPDATE SET connection_id=excluded.connection_id,proposal_version=excluded.proposal_version,
         email=excluded.email,status='pending',error_code=NULL,draft_id=NULL,lease_token=excluded.lease_token,lease_until=excluded.lease_until,updated_at=now() RETURNING *`,
-      [id, call.id, user.id, connection.connection_id, call.followups_version, JSON.stringify(email), `dimts-${id}@dimts.invalid`, token]);
+      [id, call.id, user.id, connection.connection_id, call.followups_version,
+        sealJson(email, { userId: user.id, rowId: id, field: 'email_actions:email' }), `dimts-${id}@dimts.invalid`, token]);
     return { action, create: true };
   });
   if (!reservation.create) return res.json({ action: receipt(reservation.action) });

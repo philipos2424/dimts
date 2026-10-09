@@ -4,6 +4,7 @@ import * as database from '../db/pool.js';
 import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { resolveUser, HttpError } from '../lib/users.js';
+import { sealJson } from '../lib/field-crypto.js';
 import { generateFollowups, validateReviewedFollowups } from '../services/followups.js';
 
 export const followupsRouter = express.Router();
@@ -26,7 +27,7 @@ async function persist(callId, userId, draft, version, kind, generating = false,
     INSERT INTO followup_events(call_id,user_id,kind,version)
     SELECT id,user_id,$5,followups_version FROM changed RETURNING id
   ) SELECT followups FROM changed`,
-    [callId, userId, JSON.stringify({ ...draft, version: version + 1 }), version, kind, generating, replacing]);
+    [callId, userId, sealJson({ ...draft, version: version + 1 }, { userId, rowId: callId, field: 'calls:followups' }), version, kind, generating, replacing]);
     return rows[0];
   });
 }

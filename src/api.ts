@@ -28,7 +28,9 @@ export type Agreement = { kind: string; subject: string; value: string; said_by:
   quote: string; line: number; start: number | null };
 export type Conflict = { new_index: number; previous_call_id: string; previous_index: number; note: string };
 export type PromiseItem = { call_id: string; index: number; task: string; contact_id: string | null;
-  contact_name: string | null; phone: string; created_at: string };
+  contact_name: string | null; phone: string; created_at: string;
+  /** Deadline in the owner's local time: "2026-10-08T12:00" or "2026-10-09"; null when none was said. */
+  due: string | null; due_at: string | null; overdue: boolean };
 export type Promises = { you_owe: PromiseItem[]; waiting_on: PromiseItem[] };
 export type Citation = { call_id: string; contact_name: string | null; created_at: string; line: number; quote: string; start: number | null };
 export type AskDraft = { subject: string; body: string };
@@ -38,6 +40,10 @@ export type Person = {
   calls: { id: string; created_at: string; direction: string; status: string; duration_sec: number | null; summary: string | null; agreements: Agreement[] | null }[];
   promises: Promises;
 };
+/** Funnel events only the app can see; fire and forget. */
+export function trackEvent(event: 'paywall_viewed' | 'recap_shared') {
+  request('/api/events', '', { method: 'POST', body: JSON.stringify({ event }) }).catch(() => {});
+}
 export function getPromises() { return request<Promises>('/api/promises', ''); }
 type BriefingPromise = PromiseItem & { age_days: number; money: boolean };
 export type Briefing = {
@@ -47,7 +53,7 @@ export type Briefing = {
   you_owe: BriefingPromise[]; waiting_on: BriefingPromise[];
   conflicts: { call_id: string; created_at: string; contact_name: string | null; count: number; note: string | null }[];
   next_moves: { call_id: string; created_at: string; contact_name: string | null; move: string }[];
-  totals: { you_owe: number; waiting_on: number; money: number; conflicts: number };
+  totals: { you_owe: number; waiting_on: number; money: number; conflicts: number; overdue?: number };
 };
 export function getBriefing() { return request<Briefing>('/api/briefing', ''); }
 export function setPromise(callId: string, index: number, status: 'open' | 'done' | 'dismissed') {
@@ -63,6 +69,10 @@ export function askQuestion(question: string, history: AskTurn[] = []) {
 export function getPerson(id: string) { return request<Person>(`/api/contacts/${encodeURIComponent(id)}`, ''); }
 export function renameContact(id: string, display_name: string, company: string, notes: string) {
   return request(`/api/contacts/${encodeURIComponent(id)}`, '', { method: 'PATCH', body: JSON.stringify({ display_name, company, notes }) });
+}
+/** The phone's IANA time zone, so the server reads "tomorrow at noon" in the owner's own time. */
+export function patchTimezone(timezone: string) {
+  return request<{ timezone: string }>('/api/me', '', { method: 'PATCH', body: JSON.stringify({ timezone }) });
 }
 export function patchLanguage(language: 'en' | 'am') {
   return request<{ language: string }>('/api/me', '', { method: 'PATCH', body: JSON.stringify({ language }) });
@@ -174,6 +184,9 @@ export type Interval = 'month' | 'year';
 export type Billing = {
   tier: PlanId;
   minutes_included: number;
+  /** Set while a free account is on its 21-day Pro trial. */
+  trial_ends_at?: string | null;
+  trial_used?: boolean;
   minutes_used: number;
   /** 1 credit = 1 US cent. */
   credits_cents: number;
@@ -186,6 +199,7 @@ export type Billing = {
     region: 'standard' | 'lite';
     currency: string;
     overage_cents_per_min: number;
+    overage_leg_extra_cents?: Record<string, number>;
     leg_surcharges: Record<string, number>;
     plans: { id: PlanId; minutes: number; features: string[]; prices: Record<Interval, Price> | null }[];
     credit_packs: { id: string; credits: number; price: Price }[];
@@ -219,13 +233,33 @@ export function authHeaders(userPhone: string): Record<string, string> {
 export function sendLoginCode(phone: string, channel: 'sms' | 'call' = 'sms') {
   return request('/api/auth/start', '', { method: 'POST', body: JSON.stringify({ phone, channel }) });
 }
+/** Shown in Settings › Signed-in devices; browsers are named by the server from the user agent. */
+function deviceName(): string | undefined {
+  if (Platform.OS === 'ios') return Platform.isPad ? 'iPad (Dimts app)' : 'iPhone (Dimts app)';
+  if (Platform.OS === 'android') {
+    const model = (Platform.constants as { Model?: string }).Model;
+    return `${model?.trim() || 'Android phone'} (Dimts app)`;
+  }
+  return undefined;
+}
 export function verifyLoginCode(phone: string, code: string) {
   return request<{ token: string; phone: string }>('/api/auth/verify', '', {
-    method: 'POST', body: JSON.stringify({ phone, code }),
+    method: 'POST', body: JSON.stringify({ phone, code, device: deviceName() }),
   });
 }
+export type SignedInDevice = { id: string; device_name: string | null; created_at: string; last_seen_at: string | null; current: boolean };
+export function getSessions() {
+  return request<{ sessions: SignedInDevice[] }>('/api/me/sessions', '').then(r => r.sessions);
+}
+export function endSession(id: string) {
+  return request<{ status: string; current: boolean }>(`/api/me/sessions/${encodeURIComponent(id)}`, '', { method: 'DELETE' });
+}
+/** Signs out every other device; with all, this one too. */
+export function endOtherSessions(all = false) {
+  return request<{ ended: number }>(`/api/me/sessions/revoke${all ? '?all=1' : ''}`, '', { method: 'POST' });
+}
 export function getMe() {
-  return request<{ phone: string; tier: string; agent_number: string | null; terms_required: boolean; language: 'en' | 'am'; retention_months: Retention; caller_id?: boolean; number_release_at?: string | null }>('/api/me', '');
+  return request<{ phone: string; tier: string; agent_number: string | null; terms_required: boolean; language: 'en' | 'am'; retention_months: Retention; timezone?: string | null; caller_id?: boolean; number_release_at?: string | null }>('/api/me', '');
 }
 export function startCallerId(method: 'call' | 'sms' = 'call') {
   return request<{ status: 'code_sent' | 'verified' }>('/api/me/caller-id/start', '', { method: 'POST', body: JSON.stringify({ method }) });
@@ -297,10 +331,10 @@ function publicErrorMessage(status: number, body: string): string {
     caller_id_rejected: 'The carrier could not verify this number. Check it can receive calls, then try again.',
     caller_id_unavailable: 'Showing your own number is not available yet.',
     invalid_verification: 'Check your phone number and verification code, then try again.',
-    verification_trial_number_required: 'This pilot uses a Twilio trial account. Verify this mobile number in Twilio first, or use a verified test number.',
-    verification_country_disabled: 'Verification messages are not enabled for this country. The operator needs to check Twilio Verify geographic permissions.',
-    destination_trial_number_required: 'The other phone must be verified in this Twilio trial account. Add it under Verified Caller IDs, then try again. No call was started.',
-    handset_trial_number_required: 'Your answering phone must be verified in the connected Twilio trial account before this call can start.',
+    verification_trial_number_required: 'Dimts cannot text this number yet. Try again later or contact support.',
+    verification_country_disabled: 'Dimts cannot send codes to this country yet.',
+    destination_trial_number_required: 'Dimts cannot call this number yet. No call was started.',
+    handset_trial_number_required: 'Dimts cannot ring your phone yet. No call was started.',
     country_not_supported: 'Dimts is not available for phone numbers in this country yet.',
     destination_not_supported: 'Dimts cannot call numbers in this country or premium-rate numbers. No call was started.',
     handset_not_supported: 'Dimts cannot ring your phone number in this country. No call was started.',
@@ -318,6 +352,7 @@ function publicErrorMessage(status: number, body: string): string {
     billing_unavailable: 'Payments are unavailable right now. Try again in a minute.',
     invalid_item: 'That plan is not available. Reload and try again.',
     number_pool_empty: 'No business number is available yet. Your account is still saved.',
+    number_country_unavailable: 'Business numbers are not available in your country yet. You can still make recorded calls.',
     recording_check_cooldown: 'Please wait a minute before checking the recording again.',
     recording_not_recoverable: 'This call is not eligible for recording recovery.',
     processing_active: 'Your notes are still being prepared. Refresh to check their progress.',
@@ -330,6 +365,7 @@ function publicErrorMessage(status: number, body: string): string {
     recap_failed: 'Couldn’t write a recap. Try again.',
     call_not_ready: 'The notes for this call are not ready yet.',
     invalid_question: 'Ask a question between 3 and 500 characters.',
+    ai_unavailable: 'Dimts AI is not answering right now. Try again in a minute.',
     promise_not_found: 'This promise is no longer available. Refresh and try again.',
   };
   if (typeof code === 'string' && Object.prototype.hasOwnProperty.call(messages, code)) return messages[code];

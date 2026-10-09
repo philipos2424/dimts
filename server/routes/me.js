@@ -1,7 +1,6 @@
 import express from 'express';
-import { config } from '../config.js';
 import { query, queryOne } from '../db/pool.js';
-import { claimNumber } from '../db/claim-number.js';
+import { claimNumber, incomingVoiceUrl } from '../db/claim-number.js';
 import { HttpError, resolveUser } from '../lib/users.js';
 import { TERMS_VERSION, hasAcceptedTerms } from '../lib/terms.js';
 import { audit } from '../lib/audit.js';
@@ -10,7 +9,7 @@ import { hit } from '../lib/rate-limit.js';
 import { buildExport } from '../services/export-user.js';
 import { deleteAccount } from '../services/delete-account.js';
 import { liveSubscriptionIds } from '../services/billing.js';
-import { planOf } from '../lib/pricing.js';
+import { onTrial, planOf } from '../lib/pricing.js';
 import { revokeSubscription } from '../services/polar.js';
 import { RETENTION_MONTHS } from '../services/retention.js';
 import { refuseForReviewDemo } from '../lib/review-demo.js';
@@ -22,12 +21,12 @@ meRouter.post('/number', async (req, res, next) => {
     const user = await resolveUser(req);
     refuseForReviewDemo(user);
     if (user.agent_number) return res.json({ agent_number: user.agent_number });
-    // Each number costs about $1 a month whether or not it rings, so it comes with a paid plan.
-    if (planOf(user) === 'free') throw new HttpError(402, 'plan_required', 'A business number comes with Pro and Business.');
-    if (!process.env.PUBLIC_BASE_URL) throw new HttpError(503, 'routing_unavailable', 'Business-number routing is not configured yet.');
-    const base = new URL(config.publicBaseUrl);
-    if (base.protocol !== 'https:') throw new HttpError(503, 'routing_unavailable');
-    res.json(await claimNumber(user.id, `${config.publicBaseUrl}/twiml/incoming`));
+    // Each number costs about $1 a month whether or not it rings, so it comes
+    // with a paid plan only; a trial does not include one.
+    if (planOf(user) === 'free' || onTrial(user)) throw new HttpError(402, 'plan_required', 'A business number comes with Pro and Business.');
+    const voiceUrl = incomingVoiceUrl();
+    if (!voiceUrl) throw new HttpError(503, 'routing_unavailable', 'Business-number routing is not configured yet.');
+    res.json(await claimNumber(user.id, voiceUrl));
   } catch (err) { next(err); }
 });
 
@@ -82,6 +81,7 @@ meRouter.get('/', async (req, res, next) => {
       terms_required: !hasAcceptedTerms(user),
       language: user.language ?? 'en',
       retention_months: user.retention_months ?? null,
+      timezone: user.timezone ?? null,
       caller_id: !!user.caller_id_verified_at,
     });
   } catch (err) { next(err); }
@@ -130,18 +130,61 @@ meRouter.delete('/', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+/** An IANA zone that Intl and Postgres both understand, e.g. "America/New_York". */
+export function validTimezone(zone) {
+  if (typeof zone !== 'string' || !/^[A-Za-z0-9_+\-/]{1,64}$/.test(zone)) return false;
+  try { new Intl.DateTimeFormat('en-US', { timeZone: zone }); return true; } catch { return false; }
+}
+
 meRouter.patch('/', async (req, res, next) => {
   try {
     const user = await resolveUser(req);
     const body = req.body ?? {};
-    const setLanguage = 'language' in body, setRetention = 'retention_months' in body;
+    const setLanguage = 'language' in body, setRetention = 'retention_months' in body, setTimezone = 'timezone' in body;
     if (setLanguage && !['en', 'am'].includes(body.language)) throw new HttpError(400, 'invalid_language');
     if (setRetention && body.retention_months !== null && !RETENTION_MONTHS.includes(body.retention_months)) throw new HttpError(400, 'invalid_retention');
-    if (!setLanguage && !setRetention) throw new HttpError(400, 'nothing_to_change');
+    if (setTimezone && !validTimezone(body.timezone)) throw new HttpError(400, 'invalid_timezone');
+    if (!setLanguage && !setRetention && !setTimezone) throw new HttpError(400, 'nothing_to_change');
     const row = await queryOne(`UPDATE users SET language=CASE WHEN $2 THEN $3 ELSE language END,
-      retention_months=CASE WHEN $4 THEN $5::int ELSE retention_months END WHERE id=$1 RETURNING language,retention_months`,
-    [user.id, setLanguage, setLanguage ? body.language : null, setRetention, setRetention ? body.retention_months : null]);
+      retention_months=CASE WHEN $4 THEN $5::int ELSE retention_months END,
+      timezone=CASE WHEN $6 THEN $7 ELSE timezone END WHERE id=$1 RETURNING language,retention_months,timezone`,
+    [user.id, setLanguage, setLanguage ? body.language : null, setRetention, setRetention ? body.retention_months : null,
+      setTimezone, setTimezone ? body.timezone : null]);
     if (setRetention) await audit({ userId: user.id, action: 'retention_changed', targetType: 'retention', targetId: body.retention_months ?? 'off', req });
     res.json(row);
+  } catch (err) { next(err); }
+});
+
+// Signed-in devices. A stolen phone number signs in with a valid code, so the
+// owner must be able to see every session and end it.
+meRouter.get('/sessions', async (req, res, next) => {
+  try {
+    const user = await resolveUser(req);
+    const { rows } = await query(`SELECT id, device_name, created_at, last_seen_at FROM sessions
+      WHERE user_id=$1 AND expires_at > now() ORDER BY coalesce(last_seen_at, created_at) DESC LIMIT 50`, [user.id]);
+    res.set('Cache-Control', 'no-store').json({ sessions: rows.map(row => ({ ...row, current: row.id === user.sessionId })) });
+  } catch (err) { next(err); }
+});
+
+meRouter.delete('/sessions/:id', async (req, res, next) => {
+  try {
+    const user = await resolveUser(req);
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.params.id)) throw new HttpError(404, 'session_not_found');
+    const ended = await queryOne('DELETE FROM sessions WHERE id=$1 AND user_id=$2 RETURNING id', [req.params.id, user.id]);
+    if (!ended) throw new HttpError(404, 'session_not_found');
+    await audit({ userId: user.id, action: 'session_revoked', targetType: 'session', targetId: ended.id, req });
+    res.json({ status: 'signed_out', current: ended.id === user.sessionId });
+  } catch (err) { next(err); }
+});
+
+/** Ends every other session; with ?all=1, this one too. */
+meRouter.post('/sessions/revoke', async (req, res, next) => {
+  try {
+    const user = await resolveUser(req);
+    const all = req.query.all === '1';
+    const { rows } = await query(`DELETE FROM sessions WHERE user_id=$1 AND ($2::boolean OR id<>$3) RETURNING id`,
+      [user.id, all, user.sessionId]);
+    await audit({ userId: user.id, action: all ? 'sessions_revoked_all' : 'sessions_revoked_others', req });
+    res.json({ status: 'signed_out', ended: rows.length });
   } catch (err) { next(err); }
 });

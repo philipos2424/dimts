@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Linking, Platform, Pressable, ScrollView, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { useApp } from '../src/AppContext';
-import { ApiError, getBilling, openBillingPortal, startCheckout, type Billing, type Interval, type PlanId } from '../src/api';
+import { ApiError, getBilling, openBillingPortal, startCheckout, trackEvent, type Billing, type Interval, type PlanId } from '../src/api';
 import { COUNTRY_NAMES, canBuyHere, formatCredits, formatPrice } from '../src/billing';
 import { Banner } from '../src/components/Banner';
 import { Button } from '../src/components/Button';
@@ -15,6 +15,9 @@ import { radius, space, useTheme } from '../src/theme';
 const COPY = {
   en: {
     current: 'Your plan', minutes: (used: number, total: number) => `${used} of ${total} minutes used this month`,
+    trial: (days: number) => `Pro trial · ${days} ${days === 1 ? 'day' : 'days'} left`,
+    trialStart: 'Your free trial starts with your first call: 20 minutes of recorded calls with AI notes, for 21 days. A call is never cut off when the trial minutes run out. No card needed.',
+    trialOver: 'Your trial has ended. Your calls and notes stay readable. Choose a plan to make new calls.',
     credits: 'Credits', renews: (d: string) => `Renews on ${d}`, ends: (d: string) => `Ends on ${d}, then returns to Free`,
     pastDue: 'Your last payment failed. Update your card to keep your plan.',
     manage: 'Manage plan, card and invoices', monthly: 'Monthly', yearly: 'Yearly', twoFree: '2 months free',
@@ -27,6 +30,7 @@ const COPY = {
     rateHeader: 'Extra, paid from credits, for each phone ringing in:',
     perMin: '/min',
     overage: (n: string) => `After your plan minutes run out: ${n} a minute.`,
+    overageLegs: (uk: string, eu: string) => `Plus ${uk} a minute for each UK phone and ${eu} for each European phone on the call, because those networks cost more.`,
     afterCheckout: 'Payment received. Your plan updates in a few seconds.',
     webOnly: 'Plans and credits can be bought at dimts.app from any browser.',
     regional: 'Regional pricing for your country.',
@@ -35,6 +39,9 @@ const COPY = {
   },
   am: {
     current: 'የእርስዎ ዕቅድ', minutes: (used: number, total: number) => `በዚህ ወር ከ${total} ደቂቃ ${used} ተጠቅመዋል`,
+    trial: (days: number) => `የፕሮ ሙከራ · ${days} ቀን ቀርቷል`,
+    trialStart: 'ነፃ ሙከራዎ በመጀመሪያ ጥሪዎ ይጀምራል፦ ለ21 ቀናት 20 ደቂቃ የተቀዳ ጥሪ ከAI ማስታወሻ ጋር። የሙከራ ደቂቃዎ ሲያልቅ ጥሪ አይቋረጥም።',
+    trialOver: 'ሙከራዎ አልቋል። ጥሪዎችዎና ማስታወሻዎችዎ ይቆያሉ። አዲስ ጥሪ ለማድረግ ዕቅድ ይምረጡ።',
     credits: 'ክሬዲት', renews: (d: string) => `${d} ላይ ይታደሳል`, ends: (d: string) => `${d} ላይ ያበቃል፣ ከዚያ ወደ ነፃ ይመለሳል`,
     pastDue: 'የመጨረሻው ክፍያ አልተሳካም። ዕቅድዎን ለማቆየት ካርድዎን ያዘምኑ።',
     manage: 'ዕቅድ፣ ካርድ እና ደረሰኞችን ያስተዳድሩ', monthly: 'ወርሃዊ', yearly: 'ዓመታዊ', twoFree: '2 ወር ነፃ',
@@ -47,6 +54,7 @@ const COPY = {
     rateHeader: 'ከክሬዲት የሚከፈል ተጨማሪ፣ እዚህ ለሚደውል ለእያንዳንዱ ስልክ፦',
     perMin: '/በደቂቃ',
     overage: (n: string) => `የዕቅድ ደቂቃ ካለቀ በኋላ፦ በደቂቃ ${n}።`,
+    overageLegs: (uk: string, eu: string) => `በጥሪው ላይ ላለ እያንዳንዱ የዩኬ ስልክ በደቂቃ ${uk}፣ ለአውሮፓ ስልክ ${eu} ይጨመራል።`,
     afterCheckout: 'ክፍያው ደርሷል። ዕቅድዎ በጥቂት ሰከንዶች ውስጥ ይዘመናል።',
     webOnly: 'ዕቅድ እና ክሬዲት በማንኛውም ብራውዘር dimts.app ላይ መግዛት ይቻላል።',
     regional: 'ለአገርዎ የተዘጋጀ ዋጋ።',
@@ -87,6 +95,7 @@ export default function Plans() {
   const load = useCallback(() => getBilling().then(setBilling).catch(err => setError(err instanceof ApiError ? err.message : String(err))), []);
   // The session token is restored with userPhone; asking earlier reads as signed out.
   useEffect(() => { if (userPhone) load(); }, [userPhone, load]);
+  useEffect(() => { if (userPhone) trackEvent('paywall_viewed'); }, [userPhone]);
   // Polar's webhook lands moments after the redirect; check back a few times.
   useEffect(() => {
     if (params.checkout !== 'done' || !userPhone) return;
@@ -111,6 +120,7 @@ export default function Plans() {
   const { catalog, subscription } = billing;
   const date = (iso: string) => new Date(iso).toLocaleDateString(lang === 'am' ? 'am-ET' : undefined, { day: 'numeric', month: 'long', year: 'numeric' });
   const usedPct = Math.min(1, billing.minutes_used / Math.max(1, billing.minutes_included));
+  const trialDays = billing.trial_ends_at ? Math.max(0, Math.ceil((Date.parse(billing.trial_ends_at) - Date.now()) / 86_400_000)) : null;
   const shop = canBuyHere && billing.purchasable;
 
   return (
@@ -120,10 +130,12 @@ export default function Plans() {
 
       <Section title={copy.current}>
         <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: space.sm }}>
-          <Txt size="title" weight="bold" serif>{copy[billing.tier]}</Txt>
+          <Txt size="title" weight="bold" serif>{trialDays != null ? copy.trial(trialDays) : copy[billing.tier]}</Txt>
           {subscription && <Txt tone="muted">{subscription.interval === 'year' ? copy.yearly : copy.monthly}</Txt>}
         </View>
-        <Txt tone="muted">{copy.minutes(Math.round(billing.minutes_used), billing.minutes_included)}</Txt>
+        {billing.tier === 'free' && trialDays == null
+          ? <Txt tone="muted">{billing.trial_used ? copy.trialOver : copy.trialStart}</Txt>
+          : <Txt tone="muted">{copy.minutes(Math.round(billing.minutes_used), billing.minutes_included)}</Txt>}
         <View style={{ height: 8, borderRadius: radius.pill, backgroundColor: c.line, overflow: 'hidden' }}>
           <View style={{ width: `${usedPct * 100}%`, height: '100%', backgroundColor: usedPct >= 0.9 ? c.warn : c.ok }} />
         </View>
@@ -153,7 +165,8 @@ export default function Plans() {
           </View>
           {catalog.region === 'lite' && <Txt size="caption" tone="muted">{copy.regional}</Txt>}
           {catalog.plans.map(plan => {
-            const current = billing.tier === plan.id;
+            // A trial is not a purchase: Pro stays buyable during it.
+            const current = billing.tier === plan.id && trialDays == null;
             const price = plan.prices?.[interval];
             return (
               <Card key={plan.id} style={plan.id === 'pro' ? { borderColor: c.brand, borderWidth: 2 } : undefined}>
@@ -204,6 +217,8 @@ export default function Plans() {
           </View>
         ))}
         <Txt tone="muted">{copy.overage(formatCredits(catalog.overage_cents_per_min, lang))}</Txt>
+        {catalog.overage_leg_extra_cents ? <Txt tone="muted">{copy.overageLegs(
+          formatCredits(catalog.overage_leg_extra_cents['44'] ?? 0, lang), formatCredits(catalog.overage_leg_extra_cents.eea ?? 0, lang))}</Txt> : null}
       </Section>
     </ScrollView>
   );

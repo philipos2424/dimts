@@ -1,4 +1,5 @@
 import * as database from './pool.js';
+import { capture } from '../lib/analytics.js';
 import { HttpError } from '../lib/users.js';
 import { config } from '../config.js';
 import { isAccountSid } from '../lib/carrier.js';
@@ -6,7 +7,7 @@ import { recordingPolicy } from '../lib/recording-policy.js';
 import { hasAcceptedTerms } from '../lib/terms.js';
 import { PLAN_SECONDS_SQL } from './plan-usage.js';
 import { VOICEMAIL_MAX_SECONDS } from '../lib/recording-consent.js';
-import { PLANS, affordableSeconds, callSurcharge, planOf, OVERAGE_CENTS_PER_MIN } from '../lib/pricing.js';
+import { TRIAL_CALL_GRACE_SECONDS, TRIAL_DAYS, affordableSeconds, callSurcharge, onTrial, overageRate, planMinutes, planOf } from '../lib/pricing.js';
 
 function limit(name, fallback) {
   const value = Number(process.env[name] ?? fallback);
@@ -24,24 +25,33 @@ async function callBudget(db, user, destination, direction, tier) {
   // Finished calls count only the plan minutes they used (finish-call.js).
   const usage = (await db.query(`SELECT
     COALESCE(sum(CASE WHEN user_id=$1 THEN ${PLAN_SECONDS_SQL} ELSE 0 END),0)::int AS plan_seconds,
-    COALESCE(sum(CASE WHEN COALESCE(billing_tier,'free')='free' THEN ${PLAN_SECONDS_SQL} ELSE 0 END),0)::int AS free_seconds
+    COALESCE(sum(CASE WHEN COALESCE(billing_tier,'free') IN ('free','trial') THEN ${PLAN_SECONDS_SQL} ELSE 0 END),0)::int AS free_seconds
     FROM calls WHERE created_at >= date_trunc('month', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'
     AND NOT budget_released`, [user.id])).rows[0];
   const credits = (await db.query('SELECT COALESCE(sum(amount_cents),0)::int AS cents FROM credit_ledger WHERE user_id=$1', [user.id])).rows[0].cents;
   // The free plan's minutes come from one monthly pool shared by all free
   // users: a cost guard against sign-up farms. Credits are never held by it.
   const freePool = limit('GLOBAL_CALL_MINUTES_PER_MONTH', 300) * 60 - usage.free_seconds;
-  const ownPlanSeconds = Math.max(0, PLANS[tier].minutes * 60 - usage.plan_seconds);
-  const planSecondsLeft = tier === 'free' ? Math.min(ownPlanSeconds, Math.max(0, freePool)) : ownPlanSeconds;
+  const trial = onTrial(user), override = user.minutes_override ?? null;
+  const ownPlanSeconds = Math.max(0, planMinutes(tier, user.phone, { trial, override }) * 60 - usage.plan_seconds);
+  // Granted minutes are the founder's own decision, so the shared free pool does not limit them.
+  const pooled = override == null && (tier === 'free' || trial);
+  const pooledSecondsLeft = pooled ? Math.min(ownPlanSeconds, Math.max(0, freePool)) : ownPlanSeconds;
   const surcharge = callSurcharge(user.phone, destination, direction);
-  const remaining = affordableSeconds({ planSecondsLeft, credits, surcharge });
+  // A trial call is never cut off when its minutes run out: with a minute left it may
+  // run to the grace length, paid from the shared pool, never from the owner's card.
+  const planSecondsLeft = trial && pooled && surcharge === 0 && pooledSecondsLeft >= 60
+    ? Math.max(pooledSecondsLeft, Math.min(TRIAL_CALL_GRACE_SECONDS, Math.max(0, freePool)))
+    : pooledSecondsLeft;
+  const overage = overageRate(user.phone, destination, direction);
+  const remaining = affordableSeconds({ planSecondsLeft, credits, surcharge, overage });
   if (remaining < 60) {
-    if (ownPlanSeconds >= 60 && planSecondsLeft < 60 && surcharge === 0) throw new HttpError(429, 'call_minutes_limit', 'Call minute limit reached.');
+    if (ownPlanSeconds >= 60 && pooledSecondsLeft < 60 && surcharge === 0) throw new HttpError(429, 'call_minutes_limit', 'Call minute limit reached.');
     throw new HttpError(402, 'credits_required', surcharge > 0
       ? `Calls to this country cost ${surcharge} credits a minute. Add credits to call.`
       : "You have used this month's minutes. Add credits or upgrade to keep calling.");
   }
-  return { remaining, planSeconds: Math.min(planSecondsLeft, remaining), surcharge };
+  return { remaining, planSeconds: Math.min(planSecondsLeft, remaining), surcharge, overage };
 }
 
 export function reserveCall(user, destination, record, requestKey, options = {}) {
@@ -70,11 +80,20 @@ export async function reserveCallInTransaction(db, user, destination, record, re
   const daily = (await db.query(`SELECT count(*)::int AS count FROM calls WHERE user_id=$1
     AND created_at >= date_trunc('day', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'`, [user.id])).rows[0].count;
   if (daily >= limit('CALLS_PER_DAY', 10)) throw new HttpError(429, 'daily_call_limit', 'Daily call limit reached.');
+  // A free account's first call starts its trial; the trial is never restarted.
+  // Re-read it afterwards: a concurrent first call may have started it.
+  if (!options.voicemailOnly && (user.tier ?? 'free') === 'free' && !user.trial_ends_at) {
+    const started = await db.query(`UPDATE users SET trial_ends_at = now() + make_interval(days => $2)
+      WHERE id=$1 AND tier='free' AND trial_ends_at IS NULL RETURNING id`, [user.id, TRIAL_DAYS]);
+    if (started.rows.length) capture(user.id, 'trial_started');
+    const row = (await db.query('SELECT trial_ends_at FROM users WHERE id=$1', [user.id])).rows[0];
+    user = { ...user, trial_ends_at: row?.trial_ends_at ?? null };
+  }
   const tier = planOf(user);
   // A caller who reaches an owner with no minutes or credits left can still
   // leave a message: the call is recorded as missed, with voicemail, at no charge.
-  const { remaining, planSeconds, surcharge } = options.voicemailOnly
-    ? { remaining: VOICEMAIL_MAX_SECONDS, planSeconds: 0, surcharge: 0 }
+  const { remaining, planSeconds, surcharge, overage } = options.voicemailOnly
+    ? { remaining: VOICEMAIL_MAX_SECONDS, planSeconds: 0, surcharge: 0, overage: 0 }
     : await callBudget(db, user, destination, direction, tier);
   const account = config.providerAccountSid;
   if (!isAccountSid(account)) throw new Error(`Invalid ${config.carrier === 'telnyx' ? 'TELNYX' : 'TWILIO'}_ACCOUNT_SID`);
@@ -90,11 +109,12 @@ export async function reserveCallInTransaction(db, user, destination, record, re
       CASE WHEN $13::text='notice' AND $5 AND $9::text='outbound' THEN now() END,
       CASE WHEN $13::text='notice' AND $5 AND $9::text='inbound' THEN now() END,$15,$16,$17,$18,$19) RETURNING *`,
     [user.id, user.phone, destination, contactId, record, requestKey, remaining, direction === 'inbound' ? 'ringing' : 'initiating', direction, options.callSid ?? null, user.agent_number ?? null, account, policy.mode, policy.scope, callerId,
-      tier, planSeconds, surcharge, options.voicemailOnly ? 0 : OVERAGE_CENTS_PER_MIN])).rows[0];
+      onTrial(user) ? 'trial' : tier, planSeconds, surcharge, overage])).rows[0];
   if (options.voicemailOnly) {
     const missed = (await db.query(`UPDATE calls SET status='missed', voicemail=true, duration_sec=0, completed_at=now()
       WHERE id=$1 RETURNING *`, [call.id])).rows[0];
     return { call: missed, created: true };
   }
+  capture(user.id, 'call_started', { direction, plan: tier, recorded: !!record });
   return { call, created: true };
 }

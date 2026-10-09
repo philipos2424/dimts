@@ -1,3 +1,4 @@
+import { captureCallFailure } from '../lib/sentry.js';
 import { queryOne } from './pool.js';
 import { startCallRecording } from '../services/start-recording.js';
 import { processDeletion } from '../services/process-deletion.js';
@@ -12,6 +13,7 @@ export async function beginAgreedRecording(callId, childSid) {
   let sid;
   try { sid = await startCallRecording(call); }
   catch (err) {
+    captureCallFailure(err, { callId, userId: call.user_id, stage: 'recording_start' });
     const definite = [400,401,403,404,422].includes(err.status);
     // A timeout may have started a recording. Never issue a second create.
     return queryOne(`UPDATE calls SET recording_start_status=$2,

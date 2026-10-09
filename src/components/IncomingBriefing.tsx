@@ -21,13 +21,16 @@ export function IncomingBriefing() {
     let timer: ReturnType<typeof setTimeout>;
     async function poll() {
       const visible = Platform.OS === 'web' ? !document.hidden : AppState.currentState === 'active';
+      let ringing = false;
       if (visible) {
         try {
           const result = await getActiveIncoming();
+          ringing = !!result.call;
           if (active) setCall(result.call);
         } catch { if (active) setCall(null); }
       } else if (active) setCall(null);
-      if (active) timer = setTimeout(poll, 3000);
+      // Every request wakes a server function; check less often while nothing rings.
+      if (active) timer = setTimeout(poll, ringing ? 3000 : 6000);
     }
     poll();
     return () => { active = false; clearTimeout(timer); };

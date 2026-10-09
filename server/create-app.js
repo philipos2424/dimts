@@ -1,4 +1,5 @@
 import express from 'express';
+import { captureCallFailure } from './lib/sentry.js';
 import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
 import { authRouter } from './routes/auth.js';
@@ -16,6 +17,8 @@ import { meRouter } from './routes/me.js';
 import { promisesRouter } from './routes/promises.js';
 import { recapRouter } from './routes/recap.js';
 import { askRouter } from './routes/ask.js';
+import { healthRouter } from './routes/health.js';
+import { eventsRouter } from './routes/events.js';
 import { briefingRouter, cronRouter } from './routes/briefing.js';
 import { myPrivacyRequestsRouter, privacyRequestsRouter } from './routes/privacy-requests.js';
 import { inboundRouter } from './routes/inbound.js';
@@ -45,6 +48,8 @@ export function createApp({ webRoot = fileURLToPath(new URL('../dist/', import.m
     next();
   });
   app.use('/api', apiRateLimit);
+  app.use('/api/health', healthRouter);
+  app.use('/api/events', eventsRouter);
   app.use('/api/auth', authRouter);
   app.use('/api/notifications', notificationsRouter);
   app.use('/api/integrations/google', googleRouter);
@@ -103,6 +108,7 @@ export function createApp({ webRoot = fileURLToPath(new URL('../dist/', import.m
    */
   app.use((err, _req, res, _next) => {
     const status = err?.status ?? 500;
+    if (status >= 500) captureCallFailure(err, { stage: 'server' });
     if (status >= 500) console.error('[error]', safeError(err));
     if (err?.retryAfter) res.set('Retry-After', String(err.retryAfter));
 

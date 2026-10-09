@@ -9,9 +9,13 @@ import { useEffect } from 'react';
 import { View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AppProvider, useApp } from '../src/AppContext';
+import { AppLockGate } from '../src/AppLock';
 import { IncomingBriefing } from '../src/components/IncomingBriefing';
 import { IncomingNotificationObserver } from '../src/components/IncomingNotificationObserver';
 import { font, useTheme } from '../src/theme';
+import { initSentry, wrapWithSentry } from '../src/sentry';
+
+initSentry();
 
 const PUBLIC = new Set(['privacy', 'terms', 'privacy-request', 'subprocessors']);
 
@@ -32,6 +36,10 @@ function Gate() {
     else if (userPhone && termsRequired && screen !== 'terms-accept') router.replace('/terms-accept');
     else if (userPhone && !termsRequired && (onOnboarding || screen === 'terms-accept')) router.replace('/');
   }, [ready, userPhone, termsRequired, segments, router]);
+
+  // Screens fetch on mount; before the stored session is restored those
+  // requests go out signed-out, fail with 401 and never retry.
+  if (!ready) return <View style={{ flex: 1, backgroundColor: c.bg }} />;
 
   return (
     <View style={{ flex: 1 }}>
@@ -63,11 +71,12 @@ function Gate() {
       <Stack.Screen name="privacy-request" options={{ title: 'Privacy request' }} />
       <Stack.Screen name="subprocessors" options={{ title: 'Subprocessors' }} />
     </Stack>
+    <AppLockGate />
     </View>
   );
 }
 
-export default function RootLayout() {
+function RootLayout() {
   const { c } = useTheme();
   // The plugin embeds these at build time; loading them here also covers
   // Expo Go during development.
@@ -92,3 +101,5 @@ export default function RootLayout() {
     </SafeAreaProvider>
   );
 }
+
+export default wrapWithSentry(RootLayout);

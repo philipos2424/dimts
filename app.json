@@ -55,7 +55,20 @@
         }
       ],
       "expo-sharing",
-      "expo-notifications"
+      [
+        "expo-calendar",
+        {
+          "writeOnlyAccess": true,
+          "writeOnlyCalendarPermission": "Dimts adds the meetings you agree on calls to your calendar. It never reads your calendar."
+        }
+      ],
+      "expo-notifications",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Allow Dimts to use Face ID to keep your calls private."
+        }
+      ]
     ],
     "scheme": "dimts",
     "experiments": {

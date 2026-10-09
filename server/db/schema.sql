@@ -270,12 +270,20 @@ CREATE TABLE IF NOT EXISTS promise_states (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (call_id, item_index)
 );
-CREATE INDEX IF NOT EXISTS calls_search_idx ON calls
-  USING gin (to_tsvector('simple', coalesce(summary,'') || ' ' || coalesce(transcript,'')));
+-- Call content is encrypted at rest; a text index would keep a readable copy of every word.
+DROP INDEX IF EXISTS calls_search_idx;
 -- A message left after a missed incoming call: one mono channel, the caller only.
 ALTER TABLE calls ADD COLUMN IF NOT EXISTS voicemail BOOLEAN NOT NULL DEFAULT false;
 -- Storage limitation: calls older than this many months are deleted automatically. NULL keeps them until deleted.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS retention_months INT CHECK (retention_months IN (3,6,12,24));
+-- New accounts keep calls for a year unless they choose otherwise; existing accounts keep their choice.
+ALTER TABLE users ALTER COLUMN retention_months SET DEFAULT 12;
+-- IANA time zone from the owner's phone, so "tomorrow at noon" becomes the right moment.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS timezone TEXT;
+-- Set on the first call of a free account: 21 days of Pro (pricing.js TRIAL_DAYS).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_ends_at TIMESTAMPTZ;
+-- Monthly minutes the founder grants by hand (scripts/grant-minutes.js); replaces the plan's.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS minutes_override INT CHECK (minutes_override >= 0);
 -- The owner's own mobile shown as caller ID once the carrier has verified it.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS caller_id_verified_at TIMESTAMPTZ;
 ALTER TABLE calls ADD COLUMN IF NOT EXISTS caller_id TEXT;

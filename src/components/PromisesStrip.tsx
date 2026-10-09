@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { setPromise, type PromiseItem, type Promises } from '../api';
+import { dueLabel } from '../reminderTime';
 import { Card } from './Card';
 import { Txt } from './Txt';
 import { space, useTheme } from '../theme';
@@ -16,7 +17,12 @@ function Row({ item, onChange }: { item: PromiseItem; onChange: () => void }) {
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, opacity: busy ? 0.5 : 1 }}>
       <View style={{ flex: 1 }}>
         <Txt>{item.task}</Txt>
-        <Txt size="caption" tone="muted">{item.contact_name ?? item.phone}</Txt>
+        <Txt size="caption" tone="muted">
+          {item.contact_name ?? item.phone}
+          {item.due ? <Txt size="caption" tone={item.overdue ? 'danger' : 'muted'} weight={item.overdue ? 'bold' : 'regular'}>
+            {' · '}{item.overdue ? 'Overdue' : 'Due'} {dueLabel(item.due)?.replace(/^(Today|Tomorrow|Yesterday)/, s => s.toLowerCase())}
+          </Txt> : null}
+        </Txt>
       </View>
       <Pressable accessibilityRole="button" disabled={busy} onPress={() => mark('done')} hitSlop={8}>
         <Txt tone="ok" weight="bold">Done</Txt>
@@ -31,7 +37,9 @@ function Row({ item, onChange }: { item: PromiseItem; onChange: () => void }) {
 /** "You owe 2 · Waiting on 1": commitments from calls, until they are done. */
 export function PromisesStrip({ promises, onChange }: { promises: Promises; onChange: () => void }) {
   const { c } = useTheme();
-  const [open, setOpen] = useState(false);
+  const overdue = promises.you_owe.filter(p => p.overdue).length;
+  // A missed promise is not news to skim past: open the list when one is overdue.
+  const [open, setOpen] = useState(overdue > 0);
   const owe = promises.you_owe.length, waiting = promises.waiting_on.length;
   if (!owe && !waiting) return null;
   return (
@@ -39,6 +47,7 @@ export function PromisesStrip({ promises, onChange }: { promises: Promises; onCh
       <Pressable accessibilityRole="button" accessibilityState={{ expanded: open }} onPress={() => setOpen(!open)}
         style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
         <Txt weight="bold">
+          {overdue ? <Txt weight="bold" tone="danger">{overdue} overdue · </Txt> : null}
           {owe ? `You owe ${owe}` : ''}{owe && waiting ? ' · ' : ''}{waiting ? `Waiting on ${waiting}` : ''}
         </Txt>
         <Txt tone="brand">{open ? 'Hide' : 'Show'}</Txt>

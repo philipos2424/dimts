@@ -9,14 +9,14 @@ mock.module('../db/pool.js', { namedExports: {
   query: (sql, p) => db.query(sql, p), queryOne: async (sql, p) => (await db.query(sql, p)).rows[0],
   withTransaction: work => db.transaction(work), getPool: () => ({}),
 } });
-let prompts = [], reply;
-mock.module('../services/llm.js', { namedExports: { completeJson: async (system, input) => {
-  prompts.push({ system, input }); return JSON.stringify(reply);
+let prompts = [], reply, failure = null;
+mock.module('../services/llm.js', { namedExports: { completeJson: async (system, input, schema, { signal } = {}) => {
+  prompts.push({ system, input, signal }); if (failure) throw failure; return JSON.stringify(reply);
 } } });
 const { createApp } = await import('../create-app.js');
 const server = createApp().listen(0), origin = `http://127.0.0.1:${server.address().port}`;
 test.after(async () => { await new Promise(r => server.close(r)); await db.close(); });
-test.beforeEach(() => { prompts = []; });
+test.beforeEach(() => { prompts = []; failure = null; });
 
 async function signedIn(phone) {
   const user = (await db.query('INSERT INTO users(phone) VALUES($1) RETURNING id', [phone])).rows[0];
@@ -92,7 +92,7 @@ test('questions must be 3 to 500 characters and are limited to 30 an hour', asyn
 });
 
 test('a follow-up finds the same calls through the question before it, and earlier answers are context, not evidence', async () => {
-  const o = await signedIn('+15555551299');
+  const o = await signedIn('+15555551298');
   await seed(o.id, 'Abebe', 'User: Cement price?\nCaller: 450 birr per bag, delivery on Friday.');
   reply = { answer: 'Friday.', citations: [{ call: 'C1', line: 2 }] };
   const followUp = await fetch(origin + '/api/ask', { method: 'POST',
@@ -136,4 +136,14 @@ test('a follow-up searches the calls the last answer cited first, and only the o
   assert.equal(body.citations[0].call_id, cited);
   assert.match(prompts.at(-1).input, /C1 \| Kiruben/);
   assert.doesNotMatch(prompts.at(-1).input, /STRANGER-SECRET/);
+});
+
+test('a slow or failing model is stopped in time and reported plainly, not as a timeout', async () => {
+  const o = await signedIn('+15555551377');
+  await seed(o.id, 'Dave', 'Caller: It is $7.10 a square foot.');
+  failure = Object.assign(new Error('This operation was aborted'), { name: 'TimeoutError' });
+  const { status, body } = await ask(o.token, 'What did Dave quote for the tile?');
+  assert.equal(status, 503);
+  assert.equal(body.error, 'ai_unavailable');
+  assert.ok(prompts[0].signal instanceof AbortSignal, 'the model call carries a deadline');
 });

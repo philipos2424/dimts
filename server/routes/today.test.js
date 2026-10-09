@@ -12,7 +12,7 @@ mock.module('../db/pool.js', { namedExports: {
   withTransaction: work => db.transaction(work),
 } });
 mock.module('../lib/users.js', { namedExports: {
-  resolveUser: async () => user, currentMonth: () => '2026-10',
+  resolveUser: async () => user, currentMonth: () => '2026-10', hashToken: value => value,
   HttpError: class extends Error { constructor(status, code) { super(code); this.status = status; this.code = code; } },
 } });
 const { callsRouter } = await import('./calls.js');

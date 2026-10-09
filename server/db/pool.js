@@ -3,6 +3,7 @@ import { config } from '../config.js';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { safeError } from '../lib/log-safe.js';
+import { openRows } from '../lib/field-crypto.js';
 
 let pool;
 let localDatabase;
@@ -46,19 +47,22 @@ async function getLocalDatabase() {
   return localDatabase;
 }
 
+// Encrypted call content is opened here, once, for every caller.
 export async function query(text, params) {
   if (process.env.DATABASE_MODE === 'local') {
-    return (await getLocalDatabase()).query(text, params);
+    return openRows(await (await getLocalDatabase()).query(text, params));
   }
-  return getPool().query(text, params);
+  return openRows(await getPool().query(text, params));
 }
 
+const opening = client => ({ query: async (text, params) => openRows(await client.query(text, params)) });
+
 export async function withTransaction(work) {
-  if (process.env.DATABASE_MODE === 'local') return (await getLocalDatabase()).transaction(work);
+  if (process.env.DATABASE_MODE === 'local') return (await getLocalDatabase()).transaction(tx => work(opening(tx)));
   const client = await getPool().connect();
   try {
     await client.query('BEGIN');
-    const result = await work(client);
+    const result = await work(opening(client));
     await client.query('COMMIT');
     return result;
   } catch (err) {
