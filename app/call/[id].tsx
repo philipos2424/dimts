@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { Platform, Pressable, ScrollView, View } from 'react-native';
 import { useApp } from '../../src/AppContext';
 import { ApiError, captureSessionGuard, type CallDetail, getCall, reprocessCall, recoverCallRecording } from '../../src/api';
 import { AgreementList } from '../../src/components/AgreementList';
@@ -18,7 +18,7 @@ import { Txt } from '../../src/components/Txt';
 import { EndCall } from '../../src/components/EndCall';
 import { type Key, statusKey } from '../../src/i18n';
 import { space, useTheme } from '../../src/theme';
-import { exportCall } from '../../src/exportCall';
+import { exportCall, prepareWebExport, releaseWebExport, saveWebExport, type PreparedExport } from '../../src/exportCall';
 import { DeleteCallControl, DeletionStatus } from '../../src/components/CallDeletion';
 
 export default function CallDetailScreen() {
@@ -38,6 +38,8 @@ export default function CallDetailScreen() {
   const [errorKey, setErrorKey] = useState<Key | null>(null);
   const [exporting, setExporting] = useState<'notes' | 'audio' | null>(null);
   const [exportError, setExportError] = useState('');
+  const [prepared, setPrepared] = useState<PreparedExport | null>(null);
+  useEffect(() => () => releaseWebExport(prepared), [prepared]);
   const [retryingProcessing, setRetryingProcessing] = useState(false);
   const [retryError, setRetryError] = useState('');
   async function retryProcessing() {
@@ -67,7 +69,10 @@ export default function CallDetailScreen() {
   async function saveCopy(kind: 'notes' | 'audio') {
     if (!id || exporting) return;
     setExporting(kind); setExportError('');
-    try { await exportCall(id, kind); }
+    try {
+      if (Platform.OS === 'web') setPrepared(await prepareWebExport(id, kind));
+      else await exportCall(id, kind);
+    }
     catch (err) { setExportError(err instanceof Error && err.name !== 'AbortError' ? err.message : 'Export took too long. Please try again.'); }
     finally { setExporting(null); }
   }
@@ -255,6 +260,12 @@ export default function CallDetailScreen() {
             <Txt tone="brand">{exporting === 'audio' ? 'Preparing recording…' : 'Export recording'}</Txt>
           </Pressable>}
         </View>
+        {prepared && <Pressable accessibilityRole="button" onPress={async () => {
+          try { await saveWebExport(prepared); setPrepared(null); }
+          catch { setExportError('Your browser could not save the file. Try again.'); }
+        }} style={{ minHeight: 44, justifyContent: 'center' }}>
+          <Txt tone="brand" weight="bold">{prepared.kind === 'audio' ? 'Save recording to this device' : 'Save notes to this device'}</Txt>
+        </Pressable>}
         {exportError ? <Txt tone="muted" accessibilityRole="alert">{exportError}</Txt> : null}
         {!['initiating','ringing','in-progress'].includes(call.status) && <DeleteCallControl callId={call.id} onDeleted={load} />}
         <Txt size="caption" tone="faint" selectable>Call ID: {call.id}</Txt>

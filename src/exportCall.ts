@@ -1,6 +1,42 @@
 import { Platform } from 'react-native';
 import { fetchCallExport } from './api';
 
+export type PreparedExport = { file: File; url: string; kind: 'notes' | 'audio' };
+
+/**
+ * Safari only lets a page save or share in direct response to a tap, and the
+ * download takes longer than that allows. So the web fetches first, then a
+ * second tap calls saveWebExport, which hands the file over synchronously.
+ */
+export async function prepareWebExport(id: string, kind: 'notes' | 'audio'): Promise<PreparedExport> {
+  if (!/^[a-f0-9-]{36}$/i.test(id)) throw new Error('Invalid call.');
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 120_000);
+  try {
+    const bytes = await fetchCallExport(id, kind, controller.signal);
+    const type = kind === 'audio' ? 'audio/mpeg' : 'text/plain';
+    const file = new File([bytes as Uint8Array<ArrayBuffer>], `dimts-call-${id}.${kind === 'audio' ? 'mp3' : 'txt'}`, { type });
+    return { file, url: URL.createObjectURL(file), kind };
+  } finally { clearTimeout(timer); }
+}
+
+/** Call from a tap handler. iPhone shows the share sheet ("Save to Files"); desktops download. */
+export function saveWebExport(prepared: PreparedExport): Promise<void> | void {
+  const files = [prepared.file];
+  if (typeof navigator.canShare === 'function' && navigator.canShare({ files })) {
+    return navigator.share({ files }).catch(err => { if (err?.name !== 'AbortError') throw err; });
+  }
+  const link = document.createElement('a');
+  link.href = prepared.url; link.download = prepared.file.name;
+  document.body.appendChild(link);
+  try { link.click(); } finally { link.remove(); }
+}
+
+export function releaseWebExport(prepared: PreparedExport | null) {
+  // Delay so a download the browser just started can still read the file.
+  if (prepared) setTimeout(() => URL.revokeObjectURL(prepared.url), 60_000);
+}
+
 export async function exportCall(id: string, kind: 'notes' | 'audio') {
   if (!/^[a-f0-9-]{36}$/i.test(id)) throw new Error('Invalid call.');
   const controller = new AbortController();
