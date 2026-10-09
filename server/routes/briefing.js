@@ -7,6 +7,8 @@ import { sendBriefingNotification } from '../services/briefing-push.js';
 import { expireOldCalls } from '../services/retention.js';
 import { releaseExpiredNumbers } from '../services/release-numbers.js';
 import { syncProviderCosts } from '../services/provider-costs.js';
+import { encryptExisting } from '../services/encrypt-existing.js';
+import { encryptionEnabled } from '../lib/field-crypto.js';
 
 export const briefingRouter = express.Router();
 
@@ -44,12 +46,18 @@ cronRouter.get('/weekly-briefing', async (req, res) => {
 });
 
 // Daily housekeeping: delete calls past each owner's retention period,
-// release business numbers whose grace has ended, and copy carrier costs.
+// release business numbers whose grace has ended, copy carrier costs, and
+// encrypt a batch of anything stored before encryption at rest (or under an
+// old key) until nothing is left.
 // One cron path, because plans with few cron slots must still run all three.
 cronRouter.get('/retention', async (req, res) => {
   if (!authorizedCron(req)) return res.status(401).json({ error: 'unauthorized' });
   const result = await expireOldCalls();
   const numbers = await releaseExpiredNumbers().catch(err => ({ error: err?.message }));
   const costs = await syncProviderCosts().catch(err => ({ error: err?.message }));
-  res.json({ ...result, numbers, costs });
+  // Recordings are copied one by one, so keep that batch small enough for one run.
+  const encryption = encryptionEnabled()
+    ? await encryptExisting({ limit: 200, audioLimit: 20 }).catch(err => ({ error: err?.message }))
+    : { skipped: 'encryption_off' };
+  res.json({ ...result, numbers, costs, encryption });
 });

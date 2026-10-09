@@ -85,3 +85,21 @@ test('another user cannot read a call even with the same server keys', async () 
     [copy, other.id, stolen.replace(id, copy).replace(owner.id, other.id)]);
   assert.equal((await api(`/api/calls/${copy}`, other.token)).status, 500);
 });
+
+test('calls stored before encryption are sealed by the catch-up job, still read as normal, and a re-run finds nothing', async () => {
+  const { encryptExisting } = await import('../services/encrypt-existing.js');
+  const o = await signedIn('+15555552077');
+  const id = randomUUID();
+  await db.query(`INSERT INTO calls(id,user_id,user_phone,destination,status,direction,transcript,summary,transcript_data)
+    VALUES($1,$2,'+1','+15555552998','ready','outbound','User: Twelve pallets of tiles?\nCaller: Monday.','Tiles on Monday.','{"words":[]}')`, [id, o.id]);
+  const first = await encryptExisting({ limit: 50 });
+  assert.ok(first.calls >= 1);
+  const raw = (await db.query('SELECT transcript, summary, transcript_data::text AS data FROM calls WHERE id=$1', [id])).rows[0];
+  for (const value of Object.values(raw)) assert.ok(!/tiles|Monday|words/i.test(value), 'no plaintext left at rest');
+  const call = await api(`/api/calls/${id}`, o.token);
+  assert.equal(call.status, 200);
+  assert.match(call.body.transcript, /Twelve pallets of tiles/);
+  assert.equal(call.body.summary, 'Tiles on Monday.');
+  const again = await encryptExisting({ limit: 50 });
+  assert.deepEqual([again.calls, again.pending.calls], [0, 0]);
+});
