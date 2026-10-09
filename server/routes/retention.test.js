@@ -46,7 +46,7 @@ test('the daily sweep deletes only calls past their owner\'s period, and only wi
   const old = await call(limited.id, 4), recent = await call(limited.id, 1), forever = await call(keeps.id, 30);
   assert.equal((await fetch(origin + '/api/cron/retention')).status, 401);
   const result = await fetch(origin + '/api/cron/retention', { headers: { Authorization: 'Bearer retention-cron-secret-123' } }).then(r => r.json());
-  assert.deepEqual(result, { deleted: 1, skipped: 0, forgotten: 0, auditExpired: 0, numbers: { released: 0 }, costs: { skipped: 'telnyx_not_configured' } });
+  assert.deepEqual(result, { deleted: 1, skipped: 0, forgotten: 0, auditExpired: 0, numbers: { released: 0 }, costs: { skipped: 'telnyx_not_configured' }, encryption: { skipped: 'encryption_off' } });
   const rows = Object.fromEntries((await db.query('SELECT id, deleted_at, transcript FROM calls WHERE id = ANY($1)', [[old, recent, forever]])).rows.map(r => [r.id, r]));
   assert.ok(rows[old].deleted_at); assert.equal(rows[old].transcript, null);
   assert.equal(rows[recent].deleted_at, null); assert.equal(rows[forever].deleted_at, null);
