@@ -26,10 +26,14 @@ Dimts processes their data only on your instructions as your **processor**.
   summarize them.
 - To suggest next steps for you to approve.
 - To keep your account secure.
+- To run and improve Dimts: we measure how the service is used from account,
+  usage and billing records (sign-ups, numbers of calls and minutes, plans,
+  payments), never from what is said on calls.
 
 **Legal bases:**
 - **Contract**, for providing the service to you.
-- **Legitimate interests**, for security logs.
+- **Legitimate interests**, for security logs and for measuring how the
+  service is used.
 - For the people you call, **you** choose the basis as controller: usually
   your **legitimate interest** in an accurate record of business calls, or
   their **consent** where local law requires it (Dimts asks every person to
@@ -92,6 +96,10 @@ Activity-log entries are kept for one year and contain no call content.
 - A list of every signed-in device, a warning when a new device signs in,
   and one tap to sign out everywhere.
 - A user-visible activity log.
+- Staff access: our support tools do not show calls, transcripts, notes or
+  contacts. Staff see account, usage and billing details only to help you,
+  fix a billing problem or investigate abuse; each time is logged with the
+  reason and appears in your activity log.
 
 ## Contact
 `privacy@dimts.app`

@@ -366,3 +366,28 @@ CREATE UNIQUE INDEX IF NOT EXISTS sessions_id_idx ON sessions (id);
 ALTER TABLE sessions ADD COLUMN IF NOT EXISTS device_name TEXT;
 ALTER TABLE sessions ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS sessions_user_idx ON sessions (user_id);
+-- Operator console (2026-10-07): why staff opened someone's details, from a fixed list.
+ALTER TABLE audit_events ADD COLUMN IF NOT EXISTS reason TEXT;
+CREATE INDEX IF NOT EXISTS audit_events_action_idx ON audit_events (action, created_at DESC);
+CREATE INDEX IF NOT EXISTS audit_events_created_idx ON audit_events (created_at);
+-- Launch sprint columns the console reads (same statements as launch-sprint; idempotent).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS timezone TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_ends_at TIMESTAMPTZ;
+-- Operator console sign-in with a passkey (Face ID, fingerprint, device PIN): no text code.
+CREATE TABLE IF NOT EXISTS admin_passkeys (
+  id TEXT PRIMARY KEY,                       -- WebAuthn credential ID, base64url
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  public_key TEXT NOT NULL,                  -- COSE public key, base64url; no secret is stored
+  counter BIGINT NOT NULL DEFAULT 0,
+  transports TEXT[],
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  last_used_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS admin_passkeys_user_idx ON admin_passkeys (user_id);
+-- One-time challenges, valid for five minutes.
+CREATE TABLE IF NOT EXISTS admin_challenges (
+  challenge TEXT PRIMARY KEY,
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL CHECK (kind IN ('register','login')),
+  expires_at TIMESTAMPTZ NOT NULL DEFAULT now() + interval '5 minutes'
+);
