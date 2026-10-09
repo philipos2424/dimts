@@ -31,7 +31,7 @@ export default function TermsAccept() {
         {AI_PROVIDERS.map(p => (
           <Txt key={p.name} tone="muted">• <Txt weight="bold">{p.name}</Txt> gets your {p.gets} and {p.does}.</Txt>
         ))}
-        <Txt tone="muted">Neither may keep your calls or use them to train AI. Recordings and notes are stored in Europe for 12 months unless you change this in Settings, and you can download or delete everything at any time.</Txt>
+        <Txt tone="muted">Neither may use your calls to train AI. Ollama keeps nothing; ElevenLabs may keep audio for a limited time (typically up to 30 days) to detect abuse, then deletes it. Recordings and notes are stored in Europe for 12 months unless you change this in Settings, and you can download or delete everything at any time.</Txt>
       </View>
       <Txt tone="muted">{EMERGENCY_NOTICE}</Txt>
       <Txt tone="muted">By continuing you confirm you are 18 or older and allow Dimts to send your calls to these providers.</Txt>
