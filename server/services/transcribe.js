@@ -146,6 +146,8 @@ async function callScribe(audio, fields, signal, keyterms = []) {
     method: 'POST',
     headers: { 'xi-api-key': config.elevenLabsApiKey },
     body: form,
+    // Audio goes only to the approved origin, never to a redirect target.
+    redirect: 'error',
     signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(120_000)]) : AbortSignal.timeout(120_000),
   });
 
