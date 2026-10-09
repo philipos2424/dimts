@@ -1,3 +1,4 @@
+import { captureCallFailure } from '../lib/sentry.js';
 import { adoptExtractedName, touchLastCall } from '../db/contacts.js';
 import { capture } from '../lib/analytics.js';
 import { query, queryOne } from '../db/pool.js';
@@ -85,6 +86,7 @@ async function nameContact(call, transcript, signal) {
       await adoptExtractedName(call.contact_id, identity);
     }
   } catch (err) {
+    captureCallFailure(err, { callId: call.id, userId: call.user_id, stage: 'identify' });
     console.error('[identify] naming failed for call', call.id, safeError(err));
   }
 }
@@ -123,7 +125,10 @@ export async function processRecording(callId, { force = false, signal: callerSi
        LEFT JOIN contacts k ON k.id = c.contact_id
       WHERE c.id = $1`,
     [callId, lease, force]
-  );
+  ).catch(err => {
+    captureCallFailure(err, { callId, stage: 'processing' });
+    throw err;
+  });
 
   if (!call?.recording_url) {
     return { status: 'skipped' };
@@ -134,6 +139,7 @@ export async function processRecording(callId, { force = false, signal: callerSi
     ? sealJson(value, { userId: call.user_id, rowId: callId, field: `calls:${column}` })
     : sealText(value, { userId: call.user_id, rowId: callId, field: `calls:${column}` });
 
+  let stage = 'recording_fetch';
   try {
     async function renew() {
       const owned = await queryOne(`UPDATE calls SET processing_until=now()+interval '10 minutes'
@@ -150,8 +156,10 @@ export async function processRecording(callId, { force = false, signal: callerSi
       // The owner's own contact names help the transcriber spell them.
       const { rows: named } = await query(`SELECT display_name FROM contacts WHERE user_id=$1 AND display_name IS NOT NULL
         ORDER BY last_call_at DESC NULLS LAST LIMIT 60`, [call.user_id]);
+      stage = 'transcription';
       result = await transcribe(audio, { direction: call.direction, voicemail: call.voicemail, signal,
         names: named.map(r => r.display_name), phones: [call.user_phone, call.destination] });
+      stage = 'persist';
       const saved = await queryOne(`UPDATE calls SET transcript=$3,transcript_data=$4,
         language=$5,language_probability=$6,transcript_recording_url=$7,
         processing_until=now()+interval '10 minutes'
@@ -160,6 +168,7 @@ export async function processRecording(callId, { force = false, signal: callerSi
       if (!saved) throw new Error('Processing ownership changed');
     }
 
+    stage = 'quality';
     const qualityError = call.voicemail ? voicemailQualityError(result.raw) : recordingQualityError(result.raw);
     if (qualityError) throw new Error(qualityError);
     if (!result.text.trim()) {
@@ -167,6 +176,7 @@ export async function processRecording(callId, { force = false, signal: callerSi
     }
 
     await renew();
+    stage = 'summary';
     const summary = await summarize(result.text, { signal, language: call.owner_language,
       callTime: call.created_at, timezone: call.owner_timezone });
     const agreements = resolveAgreements(summary.agreements, result.text, transcriptTurns({
@@ -174,6 +184,7 @@ export async function processRecording(callId, { force = false, signal: callerSi
       transcript_recording_url: call.recording_url, direction: call.direction, duration_sec: call.duration_sec,
     }));
 
+    stage = 'persist';
     const saved = await query(
       `UPDATE calls
           SET transcript = $2,
@@ -214,6 +225,7 @@ export async function processRecording(callId, { force = false, signal: callerSi
       defer(removeArchivedFromProvider(callId), `archive-remove:${callId}`);
     }
   } catch (err) {
+    captureCallFailure(err, { callId, userId: call.user_id, stage: signal.aborted ? 'processing_timeout' : stage });
     await query(
       `UPDATE calls SET status = 'failed', error = $2,
         processing_token = NULL, processing_until = NULL

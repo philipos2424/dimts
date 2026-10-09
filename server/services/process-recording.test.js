@@ -9,6 +9,11 @@ const touched = [];
 const transcriptions = [];
 const updates = [];
 let claimed = false;
+let errorAt;
+const failures = [];
+mock.module('../lib/sentry.js', { namedExports: {
+  captureCallFailure: (error, metadata) => failures.push({ error, metadata }),
+}});
 
 mock.module('../db/pool.js', {
   namedExports: {
@@ -25,14 +30,14 @@ mock.module('../db/pool.js', {
 
 mock.module('./originate.js', {
   namedExports: {
-    fetchRecording: async () => ({ ok: true, blob: async () => new Blob(['x']) }),
+    fetchRecording: async () => { if (errorAt === 'recording_fetch') throw new Error('PRIVATE'); return { ok: true, blob: async () => new Blob(['x']) }; },
     isE164: () => true,
   },
 });
 
 mock.module('./transcribe.js', {
   namedExports: {
-    transcribe: async (_audio, options) => { transcriptions.push(options); return ({
+    transcribe: async (_audio, options) => { transcriptions.push(options); if (errorAt === 'transcription') throw new Error('PRIVATE'); return ({
       text: 'Caller: hi this is Phili from Amax\nUser: hello',
       language: 'eng',
       languageProbability: 0.99,
@@ -43,12 +48,12 @@ mock.module('./transcribe.js', {
 
 mock.module('./summarize.js', {
   namedExports: {
-    summarize: async () => ({
+    summarize: async () => { if (errorAt === 'summary') throw new Error('PRIVATE'); return ({
       summary: 'Pricing discussion.',
       next_moves: ['Send pricing'],
       action_items: [],
       key_points: [],
-    }),
+    }); },
   },
 });
 
@@ -84,6 +89,8 @@ test.beforeEach(() => {
     contact_name_confidence: null,
   };
   identity = { name: 'Phili', company: 'Amax', confidence: 0.92 };
+  errorAt = undefined;
+  failures.length = 0;
   identifyThrows = false;
   identifyCalls = 0;
   adopted.length = 0;
@@ -174,4 +181,19 @@ test('with encryption keys set, the transcript, raw response and summary are sto
     assert.equal(openValue(summary), 'Pricing discussion.');
     assert.ok(transcript.includes(call.user_id) && transcript.includes(call.id), 'bound to this owner and call');
   } finally { delete process.env.DATA_ENCRYPTION_KEYS; }
+});
+
+for (const stage of ['recording_fetch', 'transcription', 'summary']) {
+  test(stage + ' failure reports call metadata and still persists failure/rethrows', async () => {
+    errorAt = stage;
+    await assert.rejects(processRecording(call.id), /PRIVATE/);
+    assert.equal(failures.length, 1);
+    assert.equal(failures[0].metadata.callId, call.id);
+    assert.equal(failures[0].metadata.stage, stage);
+    assert.ok(updates.some(update => update.sql.includes("status = 'failed'")));
+  });
+}
+test('successful processing emits no failure event', async () => {
+  await processRecording(call.id);
+  assert.equal(failures.length, 0);
 });

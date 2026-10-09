@@ -1,3 +1,4 @@
+import { captureCallFailure } from '../lib/sentry.js';
 import express from 'express';
 import { randomUUID } from 'node:crypto';
 import { queryOne } from '../db/pool.js';
@@ -27,7 +28,7 @@ recordingRecoveryRouter.post('/:id/recording/reconcile', async (req, res) => {
   }
   let recording;
   try { recording = await findCompletedRecording(call); }
-  catch { throw new HttpError(503, 'recording_lookup_failed', 'The recording provider could not be checked. Please try again in a minute.'); }
+  catch (err) { captureCallFailure(err, { callId: call.id, userId: user.id, stage: 'recording_lookup' }); throw new HttpError(503, 'recording_lookup_failed', 'The recording provider could not be checked. Please try again in a minute.'); }
   if (recording.status !== 'found') return res.json({ status: recording.status });
   const saved = await queryOne(`UPDATE calls SET recording_url=$4,recording_sid=$5,
       recording_start_status='started',status='processing',error=NULL,processing_requested_at=now()

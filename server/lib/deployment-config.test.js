@@ -40,3 +40,12 @@ test('production refuses to run without data encryption keys or a private audit 
     assert.throws(()=>validateDeployment(env),error);
   }
 });
+
+test('Sentry is optional but configured DSNs must point to the EU region', () => {
+  assert.equal(validateDeployment({ ...base(), SENTRY_DSN: '', EXPO_PUBLIC_SENTRY_DSN: '' }).port, 3000);
+  const eu = 'https://abcdef@o123.ingest.de.sentry.io/456';
+  assert.equal(validateDeployment({ ...base(), SENTRY_DSN: eu, EXPO_PUBLIC_SENTRY_DSN: eu }).port, 3000);
+  for (const name of ['SENTRY_DSN', 'EXPO_PUBLIC_SENTRY_DSN']) {
+    assert.throws(() => validateDeployment({ ...base(), [name]: 'https://abcdef@o123.ingest.us.sentry.io/456' }), new RegExp(name));
+  }
+});

@@ -2,11 +2,15 @@ import { isE164 } from './phone.js';
 import { recordingPolicy } from './recording-policy.js';
 import { polarProducts } from './polar-products.js';
 import { validateKeyring } from './field-crypto.js';
+import { isEuDsn } from './sentry-privacy.cjs';
 
 // Validate before listening or migrating. Error messages name settings only;
 // never include database URLs, tokens or other configured values.
 export function validateDeployment(env = process.env) {
   recordingPolicy(env);
+  for (const name of ['SENTRY_DSN', 'EXPO_PUBLIC_SENTRY_DSN']) {
+    if (env[name] && !isEuDsn(env[name])) throw new Error(`Invalid ${name}: use a Sentry EU project DSN`);
+  }
   const required = name => { if (!env[name]?.trim()) throw new Error(`Set ${name}`); return env[name]; };
   const match = (name, pattern) => { if (!pattern.test(required(name))) throw new Error(`Invalid ${name}`); };
   function url(name, protocols) {
