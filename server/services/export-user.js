@@ -24,7 +24,7 @@ export async function buildExport(userId) {
     FROM calls WHERE user_id=$1 AND deleted_at IS NOT NULL ORDER BY deleted_at`, [userId])).rows;
   const promiseStates = (await query(`SELECT p.call_id,p.item_index,p.status,p.updated_at FROM promise_states p
     JOIN calls c ON c.id=p.call_id WHERE c.user_id=$1 ORDER BY p.updated_at`, [userId])).rows;
-  const auditEvents = (await query(`SELECT action,target_type,target_id,created_at FROM audit_events
+  const auditEvents = (await query(`SELECT action,target_type,target_id,reason,created_at FROM audit_events
     WHERE user_id=$1 ORDER BY created_at, id`, [userId])).rows;
   return {
     format: 'dimts-export-v1',

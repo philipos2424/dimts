@@ -1,0 +1,286 @@
+import test, { mock } from 'node:test';
+import assert from 'node:assert/strict';
+import { PGlite } from '@electric-sql/pglite';
+import { readFile } from 'node:fs/promises';
+import { randomBytes, createHash } from 'node:crypto';
+const hashToken = token => createHash('sha256').update(token).digest('hex');
+const db = new PGlite();
+await db.exec(await readFile(new URL('../db/schema.sql', import.meta.url), 'utf8'));
+mock.module('../db/pool.js', { namedExports: {
+  query: (sql, p) => db.query(sql, p), queryOne: async (sql, p) => (await db.query(sql, p)).rows[0],
+  withTransaction: work => db.transaction(work), getPool: () => ({}),
+} });
+process.env.ADMIN_PHONES = '+15555550100, not-a-number';
+process.env.PUBLIC_BASE_URL = 'https://dimts.example';
+// The WebAuthn cryptography is the library's job; these tests cover what Dimts does around it.
+const webauthn = { verified: true, challenge: 'challenge-1', newCounter: 1 };
+mock.module('@simplewebauthn/server', { namedExports: {
+  generateRegistrationOptions: async () => ({ challenge: webauthn.challenge, user: { id: 'dXNlcg' } }),
+  generateAuthenticationOptions: async () => ({ challenge: webauthn.challenge }),
+  verifyRegistrationResponse: async ({ expectedOrigin, expectedRPID }) => {
+    assert.equal(expectedOrigin, 'https://dimts.example'); assert.equal(expectedRPID, 'dimts.example');
+    return { verified: webauthn.verified, registrationInfo: { credential: { id: 'credential-abc', publicKey: new Uint8Array([1, 2, 3]), counter: 0, transports: ['internal'] } } };
+  },
+  verifyAuthenticationResponse: async ({ credential }) => {
+    assert.deepEqual([...credential.publicKey], [1, 2, 3]);
+    return { verified: webauthn.verified, authenticationInfo: { newCounter: webauthn.newCounter } };
+  },
+} });
+const clientData = challenge => Buffer.from(JSON.stringify({ challenge })).toString('base64url');
+const { createApp } = await import('../create-app.js');
+const { expireAuditEvents } = await import('../services/retention.js');
+const { maskPhone, regionOf } = await import('../lib/admin.js');
+const { monthlyListCents } = await import('../services/admin-metrics.js');
+const server = createApp().listen(0), origin = `http://127.0.0.1:${server.address().port}`;
+test.after(async () => { await new Promise(r => server.close(r)); await db.close(); });
+
+async function signedIn(phone, { sessionAge = '1 minute' } = {}) {
+  const user = (await db.query(`INSERT INTO users(phone) VALUES($1) ON CONFLICT (phone) DO UPDATE SET phone=EXCLUDED.phone RETURNING id`, [phone])).rows[0];
+  const token = randomBytes(32).toString('hex');
+  await db.query(`INSERT INTO sessions(token_hash,user_id,expires_at,created_at) VALUES($1,$2,now()+interval '1 day',now()-$3::interval)`,
+    [hashToken(token), user.id, sessionAge]);
+  return { id: user.id, token };
+}
+async function api(path, token, { method = 'GET', body } = {}) {
+  const response = await fetch(origin + path, { method, headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body) });
+  const text = await response.text();
+  return { status: response.status, text, body: text.startsWith('{') ? JSON.parse(text) : text, headers: response.headers };
+}
+const SECRET_WORDS = 'the confidential price is forty thousand';
+async function customerWithCall(phone, { transcript = `dmt1.k1.calls:transcript.x.y.${randomBytes(4).toString('hex')}`, consent = true } = {}) {
+  const user = (await db.query('INSERT INTO users(phone, tier) VALUES($1, $2) RETURNING id', [phone, 'pro'])).rows[0];
+  const call = (await db.query(`INSERT INTO calls(user_id,user_phone,destination,status,duration_sec,transcript,summary,record_enabled,consent_mode,
+      other_party_notice_issued_at,parent_consent_at,recording_sid,audio_object_key,direction)
+    VALUES($1,$2,'+15555559999','ready',125,$3,'dmt1.sealed',true,'notice',$4,now(),'RE1','obj','outbound') RETURNING id`,
+  [user.id, phone, transcript, consent ? new Date() : null])).rows[0];
+  return { id: user.id, callId: call.id };
+}
+
+test('the console is invisible to everyone but allowlisted staff with a recent sign-in', async () => {
+  assert.equal((await api('/api/admin/overview')).status, 404);
+  const customer = await signedIn('+15555550101');
+  assert.equal((await api('/api/admin/overview', customer.token)).status, 404, 'a customer sees the same 404 as a missing route');
+  const stale = await signedIn('+15555550100', { sessionAge: '13 hours' });
+  const refused = await api('/api/admin/overview', stale.token);
+  assert.equal(refused.status, 403); assert.equal(refused.body.error, 'reauth_required');
+  const staff = await signedIn('+15555550100');
+  assert.equal((await api('/api/admin/overview', staff.token)).status, 200);
+});
+
+test('measurements never carry call content or full phone numbers, and every view is audited', async () => {
+  const staff = await signedIn('+15555550100');
+  const a = await customerWithCall('+447700900123', { transcript: SECRET_WORDS });
+  await db.query(`INSERT INTO subscriptions(id,user_id,product_key,plan,billing_interval,status) VALUES
+    ('sub_a',$1,'pro_month','pro','month','active')`, [a.id]);
+  await db.query(`INSERT INTO payments(order_id,user_id,product_key,currency,total_amount,tax_amount) VALUES ('ord_1',$1,'pro_month','usd',1900,0)`, [a.id]);
+  const { status, body, text } = await api('/api/admin/overview', staff.token);
+  assert.equal(status, 200);
+  assert.ok(!text.includes('confidential') && !text.includes('+447700900123') && !text.includes('+15555559999'));
+  assert.ok(body.accounts.total >= 1); assert.ok(body.accounts.by_region.UK >= 1);
+  assert.equal(body.revenue.mrr_usd_cents, 1900); assert.equal(body.revenue.paying_users, 1);
+  assert.ok(body.calls_30d.connected >= 1); assert.equal(body.signups_daily.length, 90); assert.equal(body.calls_daily.length, 30);
+  assert.equal(body.top_accounts.find(row => row.id === a.id).phone, '+44 ••• 0123');
+  const logged = (await db.query("SELECT count(*)::int n FROM audit_events WHERE user_id=$1 AND action='admin_viewed_overview'", [staff.id])).rows[0].n;
+  assert.ok(logged >= 1);
+  const cohorts = await api('/api/admin/cohorts', staff.token);
+  assert.equal(cohorts.status, 200); assert.ok(Array.isArray(cohorts.body.cohorts));
+});
+
+test('search takes an exact number, the last four digits or an account ID, never a partial number', async () => {
+  const staff = await signedIn('+15555550100');
+  const target = await customerWithCall('+15555554321');
+  const byLast4 = await api('/api/admin/customers?q=4321', staff.token);
+  assert.deepEqual(byLast4.body.customers.map(row => row.id), [target.id]);
+  assert.equal(byLast4.body.customers[0].phone, '+1 ••• 4321');
+  assert.ok(!byLast4.text.includes('+15555554321'));
+  assert.deepEqual((await api(`/api/admin/customers?q=${encodeURIComponent('+1 (555) 555-4321')}`, staff.token)).body.customers.map(r => r.id), [target.id]);
+  assert.deepEqual((await api(`/api/admin/customers?q=${target.id.slice(0, 8)}`, staff.token)).body.customers.map(r => r.id), [target.id]);
+  assert.deepEqual((await api('/api/admin/customers?q=555555', staff.token)).body.customers.map(r => r.id).filter(id => id === target.id), [],
+    'six digits is neither a full number nor a last-four match');
+  assert.deepEqual((await api('/api/admin/customers?q=%2B1555', staff.token)).body.customers, []);
+});
+
+test('opening an account needs a reason, and the customer sees it in their activity log', async () => {
+  const staff = await signedIn('+15555550100');
+  const customer = await customerWithCall('+15555550777', { transcript: SECRET_WORDS });
+  assert.equal((await api(`/api/admin/customers/${customer.id}`, staff.token)).status, 400);
+  const detail = await api(`/api/admin/customers/${customer.id}?reason=support_request`, staff.token);
+  assert.equal(detail.status, 200);
+  assert.equal(detail.body.phone, '+1 ••• 0777');
+  assert.ok(!detail.text.includes('confidential') && !detail.text.includes('+15555559999') && !detail.text.includes('+15555550777'));
+  assert.equal(detail.body.usage_by_month[0].minutes, 2);
+  const theirs = (await db.query("SELECT action, reason FROM audit_events WHERE user_id=$1", [customer.id])).rows;
+  assert.deepEqual(theirs, [{ action: 'staff_viewed_account', reason: 'support_request' }]);
+  const ours = (await db.query("SELECT target_id, reason FROM audit_events WHERE user_id=$1 AND action='admin_viewed_customer'", [staff.id])).rows;
+  assert.deepEqual(ours, [{ target_id: customer.id, reason: 'support_request' }]);
+  assert.equal((await api('/api/admin/customers/not-a-uuid?reason=support_request', staff.token)).status, 404);
+});
+
+test('revealing a number and granting credits are reasoned, capped and on both records', async () => {
+  const staff = await signedIn('+15555550100');
+  const customer = await customerWithCall('+15555550888');
+  assert.equal((await api(`/api/admin/customers/${customer.id}/reveal-phone`, staff.token, { method: 'POST', body: {} })).status, 400);
+  const revealed = await api(`/api/admin/customers/${customer.id}/reveal-phone`, staff.token, { method: 'POST', body: { reason: 'billing_issue' } });
+  assert.deepEqual(revealed.body, { phone: '+15555550888' });
+  assert.equal((await api(`/api/admin/customers/${customer.id}/credits`, staff.token, { method: 'POST', body: { reason: 'billing_issue', credits: 999999 } })).status, 400);
+  const granted = await api(`/api/admin/customers/${customer.id}/credits`, staff.token, { method: 'POST', body: { reason: 'billing_issue', credits: 500 } });
+  assert.deepEqual(granted.body, { balance: 500 });
+  const theirs = (await db.query('SELECT action FROM audit_events WHERE user_id=$1 ORDER BY id', [customer.id])).rows.map(r => r.action);
+  assert.deepEqual(theirs, ['staff_viewed_phone', 'credits_granted']);
+  const log = await api('/api/admin/access-log', staff.token);
+  assert.ok(log.body.events.some(e => e.action === 'admin_revealed_phone' && e.reason === 'billing_issue' && e.staff === '+1 ••• 0100'));
+});
+
+test('compliance flags unconsented recordings, plaintext content and overdue deletion requests', async () => {
+  const staff = await signedIn('+15555550100');
+  const before = Object.fromEntries((await api('/api/admin/compliance', staff.token)).body.checks.map(c => [c.id, c.count]));
+  await customerWithCall('+15555550901', { consent: false });
+  await customerWithCall('+15555550902', { transcript: 'plain words' });
+  const owner = await customerWithCall('+15555550903');
+  const request = (await db.query("INSERT INTO privacy_requests(phone_hash,created_at) VALUES('h',now()-interval '31 days') RETURNING id")).rows[0];
+  await db.query('INSERT INTO privacy_request_targets(request_id,user_id) VALUES($1,$2)', [request.id, owner.id]);
+  const after = (await api('/api/admin/compliance', staff.token)).body.checks;
+  const byId = Object.fromEntries(after.map(c => [c.id, c]));
+  assert.equal(byId.recording_authorization.count - before.recording_authorization, 1);
+  assert.equal(byId.recording_authorization.status, 'fail');
+  assert.equal(byId.encryption.count - before.encryption, 1);
+  assert.equal(byId.privacy_overdue.count - before.privacy_overdue, 1);
+  assert.ok(byId.privacy_overdue.source.includes('GDPR'));
+});
+
+test('activity-log entries older than a year are deleted by the daily job', async () => {
+  await db.query(`INSERT INTO audit_events(action,created_at) VALUES('old_one',now()-interval '13 months'),('recent_one',now())`);
+  assert.ok(await expireAuditEvents() >= 1);
+  const left = (await db.query("SELECT action FROM audit_events WHERE action IN ('old_one','recent_one')")).rows.map(r => r.action);
+  assert.deepEqual(left, ['recent_one']);
+});
+
+test('the console page is served without data, unindexed, under a strict CSP', async () => {
+  const page = await fetch(origin + '/admin/');
+  assert.equal(page.status, 200);
+  assert.match(page.headers.get('content-security-policy'), /script-src 'self'/);
+  assert.equal(page.headers.get('x-robots-tag'), 'noindex, nofollow');
+  assert.match(await page.text(), /<script src="\/admin\/admin\.js"/);
+  assert.equal((await fetch(origin + '/admin', { redirect: 'manual' })).status, 308);
+  assert.equal((await fetch(origin + '/admin/admin.js')).status, 200);
+});
+
+test('masking, regions and list prices', () => {
+  assert.equal(maskPhone('+971501234567'), '+971 ••• 4567');
+  assert.equal(maskPhone('deleted:abc'), 'deleted');
+  assert.equal(regionOf('+4915112345678'), 'EU/EEA');
+  assert.equal(regionOf('+251911234567'), 'Ethiopia');
+  assert.equal(regionOf('+966501234567'), 'Gulf');
+  assert.equal(monthlyListCents('pro_year'), 1583);
+  assert.equal(monthlyListCents('business_month_lite'), 1900);
+  assert.equal(monthlyListCents('credits_10'), 0);
+});
+
+test('staff add a passkey once, then sign in with it alone; challenges work once', async () => {
+  const customer = await signedIn('+15555550101');
+  assert.equal((await api('/api/admin/passkeys/register/options', customer.token, { method: 'POST' })).status, 404);
+  const staff = await signedIn('+15555550100');
+  webauthn.challenge = 'register-challenge';
+  assert.equal((await api('/api/admin/passkeys/register/options', staff.token, { method: 'POST' })).body.challenge, 'register-challenge');
+  const registration = { id: 'credential-abc', response: { clientDataJSON: clientData('register-challenge') } };
+  assert.equal((await api('/api/admin/passkeys/register', staff.token, { method: 'POST', body: registration })).status, 200);
+  const replay = await api('/api/admin/passkeys/register', staff.token, { method: 'POST', body: registration });
+  assert.equal(replay.status, 400); assert.equal(replay.body.error, 'challenge_expired');
+  assert.equal((await api('/api/admin/me', staff.token)).body.passkeys.length, 1);
+
+  webauthn.challenge = 'login-challenge'; webauthn.newCounter = 7;
+  assert.equal((await api('/api/admin/passkeys/login/options', null, { method: 'POST' })).status, 200);
+  const login = await api('/api/admin/passkeys/login', null, { method: 'POST', body: { id: 'credential-abc', response: { clientDataJSON: clientData('login-challenge') } } });
+  assert.equal(login.status, 200); assert.match(login.body.token, /^[a-f0-9]{64}$/);
+  assert.equal((await api('/api/admin/overview', login.body.token)).status, 200, 'the passkey session opens the console');
+  assert.equal(Number((await db.query("SELECT counter FROM admin_passkeys WHERE id='credential-abc'")).rows[0].counter), 7);
+  const session = (await db.query(`SELECT expires_at < now() + interval '12 hours 1 minute' AS short FROM sessions
+    WHERE token_hash=$1`, [hashToken(login.body.token)])).rows[0];
+  assert.equal(session.short, true, 'console sessions last 12 hours, not 30 days');
+  assert.ok((await db.query("SELECT 1 FROM audit_events WHERE user_id=$1 AND action='admin_passkey_signed_in'", [staff.id])).rows.length);
+  const again = await api('/api/admin/passkeys/login', null, { method: 'POST', body: { id: 'credential-abc', response: { clientDataJSON: clientData('login-challenge') } } });
+  assert.equal(again.status, 400, 'a used login challenge cannot be replayed');
+});
+
+test('a passkey stops working when its owner leaves the staff list or the signature fails', async () => {
+  webauthn.challenge = 'login-2';
+  await api('/api/admin/passkeys/login/options', null, { method: 'POST' });
+  process.env.ADMIN_PHONES = '+15555550999';
+  const removed = await api('/api/admin/passkeys/login', null, { method: 'POST', body: { id: 'credential-abc', response: { clientDataJSON: clientData('login-2') } } });
+  process.env.ADMIN_PHONES = '+15555550100';
+  assert.equal(removed.status, 401);
+  webauthn.challenge = 'login-3'; webauthn.verified = false;
+  await api('/api/admin/passkeys/login/options', null, { method: 'POST' });
+  const forged = await api('/api/admin/passkeys/login', null, { method: 'POST', body: { id: 'credential-abc', response: { clientDataJSON: clientData('login-3') } } });
+  webauthn.verified = true;
+  assert.equal(forged.status, 401);
+  const unknown = await api('/api/admin/passkeys/login', null, { method: 'POST', body: { id: 'x', response: { clientDataJSON: clientData('never-issued') } } });
+  assert.equal(unknown.status, 400);
+});
+
+test('Today: health checks with actions, and this period against the one before', async () => {
+  const staff = await signedIn('+15555550100');
+  const owner = (await db.query("INSERT INTO users(phone, created_at) VALUES('+15555551201', now() - interval '40 days') RETURNING id")).rows[0];
+  await db.query(`INSERT INTO calls(user_id,user_phone,destination,status,duration_sec,created_at) VALUES
+    ($1,'+15555551201','+15555559999','ready',120,now()-interval '2 days'),
+    ($1,'+15555551201','+15555559999','ready',60,now()-interval '3 days'),
+    ($1,'+15555551201','+15555559999','ready',60,now()-interval '10 days')`, [owner.id]);
+  await db.query(`INSERT INTO calls(user_id,user_phone,destination,status,processing_requested_at,created_at)
+    VALUES($1,'+15555551201','+15555559999','processing',now()-interval '1 hour',now()-interval '1 hour')`, [owner.id]);
+  const { status, body } = await api('/api/admin/today?days=7', staff.token);
+  assert.equal(status, 200);
+  const stuck = body.health.find(c => c.id === 'stuck');
+  assert.equal(stuck.status, 'fail'); assert.ok(stuck.action);
+  assert.ok(body.attention.some(c => c.id === 'stuck'), 'failing checks are listed first under attention');
+  assert.equal(body.health.find(c => c.id === 'numbers').status, 'warn', 'an empty number pool is a warning');
+  const connected = body.changes.kpis.find(k => k.id === 'connected');
+  assert.ok(connected.now >= 2); assert.ok(connected.before >= 1);
+  assert.equal(body.changes.kpis.find(k => k.id === 'failure_rate').better, 'down');
+  assert.equal((await api('/api/admin/today?days=13', staff.token)).body.changes.days, 30, 'unknown ranges fall back to 30 days');
+});
+
+test('Funnel finds the step that loses the most people', async () => {
+  const staff = await signedIn('+15555550100');
+  const ids = [];
+  for (let i = 0; i < 4; i++) ids.push((await db.query(`INSERT INTO users(phone, terms_accepted_at, created_at)
+    VALUES($1, now(), now() - interval '1 day') RETURNING id`, [`+1555555130${i}`])).rows[0].id);
+  for (let k = 0; k < 3; k++) await db.query(`INSERT INTO calls(user_id,user_phone,destination,status,duration_sec) VALUES($1,'+15555551300','+15555559999','ready',60)`, [ids[0]]);
+  const { body } = await api('/api/admin/funnel?days=7', staff.token);
+  const step = id => body.steps.find(s => s.id === id);
+  assert.ok(step('signed_up').n >= 4); assert.ok(step('first_call').n >= 1); assert.ok(step('habit').n >= 1);
+  assert.ok(body.bottleneck, 'a bottleneck is named');
+});
+
+test('Operations reports failure categories and countries, never error text or dialed numbers', async () => {
+  const staff = await signedIn('+15555550100');
+  const owner = (await db.query("INSERT INTO users(phone) VALUES('+15555551401') RETURNING id")).rows[0];
+  await db.query(`INSERT INTO calls(user_id,user_phone,destination,status,error,direction) VALUES
+    ($1,'+15555551401','+447700900555','failed','ElevenLabs transcription failed: speaker said the secret price',  'outbound'),
+    ($1,'+15555551401','+447700900556','failed','Call no-answer','outbound')`, [owner.id]);
+  const { status, body, text } = await api('/api/admin/operations?days=30', staff.token);
+  assert.equal(status, 200);
+  assert.ok(!text.includes('secret price') && !text.includes('+447700900555') && !text.includes('ElevenLabs transcription failed'));
+  assert.ok(body.failure_reasons.some(r => r.reason === 'Transcription'));
+  assert.ok(body.failure_reasons.some(r => r.reason === 'No answer'));
+  const uk = body.by_destination.find(r => r.country_code === '44');
+  assert.equal(uk.calls, 2); assert.equal(uk.failed, 1); assert.equal(uk.unanswered, 1);
+  assert.equal(body.daily.length, 30);
+});
+
+test('a one-time setup link adds the first passkey and signs in, with no text or call; it works once', async () => {
+  const secret = 'a'.repeat(64);
+  process.env.ADMIN_SETUP_TOKEN = `+15555550100:${secret}`;
+  assert.equal((await api('/api/admin/setup/options', null, { method: 'POST', body: { setup: 'b'.repeat(64) } })).status, 404, 'a wrong secret looks like nothing is there');
+  webauthn.challenge = 'setup-challenge';
+  const options = await api('/api/admin/setup/options', null, { method: 'POST', body: { setup: secret } });
+  assert.equal(options.status, 200); assert.equal(options.body.challenge, 'setup-challenge');
+  const done = await api('/api/admin/setup', null, { method: 'POST', body: { setup: secret, credential: { id: 'credential-abc', response: { clientDataJSON: clientData('setup-challenge') } } } });
+  assert.equal(done.status, 200); assert.match(done.body.token, /^[a-f0-9]{64}$/);
+  assert.equal((await api('/api/admin/overview', done.body.token)).status, 200, 'the link signs the founder straight in');
+  const again = await api('/api/admin/setup/options', null, { method: 'POST', body: { setup: secret } });
+  assert.equal(again.status, 410); assert.equal(again.body.error, 'link_used');
+  process.env.ADMIN_SETUP_TOKEN = `+15555550888:${'c'.repeat(64)}`;
+  assert.equal((await api('/api/admin/setup/options', null, { method: 'POST', body: { setup: 'c'.repeat(64) } })).status, 404, 'only numbers on the staff list');
+  delete process.env.ADMIN_SETUP_TOKEN;
+});
