@@ -9,7 +9,7 @@ Expo SDK 57 needs Node.js 22.13 or newer. Install dependencies with `npm ci --le
 The environment boots PostgreSQL 16, applies `server/db/schema.sql`, and starts:
 
 - API at http://127.0.0.1:3000 (`GET /health`), via `node --env-file=.env server/dev.js`
-- Web UI at http://127.0.0.1:8081, via `npx expo start --web --host localhost --port 8081`
+- Web UI at http://localhost:8081, via `npx expo start --web --host localhost --port 8081` (Metro listens on IPv6 localhost)
 
 When `.env` is missing, startup writes one whose `DATABASE_URL` is `postgresql://dimts:dimts@127.0.0.1:5432/dimts` and whose Twilio, ElevenLabs, and OpenAI values are placeholders. Leave an existing `.env` alone. Replace the placeholders before placing or transcribing a real call.
 
