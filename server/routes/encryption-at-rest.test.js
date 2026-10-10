@@ -103,3 +103,17 @@ test('calls stored before encryption are sealed by the catch-up job, still read 
   const again = await encryptExisting({ limit: 50 });
   assert.deepEqual([again.calls, again.pending.calls], [0, 0]);
 });
+
+test('the app-review demo account stores its sample calls sealed, so the admin check stays at zero', async () => {
+  const { resetReviewDemo, createReviewDemoCall } = await import('../services/review-demo.js');
+  const o = await signedIn('+15555552777');
+  await resetReviewDemo({ id: o.id, phone: '+15555552777' });
+  await createReviewDemoCall({ id: o.id, phone: '+15555552777' }, '+15125550142');
+  const raw = (await db.query('SELECT id, transcript, summary FROM calls WHERE user_id=$1', [o.id])).rows;
+  assert.equal(raw.length, 7);
+  for (const row of raw) {
+    assert.ok(row.transcript.startsWith('dmt1.') && row.summary.startsWith('dmt1.'), 'demo call sealed at rest');
+  }
+  const { body } = await api(`/api/calls/${raw[0].id}`, o.token);
+  assert.match(body.transcript, /^User: /);
+});
