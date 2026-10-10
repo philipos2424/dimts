@@ -240,7 +240,7 @@ export async function compliance() {
         'Stop and investigate immediately: delete the affected recordings and find the code path that skipped the consent gate.'),
       check('encryption', 'Call content stored without encryption', 'Transcripts, summaries and notes sealed with a per-account key',
         'GDPR Art. 32 · Privacy policy "Security"', plaintext, process.env.DATA_ENCRYPTION_KEYS ? 'fail' : 'info',
-        'Run server/scripts/encrypt-existing.js with DATA_ENCRYPTION_KEYS set until it reports 0.'),
+        'The nightly retention job (02:30 UTC) seals these in batches. If the count is still above 0 the next day, a code path is writing plaintext: find it, or run server/scripts/encrypt-existing.js --dry-run to list the rows.'),
       check('audit_retention', 'Activity-log entries older than one year', 'Kept for one year',
         'Privacy policy "How long we keep it" · GDPR Art. 5(1)(e)', auditOld, 'warn',
         'The daily retention job removes them; check that it runs.'),
