@@ -4,7 +4,8 @@ export const WEB_SHELL_CSP = [
   "font-src 'self' data: https://fonts.gstatic.com",
   "img-src 'self' data: blob:",
   "media-src 'self' blob:",
-  "connect-src 'self'",
+  // The web build reports errors to Sentry's EU ingest (see src/sentry.ts).
+  "connect-src 'self' https://*.ingest.de.sentry.io",
   "frame-ancestors 'none'",
 ].join('; ');
 
