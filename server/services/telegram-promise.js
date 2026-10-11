@@ -1,5 +1,6 @@
 import { completeJson } from './llm.js';
 import { query, queryOne } from '../db/pool.js';
+import { sealJson, sealText } from '../lib/field-crypto.js';
 import { minimeConfigured, minimePost } from './minime.js';
 
 /**
@@ -81,9 +82,12 @@ export async function sendPromisedTelegram(callId, { signal } = {}) {
   const promise = await detectTelegramPromise(call.transcript, { signal });
   if (!promise) return { status: 'skipped' };
 
+  // Quoted call content, so it is sealed like the call's own transcript.
+  const ctx = field => ({ userId: call.user_id, rowId: call.id, field: `telegram_sends:${field}` });
   const claimed = await queryOne(`INSERT INTO telegram_sends(call_id,user_id,request,draft,evidence,status)
     VALUES($1,$2,$3,$4,$5,'sending') ON CONFLICT (call_id) DO NOTHING RETURNING id`,
-  [call.id, call.user_id, promise.request, promise.draft, JSON.stringify(promise.evidence)]);
+  [call.id, call.user_id, sealText(promise.request, ctx('request')), sealText(promise.draft, ctx('draft')),
+    sealJson(promise.evidence, ctx('evidence'))]);
   if (!claimed) return { status: 'skipped' };
 
   let status = 'failed', error = null;
