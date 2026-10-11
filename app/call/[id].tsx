@@ -207,6 +207,15 @@ export default function CallDetailScreen() {
                 ))}
               </View>
             )}
+            {call.telegram_send && (
+              <View style={{ gap: space.xs }}>
+                <Txt weight="bold">
+                  {{ sent: 'Sent on Telegram by MiniMe', waiting: 'Telegram: waiting for them to message your business',
+                    sending: 'Sending on Telegram…', failed: 'Telegram send failed: send it yourself' }[call.telegram_send.status]}
+                </Txt>
+                <Txt tone="muted">{call.telegram_send.request}</Txt>
+              </View>
+            )}
             <FollowupReview key={call.id} callId={call.id} initial={call.followups} />
             <RecapButton callId={call.id} />
             <Button compact variant="quiet" label="Ask about this call"
