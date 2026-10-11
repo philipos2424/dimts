@@ -117,3 +117,17 @@ test('the app-review demo account stores its sample calls sealed, so the admin c
   const { body } = await api(`/api/calls/${raw[0].id}`, o.token);
   assert.match(body.transcript, /^User: /);
 });
+
+test('pasting another user\'s ciphertext into your own contact returns it as text, never decrypted', async () => {
+  const victim = await signedIn('+15555552081'), attacker = await signedIn('+15555552082');
+  const victimContact = randomUUID(), attackerContact = randomUUID();
+  const stolen = sealText('Victim pays 9,000 on Friday', { userId: victim.id, rowId: victimContact, field: 'contacts:notes' });
+  await db.query("INSERT INTO contacts(id,user_id,phone,notes) VALUES($1,$2,'+15555552091',$3)", [victimContact, victim.id, stolen]);
+  await db.query("INSERT INTO contacts(id,user_id,phone) VALUES($1,$2,'+15555552092')", [attackerContact, attacker.id]);
+  const res = await api(`/api/contacts/${attackerContact}`, attacker.token, { method: 'PATCH', body: { display_name: 'X', notes: stolen } });
+  assert.equal(res.status, 200);
+  assert.ok(!/Victim pays/.test(JSON.stringify(res.body)), 'the victim plaintext never comes back');
+  assert.equal(res.body.notes ?? res.body.contact?.notes, stolen, 'the attacker just gets their own text back');
+  // Re-saving one's own sealed value keeps it as is (idempotent).
+  assert.equal(sealText(stolen, { userId: victim.id, rowId: victimContact, field: 'contacts:notes' }), stolen);
+});
