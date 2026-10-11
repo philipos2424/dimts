@@ -1,3 +1,4 @@
+process.env.AUDIT_SALT = 'test-trial-secret-at-least-32-characters';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -49,6 +50,7 @@ test('call reservations enforce idempotency, concurrency and minute budgets usin
     process.env.GLOBAL_CALL_MINUTES_PER_MONTH = '20'; // 60 seconds left in the shared free and trial pool
     const other = (await db.query("INSERT INTO users(phone) VALUES('+15555550104') RETURNING *")).rows[0];
     other.agent_number = '+15555550999';
+    await db.query('UPDATE users SET agent_number=$2 WHERE id=$1', [other.id, other.agent_number]);
     const inbound = () => db.transaction(tx => reserveCallInTransaction(tx, other, 'anonymous', true, 'incoming-CA_TEST',
       { direction: 'inbound', callSid: 'CA_TEST', contactId: null }));
     const incoming = await inbound();

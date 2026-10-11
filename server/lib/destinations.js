@@ -6,6 +6,7 @@
  * control and test.
  */
 import { isE164 } from './phone.js';
+import { parsePhoneNumberFromString } from 'libphonenumber-js/max';
 
 // Launch countries for signup. Ethiopia joined on 4 October 2026: Ethiopian
 // businesses are core customers, not only people the diaspora calls.
@@ -31,15 +32,18 @@ const NANP_FOREIGN = new Set([
   '758', '767', '784', '809', '829', '849', '868', '869', '876',
 ]);
 
-// Premium-rate and revenue-share ranges inside allowed countries.
-const PREMIUM = [
-  '1900', '1976',
-  '449', '4470', '4487', '447624', // UK: 09 premium, 070 personal, 087 revenue share, Isle of Man mobile
-  '49900', '49137', // Germany
-  '3389', // France 089x
-  '39899', '39892', // Italy
-  '34803', '34806', '34807', '34905', // Spain
-];
+// NANPA non-geographic services (including reserved expansion ranges), Canadian
+// special services, and local 976 pay-per-call exchanges. US territories remain
+// ordinary destinations. https://www.nanpa.com/index.php/numbering/5xx-nxx-codes
+const NANP_SPECIAL = /^(?:456|500|52[1-9]|53[238]|54[2-579]|55[23468]|56[69]|57[78]|58[89]|6(?:00|22|33|44|55|66|77|88|99)|700|710|8(?:00|22|33|44|55|66|77|88)|900|911|976)/;
+const ORDINARY_TYPES = new Set(['FIXED_LINE', 'MOBILE', 'FIXED_LINE_OR_MOBILE']);
+// Full (max, not min) metadata supplies fixed/mobile ranges for EVERY country.
+// Unknown, premium, shared-cost, toll-free, personal, pager, VoIP and other
+// service types fail closed. Keep the pinned dependency's plans up to date.
+// National administrations publish plans at https://www.itu.int/ITU-T/inr/nnp/
+// UK 070/076/084/087/09: https://www.ofcom.org.uk/phones-and-broadband/phone-numbers/numbering-data
+// AT 090x/093x: https://www.rtr.at/TKP/service/rufnummernsuche/RufnummernsucheWeb931.de.html
+// IE 15xx: https://www.comreg.ie/advice-information/premium-rate/about-premium-rate-services/
 
 function countryCode(number, allowed) {
   const digits = number.slice(1);
@@ -51,8 +55,18 @@ function permitted(number, allowed) {
   if (!isE164(number)) return false;
   const code = countryCode(number, allowed);
   if (!code) return false;
-  if (code === '1' && (number.length !== 12 || NANP_FOREIGN.has(number.slice(2, 5)))) return false;
-  return !PREMIUM.some(prefix => number.slice(1).startsWith(prefix));
+  if (code === '1') {
+    const national = number.slice(2);
+    return /^[2-9]\d{2}[2-9]\d{6}$/.test(national)
+      && !NANP_FOREIGN.has(national.slice(0, 3)) && !NANP_SPECIAL.test(national)
+      && !/^(?:900|950|958|959|976|[2-9]11)/.test(national.slice(3))
+      && !['5551212', '5554334'].includes(national.slice(3));
+  }
+  // Preserve the existing Isle of Man exclusion; 07624 is classified mobile.
+  if (number.startsWith('+447624')) return false;
+  const parsed = parsePhoneNumberFromString(number);
+  // Reject normalization (e.g. an international number with a domestic trunk 0).
+  return parsed?.number === number && ORDINARY_TYPES.has(parsed.getType());
 }
 
 /** Whether a number may sign up and receive a verification code. */

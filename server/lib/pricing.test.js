@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { CREDIT_PACKS, PLAN_PRICES, affordableSeconds, callCredits, callSurcharge, catalogFor, displayCurrency, priceRegion } from './pricing.js';
 import { PRODUCT_KEYS, parsePlanKey, polarProducts, productKeyFor } from './polar-products.js';
 
-const US = '+12025550101', TORONTO = '+14165550101', UK = '+447700900123', DE = '+4915112345678';
+const US = '+12025550101', TORONTO = '+14165550101', UK = '+447400900123', DE = '+4915112345678';
 const UAE = '+971501234567', ET = '+251911234567';
 
 test('cheap countries ride on plan minutes; each expensive leg adds its surcharge', () => {
@@ -71,11 +71,11 @@ test('POLAR_PRODUCTS must name a product for every key', () => {
 test('over-plan minutes cover UK and EU carrier costs; US calls keep the base rate', async () => {
   const { overageRate, planMinutes } = await import('./pricing.js');
   assert.equal(overageRate('+14155550100', '+14155550101'), 3);
-  assert.equal(overageRate('+447700900123', '+447700900124'), 7);
+  assert.equal(overageRate('+447400900123', '+447400900124'), 7);
   assert.equal(overageRate('+4915112345678', '+33612345678'), 11);
   assert.equal(overageRate('+14155550100', '+4915112345678'), 7);
   assert.equal(overageRate('+4915112345678', '+14155550100', 'inbound'), 7, 'inbound only prices the owner leg');
-  assert.deepEqual(['+14155550100', '+447700900123', '+4915112345678', '+971501234567'].map(p => planMinutes('pro', p)), [500, 300, 200, 500]);
+  assert.deepEqual(['+14155550100', '+447400900123', '+4915112345678', '+971501234567'].map(p => planMinutes('pro', p)), [500, 300, 200, 500]);
   assert.equal(planMinutes('business', '+33612345678'), 500);
   assert.equal(planMinutes('free', '+33612345678'), 0, 'after the trial, Free is read-only');
   assert.equal(planMinutes('pro', '+33612345678', { trial: true }), 20, 'the trial is capped everywhere');

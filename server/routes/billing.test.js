@@ -12,7 +12,7 @@ Object.assign(process.env, { PUBLIC_BASE_URL: 'https://calls.example.com', POLAR
   POLAR_ACCESS_TOKEN: 'polar_oat_test', POLAR_WEBHOOK_SECRET: `whsec_${signingKey.toString('base64')}` });
 const db = new PGlite();
 await db.exec(await readFile(new URL('../db/schema.sql', import.meta.url), 'utf8'));
-let user = (await db.query("INSERT INTO users(phone) VALUES('+447700900123') RETURNING *")).rows[0];
+let user = (await db.query("INSERT INTO users(phone) VALUES('+447400900123') RETURNING *")).rows[0];
 mock.module('../db/pool.js', { namedExports: {
   query: (sql, p) => db.query(sql, p), queryOne: async (sql, p) => (await db.query(sql, p)).rows[0],
   withTransaction: work => db.transaction(work),
@@ -65,7 +65,7 @@ test('checkout uses the product for the region and charges the currency shown', 
   assert.equal(checkouts.at(-1).productId, ids.credits_10);
   assert.equal((await post('/api/billing/checkout', { item: 'gold' })).status, 400);
   assert.equal((await post('/api/billing/checkout', { item: 'pro', interval: 'week' })).status, 400);
-  user = { ...user, phone: '+447700900123' };
+  user = { ...user, phone: '+447400900123' };
 });
 
 test('signed webhooks apply once; unsigned ones are refused; subscribers manage plans in the portal', async () => {

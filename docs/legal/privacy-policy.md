@@ -73,6 +73,8 @@ backups expire on their own schedule; deleted content in them cannot be read
 without keys held outside the database.
 Activity-log entries are kept for one year and contain no call content.
 
+After account deletion, we keep a one-way fingerprint of your phone number for 12 months only to prevent free-trial abuse.
+
 ## Your rights
 - **Access and portability:** Settings → Your data → Download my data.
 - **Correction:** edit contact names and notes in the app.
