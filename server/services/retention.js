@@ -35,6 +35,7 @@ export async function expireOldCalls({ limit = 200 } = {}) {
   }
   const forgotten = await forgetOldContacts({ limit });
   const auditExpired = await expireAuditEvents();
+  await database.query("DELETE FROM trial_tombstones WHERE trial_used_at <= now() - interval '12 months'");
   return { deleted, skipped, forgotten, auditExpired };
 }
 

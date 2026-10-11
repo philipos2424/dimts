@@ -73,6 +73,11 @@ inboundRouter.post('/', async (req, res) => {
     if (!CallSid || !caller || caller === agentNumber || caller === user.phone) throw new Error('Invalid incoming call');
     ({ call } = await reserveCall(user, caller, true, `incoming-${CallSid}`, { direction: 'inbound', callSid: CallSid, contactId }));
   } catch (err) {
+    if (['number_not_in_service', 'account_not_found'].includes(err?.code)) {
+      twiml.say('This number is not in service.');
+      twiml.hangup();
+      return res.type('text/xml').send(twiml.toString());
+    }
     // Out of minutes and credits: a business line should still take a message.
     if (['credits_required', 'call_minutes_limit'].includes(err?.code)) {
       const message = await takeMessage(user, caller, CallSid, contactId, twiml).catch(fallback => {
