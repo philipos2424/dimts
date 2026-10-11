@@ -27,10 +27,10 @@ export const CONNECTED = '(c.duration_sec > 0 OR c.voicemail)';
 export const PAYING = "('active','trialing','past_due')";
 const CHURNED = "('canceled','unpaid','revoked','incomplete_expired')";
 
-/** List price of a subscription per month in US cents, from its Polar product key (e.g. pro_year_lite). */
+/** List price of a subscription per month in US cents, from its Polar product key (e.g. pro_year). Retired `_lite` keys count at the list price. */
 export function monthlyListCents(productKey) {
-  const [plan, interval, lite] = String(productKey).split('_');
-  const cents = pricing.PLAN_PRICES[lite === 'lite' ? 'lite' : 'standard']?.[plan]?.[interval]?.usd;
+  const [plan, interval] = String(productKey).split('_');
+  const cents = pricing.PLAN_PRICES.standard?.[plan]?.[interval]?.usd;
   if (cents == null) return 0;
   return interval === 'year' ? Math.round(cents / 12) : cents;
 }

@@ -73,12 +73,12 @@ test('measurements never carry call content or full phone numbers, and every vie
   const a = await customerWithCall('+447700900123', { transcript: SECRET_WORDS });
   await db.query(`INSERT INTO subscriptions(id,user_id,product_key,plan,billing_interval,status) VALUES
     ('sub_a',$1,'pro_month','pro','month','active')`, [a.id]);
-  await db.query(`INSERT INTO payments(order_id,user_id,product_key,currency,total_amount,tax_amount) VALUES ('ord_1',$1,'pro_month','usd',1900,0)`, [a.id]);
+  await db.query(`INSERT INTO payments(order_id,user_id,product_key,currency,total_amount,tax_amount) VALUES ('ord_1',$1,'pro_month','usd',2000,0)`, [a.id]);
   const { status, body, text } = await api('/api/admin/overview', staff.token);
   assert.equal(status, 200);
   assert.ok(!text.includes('confidential') && !text.includes('+447700900123') && !text.includes('+15555559999'));
   assert.ok(body.accounts.total >= 1); assert.ok(body.accounts.by_region.UK >= 1);
-  assert.equal(body.revenue.mrr_usd_cents, 1900); assert.equal(body.revenue.paying_users, 1);
+  assert.equal(body.revenue.mrr_usd_cents, 2000); assert.equal(body.revenue.paying_users, 1);
   assert.ok(body.calls_30d.connected >= 1); assert.equal(body.signups_daily.length, 90); assert.equal(body.calls_daily.length, 30);
   assert.equal(body.top_accounts.find(row => row.id === a.id).phone, '+44 ••• 0123');
   const logged = (await db.query("SELECT count(*)::int n FROM audit_events WHERE user_id=$1 AND action='admin_viewed_overview'", [staff.id])).rows[0].n;
@@ -172,8 +172,8 @@ test('masking, regions and list prices', () => {
   assert.equal(regionOf('+4915112345678'), 'EU/EEA');
   assert.equal(regionOf('+251911234567'), 'Ethiopia');
   assert.equal(regionOf('+966501234567'), 'Gulf');
-  assert.equal(monthlyListCents('pro_year'), 1583);
-  assert.equal(monthlyListCents('business_month_lite'), 1900);
+  assert.equal(monthlyListCents('pro_year'), 1667);
+  assert.equal(monthlyListCents('business_month_lite'), 5000, 'retired regional plans count at the list price');
   assert.equal(monthlyListCents('credits_10'), 0);
 });
 

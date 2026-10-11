@@ -1,8 +1,9 @@
 // Create the Polar products Dimts sells, from the prices in lib/pricing.js,
 // and print the POLAR_PRODUCTS value to set in the environment. Safe to rerun:
-// products already tagged with their dimts_key are reused, not duplicated.
-// Price changes are not applied to existing products; archive the old product
-// in Polar and rerun, so current subscribers keep the price they agreed to.
+// a product tagged with its dimts_key is reused while its prices still match.
+// When prices change, the old product is archived (no new purchases; current
+// subscribers keep the price they agreed to) and a new one is created. Tagged
+// products Dimts no longer sells (e.g. the old regional `_lite` plans) are archived.
 // Usage: node --env-file=../.env scripts/polar-setup.js            (sandbox)
 //        node --env-file=../.env scripts/polar-setup.js --production
 import { CREDIT_PACKS, INTERVALS, PAID_PLANS, PLANS, PLAN_PRICES, planProductKey } from '../lib/pricing.js';
@@ -23,13 +24,13 @@ const fixed = prices => Object.entries(prices).map(([currency, amount]) => ({ am
 const title = word => word[0].toUpperCase() + word.slice(1);
 
 const wanted = [];
-for (const plan of PAID_PLANS) for (const interval of INTERVALS) for (const region of ['standard', 'lite']) {
+for (const plan of PAID_PLANS) for (const interval of INTERVALS) {
   wanted.push({
-    key: planProductKey(plan, interval, region),
-    name: `Dimts ${title(plan)} (${interval === 'month' ? 'monthly' : 'yearly'}${region === 'lite' ? ', regional' : ''})`,
+    key: planProductKey(plan, interval),
+    name: `Dimts ${title(plan)} (${interval === 'month' ? 'monthly' : 'yearly'})`,
     description: `${PLANS[plan].minutes} call minutes a month to the US, Canada, UK and Europe, with AI notes, agreements and follow-ups. Renews every ${interval}; cancel any time from the app.`,
     recurring_interval: interval,
-    prices: fixed(PLAN_PRICES[region][plan][interval]),
+    prices: fixed(PLAN_PRICES.standard[plan][interval]),
   });
 }
 for (const [key, pack] of Object.entries(CREDIT_PACKS)) {
@@ -41,13 +42,23 @@ for (const [key, pack] of Object.entries(CREDIT_PACKS)) {
 const existing = new Map();
 for (let page = 1; ; page++) {
   const { items, pagination } = await polar('GET', `/v1/products/?limit=100&page=${page}&is_archived=false`);
-  for (const product of items) if (product.metadata?.dimts_key) existing.set(product.metadata.dimts_key, product.id);
+  for (const product of items) if (product.metadata?.dimts_key) existing.set(product.metadata.dimts_key, product);
   if (page >= (pagination?.max_page ?? 1)) break;
 }
 
+const priceKey = prices => JSON.stringify(prices.filter(p => !p.is_archived && p.amount_type === 'fixed')
+  .map(p => [p.price_currency, p.price_amount]).sort());
+const archive = async (product, why) => {
+  await polar('PATCH', `/v1/products/${product.id}`, { is_archived: true });
+  console.error(`archived ${product.metadata.dimts_key} (${why})`);
+};
+
 const ids = {};
+for (const [key, product] of existing) if (!wanted.some(w => w.key === key)) await archive(product, 'no longer sold');
 for (const { key, ...product } of wanted) {
-  if (existing.has(key)) { ids[key] = existing.get(key); console.error(`kept    ${key}`); continue; }
+  const old = existing.get(key);
+  if (old && priceKey(old.prices) === priceKey(product.prices)) { ids[key] = old.id; console.error(`kept    ${key}`); continue; }
+  if (old) await archive(old, 'prices changed');
   const created = await polar('POST', '/v1/products/', { ...product, metadata: { dimts_key: key } });
   ids[key] = created.id;
   console.error(`created ${key}`);

@@ -55,12 +55,12 @@ test('dropping to Free keeps the business number 30 days; paying again cancels t
 
 test('every paid order is kept as revenue, with refunds', async () => {
   const user = await newUser('+12025550121');
-  const order = { id: 'ord_rev', product_id: ids.pro_month_lite, currency: 'USD', total_amount: 700, tax_amount: 0, refunded_amount: 0,
+  const order = { id: 'ord_rev', product_id: ids.pro_month, currency: 'USD', total_amount: 700, tax_amount: 0, refunded_amount: 0,
     created_at: '2026-10-04T12:00:00Z', customer: { external_id: user.id } };
   await applyPolarEvent('wh_40', { type: 'order.paid', data: order });
   await applyPolarEvent('wh_41', { type: 'order.refunded', data: { ...order, refunded_amount: 700 } });
   const row = (await db.query("SELECT product_key,currency,total_amount,refunded_amount FROM payments WHERE order_id='ord_rev'")).rows[0];
-  assert.deepEqual(row, { product_key: 'pro_month_lite', currency: 'usd', total_amount: 700, refunded_amount: 700 });
+  assert.deepEqual(row, { product_key: 'pro_month', currency: 'usd', total_amount: 700, refunded_amount: 700 });
 });
 
 test('an owner with nothing left can still receive a message, free of charge', async () => {

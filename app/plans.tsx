@@ -33,7 +33,9 @@ const COPY = {
     overageLegs: (uk: string, eu: string) => `Plus ${uk} a minute for each UK phone and ${eu} for each European phone on the call, because those networks cost more.`,
     afterCheckout: 'Payment received. Your plan updates in a few seconds.',
     webOnly: 'Plans and credits can be bought at dimts.app from any browser.',
-    regional: 'Regional pricing for your country.',
+    yearlyEquivalent: (billed: string, saved: string) => `Billed ${billed} a year. You save ${saved} against paying monthly.`,
+    perDay: (daily: string) => `About ${daily} a day.`,
+    archiveOnly: 'Every past call stays readable, searchable and exportable. New calls need a plan.',
     numberGrace: (n: string, d: string) => `Your business number ${n} stays yours until ${d}. Choose a plan to keep it; after that it is released.`,
     free: 'Free', pro: 'Pro', business: 'Business',
   },
@@ -57,7 +59,9 @@ const COPY = {
     overageLegs: (uk: string, eu: string) => `በጥሪው ላይ ላለ እያንዳንዱ የዩኬ ስልክ በደቂቃ ${uk}፣ ለአውሮፓ ስልክ ${eu} ይጨመራል።`,
     afterCheckout: 'ክፍያው ደርሷል። ዕቅድዎ በጥቂት ሰከንዶች ውስጥ ይዘመናል።',
     webOnly: 'ዕቅድ እና ክሬዲት በማንኛውም ብራውዘር dimts.app ላይ መግዛት ይቻላል።',
-    regional: 'ለአገርዎ የተዘጋጀ ዋጋ።',
+    yearlyEquivalent: (billed: string, saved: string) => `Billed ${billed} a year. You save ${saved} against paying monthly.`,
+    perDay: (daily: string) => `About ${daily} a day.`,
+    archiveOnly: 'Every past call stays readable, searchable and exportable. New calls need a plan.',
     numberGrace: (n: string, d: string) => `የንግድ ቁጥርዎ ${n} እስከ ${d} የእርስዎ ነው። ለማቆየት ዕቅድ ይምረጡ፤ ከዚያ በኋላ ይለቀቃል።`,
     free: 'ነፃ', pro: 'ፕሮ', business: 'ቢዝነስ',
   },
@@ -75,6 +79,9 @@ const FEATURES: Record<string, { en: string; am: string }> = {
   priority_support: { en: 'Priority support', am: 'ቅድሚያ ድጋፍ' },
 };
 
+/** Most expensive first: the anchor sets the frame before the recommended plan. */
+const PLAN_ORDER: PlanId[] = ['business', 'pro', 'free'];
+
 function go(url: string) {
   // Same tab on the web, so Polar's success link brings the user straight back here.
   if (Platform.OS === 'web') window.location.assign(url);
@@ -87,7 +94,7 @@ export default function Plans() {
   const copy = COPY[lang];
   const params = useLocalSearchParams<{ checkout?: string }>();
   const [billing, setBilling] = useState<Billing | null>(null);
-  const [interval, setBillingInterval] = useState<Interval>('month');
+  const [interval, setBillingInterval] = useState<Interval>('year');
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState(params.checkout === 'done' ? copy.afterCheckout : '');
@@ -163,11 +170,15 @@ export default function Plans() {
               );
             })}
           </View>
-          {catalog.region === 'lite' && <Txt size="caption" tone="muted">{copy.regional}</Txt>}
-          {catalog.plans.map(plan => {
+          {/* Price anchoring: Business comes first, so Pro is judged against it, and
+              yearly shows its monthly equivalent. No invented "was" prices: the saving
+              is against this plan's own monthly price, and the billed amount is stated. */}
+          {[...catalog.plans].sort((a, b) => PLAN_ORDER.indexOf(a.id) - PLAN_ORDER.indexOf(b.id)).map(plan => {
             // A trial is not a purchase: Pro stays buyable during it.
             const current = billing.tier === plan.id && trialDays == null;
             const price = plan.prices?.[interval];
+            const monthly = plan.prices?.month;
+            const shown = price && interval === 'year' ? { ...price, amount: Math.round(price.amount / 12) } : price;
             return (
               <Card key={plan.id} style={plan.id === 'pro' ? { borderColor: c.brand, borderWidth: 2 } : undefined}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -175,10 +186,14 @@ export default function Plans() {
                   {current ? <Pill tone="ok" label={copy.yourPlan} /> : plan.id === 'pro' ? <Pill tone="gold" label={copy.recommended} /> : null}
                 </View>
                 <Txt size="title" weight="bold">
-                  {price ? formatPrice(price, lang) : formatPrice({ amount: 0, currency: catalog.currency }, lang)}
-                  <Txt tone="muted">{price ? (interval === 'month' ? copy.perMonth : copy.perYear) : ''}</Txt>
+                  {shown ? formatPrice(shown, lang) : formatPrice({ amount: 0, currency: catalog.currency }, lang)}
+                  <Txt tone="muted">{shown ? copy.perMonth : ''}</Txt>
                 </Txt>
-                <Txt weight="bold">{copy.minutesIncluded(plan.minutes)}</Txt>
+                {price && monthly && interval === 'year' && monthly.currency === price.currency
+                  ? <Txt size="caption" tone="ok" weight="bold">{copy.yearlyEquivalent(formatPrice(price, lang),
+                      formatPrice({ ...price, amount: monthly.amount * 12 - price.amount }, lang))}</Txt>
+                  : price ? <Txt size="caption" tone="muted">{copy.perDay(formatPrice({ ...price, amount: Math.round(price.amount * 12 / 365) }, lang))}</Txt> : null}
+                <Txt weight="bold">{plan.minutes > 0 ? copy.minutesIncluded(plan.minutes) : copy.archiveOnly}</Txt>
                 {plan.features.map(feature => <Txt key={feature} tone="muted">✓ {FEATURES[feature]?.[lang] ?? feature}</Txt>)}
                 {price && !current && (
                   <>
