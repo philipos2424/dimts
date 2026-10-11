@@ -1,6 +1,7 @@
 import express from 'express';
 import * as database from '../db/pool.js';
 import { isE164 } from '../lib/phone.js';
+import { callingCode } from '../lib/destinations.js';
 import { HttpError, hashToken, resolveUser } from '../lib/users.js';
 import { hit } from '../lib/rate-limit.js';
 import { audit } from '../lib/audit.js';
@@ -15,8 +16,14 @@ export const SENT_MESSAGE = 'Your request was sent to the businesses who recorde
 privacyRequestsRouter.post('/start', async (req, res) => {
   const { phone } = req.body ?? {};
   if (!isE164(phone)) throw new HttpError(400, 'invalid_phone');
+  // Every code costs money, so this page shares sign-in's ceilings and only
+  // texts countries Dimts calls; anyone else can still write to privacy@.
+  const country = callingCode(phone);
+  if (!country) throw new HttpError(403, 'country_not_supported', 'We cannot text a code to this number. Email privacy@dimts.app and we will help.');
   await hit(`privacy-send-phone:${phone}`, 5, 3600);
   await hit(`privacy-send-ip:${req.ip}`, 20, 3600);
+  await hit(`send-country:${country}`, 300, 3600);
+  await hit('send-all', 1000, 3600);
   // Same answer as a real send, but the fictional review number is never texted.
   if (!isReviewDemo(phone)) await sendPhoneCode(phone);
   res.status(202).json({ status: 'code_sent' });

@@ -20,7 +20,7 @@ export async function encryptExisting({ dryRun = false, limit = 500, audioLimit 
   const TEXT = ['transcript', 'summary', 'recap'], JSON_COLUMNS = ['transcript_data', 'followups'];
 
   const { rows: calls } = await query(`SELECT id, user_id, ${[...TEXT, ...JSON_COLUMNS].join(', ')} FROM calls
-    WHERE status <> 'processing' AND (${[...TEXT.map(stale), ...JSON_COLUMNS.map(staleJson)].join(' OR ')})
+    WHERE status <> 'processing' AND deleted_at IS NULL AND (${[...TEXT.map(stale), ...JSON_COLUMNS.map(staleJson)].join(' OR ')})
     ORDER BY created_at LIMIT $1`, [limit]);
   for (const call of calls) {
     if (dryRun) { log(`would encrypt call ${call.id}`); continue; }
@@ -29,7 +29,8 @@ export async function encryptExisting({ dryRun = false, limit = 500, audioLimit 
     const values = [...TEXT.map(c => call[c] == null ? null : sealText(call[c], context(c))),
       ...JSON_COLUMNS.map(c => call[c] == null ? null : sealJson(call[c], context(c)))];
     const saved = await queryOne(`UPDATE calls SET transcript=$2, summary=$3, recap=$4, transcript_data=$5::jsonb, followups=$6::jsonb
-      WHERE id=$1 AND status <> 'processing' RETURNING id`, [call.id, ...values]);
+      WHERE id=$1 AND status <> 'processing' AND deleted_at IS NULL RETURNING id`, [call.id, ...values]);
+    // A deletion that commits between the read and this write wins: deleted_at stops it.
     if (saved) totals.calls++;
   }
 
@@ -50,7 +51,9 @@ export async function encryptExisting({ dryRun = false, limit = 500, audioLimit 
       if (dryRun) { log(`would encrypt ${table} ${row.id}`); continue; }
       // Aliased columns are not opened by the database layer; open explicitly.
       const value = openValue(row.value);
-      await query(`UPDATE ${table} SET ${column}=$2::jsonb WHERE id=$1`, [row.id,
+      // Deleting a call scrubs this snapshot to '{}'; never write the old one back.
+      await query(`UPDATE ${table} SET ${column}=$2::jsonb WHERE id=$1 AND ${column} <> '{}'::jsonb
+        AND EXISTS (SELECT 1 FROM calls c WHERE c.id=${table}.call_id AND c.deleted_at IS NULL)`, [row.id,
         sealJson(value, { userId: row.user_id, rowId: row.id, field: `${table}:${column}` })]);
       totals.actions++;
     }

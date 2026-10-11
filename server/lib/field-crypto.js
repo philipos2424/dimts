@@ -79,8 +79,12 @@ function checkContext({ userId, rowId, field }) {
 export function sealText(value, context) {
   if (value == null || !encryptionEnabled()) return value;
   if (typeof value !== 'string') throw new Error('sealText needs a string');
-  if (value.startsWith(PREFIX)) return value;
   checkContext(context);
+  // Already sealed for exactly this row and column (re-saving): keep it. Text a
+  // user typed that merely looks sealed, or a value sealed for someone else,
+  // is sealed as ordinary text, so pasting another user's ciphertext can never
+  // make the server decrypt it.
+  if (sealedFor(value, context)) return value;
   const { current } = keyring();
   const header = `${PREFIX}${current}.${context.field}.${String(context.userId).toLowerCase()}.${String(context.rowId).toLowerCase()}.`;
   const iv = randomBytes(12);
@@ -101,6 +105,12 @@ export function sealJson(value, context) {
 }
 
 export const isSealed = value => typeof value === 'string' && value.startsWith(PREFIX);
+
+function sealedFor(value, { userId, rowId, field }) {
+  const parts = sealedParts(value);
+  return !!parts && parts.field === field && parts.userId === String(userId).toLowerCase()
+    && parts.rowId === String(rowId).toLowerCase();
+}
 
 function sealedParts(value) {
   if (!isSealed(value)) return null;
@@ -137,7 +147,10 @@ export function openRows(result) {
   for (const row of result?.rows ?? []) {
     for (const column of Object.keys(row)) {
       const parts = sealedParts(row[column]);
-      if (parts && parts.field.split(':')[1] === column) row[column] = openValue(row[column]);
+      if (!parts || parts.field.split(':')[1] !== column) continue;
+      // Every row belongs to one owner; never open a value sealed for another.
+      if (row.user_id != null && String(row.user_id).toLowerCase() !== parts.userId) continue;
+      row[column] = openValue(row[column]);
     }
   }
   return result;
