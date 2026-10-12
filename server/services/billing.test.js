@@ -67,14 +67,14 @@ test('credit packs add credits once; refunds take back their share; calls spend 
   const reserve = (key, dest) => db.transaction(tx => reserveCallInTransaction(tx, user, dest, true, key));
   const { call } = await reserve('call-et-1', '+251911234567');
   assert.equal(call.surcharge_cents, 50);
-  assert.equal(call.max_duration_sec, 1500, '1300 credits: 20 trial minutes at 50, then 5 at 50 + 3 over plan; no grace on paid surcharges');
+  assert.equal(call.max_duration_sec, 1440, '1300 credits: 5 trial minutes at 50, then 19 at 50 + 3 over plan; no grace on paid surcharges');
   await db.query(FINISH_CALL_SQL, [call.id, 61, true, 'Dial completed', 'failed', '2026-10']);
   await db.query(FINISH_CALL_SQL, [call.id, 61, true, 'Dial completed', 'failed', '2026-10']);
   assert.equal(await balance(), 1200, 'two started minutes, charged once');
   assert.equal((await db.query('SELECT plan_seconds FROM calls WHERE id=$1', [call.id])).rows[0].plan_seconds, 61);
 
-  // The 20 trial minutes used up: a US call continues on credits at the overage rate.
-  await db.query("UPDATE calls SET plan_seconds=1200, duration_sec=1200 WHERE id=$1", [call.id]);
+  // The 5 trial minutes used up: a US call continues on credits at the overage rate.
+  await db.query("UPDATE calls SET plan_seconds=300, duration_sec=300 WHERE id=$1", [call.id]);
   const us = (await reserve('call-us-1', '+12025550199')).call;
   assert.equal(us.plan_seconds, 0);
   assert.equal(us.overage_cents, 3);

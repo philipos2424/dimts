@@ -16,7 +16,7 @@ const COPY = {
   en: {
     current: 'Your plan', minutes: (used: number, total: number) => `${used} of ${total} minutes used this month`,
     trial: (days: number) => `Pro trial · ${days} ${days === 1 ? 'day' : 'days'} left`,
-    trialStart: 'Your free trial starts with your first call: 20 minutes of recorded calls with AI notes, for 21 days. A call is never cut off when the trial minutes run out. No card needed.',
+    trialStart: 'Your free trial starts with your first call: 5 minutes of recorded calls with AI notes, for 21 days. No card needed.',
     trialOver: 'Your trial has ended. Your calls and notes stay readable. Choose a plan to make new calls.',
     credits: 'Credits', renews: (d: string) => `Renews on ${d}`, ends: (d: string) => `Ends on ${d}, then returns to Free`,
     pastDue: 'Your last payment failed. Update your card to keep your plan.',
