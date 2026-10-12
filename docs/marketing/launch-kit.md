@@ -2,7 +2,7 @@
 
 For: the founder, posting from their own accounts. Every link carries `?ref=<channel>`; the waitlist stores it in `source` (for example `home-hero:reddit-realtors`), so `node --env-file=../.env server/scripts/waitlist.js` shows which channel worked.
 
-Site: https://dimts.app (until the domain is live: https://dimts-site.vercel.app)
+Site: https://dimts-site.vercel.app (move to dimts.app once registered: replace the URL in site/ and here, add the domain to the dimts-site Vercel project)
 
 ## Order of work (organic first, $20 ads only as a funnel smoke test)
 
@@ -26,7 +26,7 @@ Site: https://dimts.app (until the domain is live: https://dimts-site.vercel.app
 >
 > Every call starts with a recording notice, and where the law asks for it, both people press 1. No covert recording.
 >
-> It works in your browser today, from $20 a month with a 21-day free trial. The iPhone and Android apps are next; the waitlist is here: https://dimts.app/?ref=linkedin
+> It works in your browser today, from $20 a month with a 21-day free trial. The iPhone and Android apps are next; the waitlist is here: https://dimts-site.vercel.app/?ref=linkedin
 >
 > If you sell by phone (agents, contractors, suppliers, brokers), I'd love 15 minutes of your honest feedback.
 
@@ -36,7 +36,7 @@ Site: https://dimts.app (until the domain is live: https://dimts-site.vercel.app
 2. After every call, Dimts writes down: what was agreed (each price and date links to the second it was said), what you owe, what you're waiting on, and a drafted follow-up.
 3. Promises carry across every call with that person. "Who am I still waiting on this week?" gets an answer with links to the calls.
 4. Consent first: a spoken notice before anyone talks; both people press 1 where the law requires it (Gulf, Germany, Austria).
-5. Works in the browser now. Apps waitlist: https://dimts.app/?ref=x
+5. Works in the browser now. Apps waitlist: https://dimts-site.vercel.app/?ref=x
 
 ## Reddit (read each sub's self-promo rule first; most allow it only in weekly threads or as a helpful answer)
 
@@ -48,12 +48,12 @@ Title: How do you keep track of what clients and other agents promise on the pho
 Title: Ever lost money on a price you agreed over the phone?
 > "$4,000 all in" vs "$4,000 plus materials". How do you protect yourself: follow-up text, email, nothing? I built a phone line that records with a notice and lists the agreed price and extras after the call; looking for 5 contractors to try it free and tell me what's wrong with it.
 
-**r/smallbusiness**, **r/Entrepreneur**: share the consent guide (https://dimts.app/record-business-calls-with-consent?ref=reddit-smb) as a useful answer whenever someone asks whether they can record calls. Don't post it cold.
+**r/smallbusiness**, **r/Entrepreneur**: share the consent guide (https://dimts-site.vercel.app/record-business-calls-with-consent?ref=reddit-smb) as a useful answer whenever someone asks whether they can record calls. Don't post it cold.
 
 ## Indie Hackers / r/SideProject
 
 Title: I built a business phone line that remembers what everyone promised
-> Problem, demo GIF of the hero sequence, stack (Expo web, Node on Vercel, Telnyx, Whisper/ElevenLabs, Ollama), pricing ($20/$50, 21-day trial), what's next (apps, waitlist). Ask for feedback on the landing page. Link: https://dimts.app/?ref=indiehackers
+> Problem, demo GIF of the hero sequence, stack (Expo web, Node on Vercel, Telnyx, Whisper/ElevenLabs, Ollama), pricing ($20/$50, 21-day trial), what's next (apps, waitlist). Ask for feedback on the landing page. Link: https://dimts-site.vercel.app/?ref=indiehackers
 
 ## Product Hunt (week 2)
 
