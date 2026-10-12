@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dimts: the business phone line that remembers every promise</title>
+<meta name="description" content="Dimts records business calls with a consent notice, then lists the prices, dates and promises, each linked to the moment it was said. 21-day free trial.">
+<link rel="canonical" href="https://dimts.app/">
+<meta name="theme-color" content="#2b2e8e">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Dimts">
+<meta property="og:url" content="https://dimts.app/">
+<meta property="og:title" content="Dimts: the phone line that remembers what everyone promised">
+<meta property="og:description" content="Every business call becomes a list: what was agreed, what you owe, what you're waiting on, and a drafted follow-up.">
+<meta property="og:image" content="https://dimts.app/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,400..900&display=swap">
+<link rel="stylesheet" href="/styles.css">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "https://dimts.app/#org",
+      "name": "Dimts",
+      "url": "https://dimts.app/",
+      "logo": "https://dimts.app/apple-touch-icon.png"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "name": "Dimts",
+      "applicationCategory": "BusinessApplication",
+      "operatingSystem": "Web, iOS, Android",
+      "description": "A business phone line that records calls with a consent notice, then tracks what every contact promised and drafts the follow-up.",
+      "publisher": { "@id": "https://dimts.app/#org" },
+      "offers": [
+        { "@type": "Offer", "name": "Pro", "price": "20.00", "priceCurrency": "USD", "url": "https://dimts.app/#pricing" },
+        { "@type": "Offer", "name": "Business", "price": "50.00", "priceCurrency": "USD", "url": "https://dimts.app/#pricing" }
+      ]
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        { "@type": "Question", "name": "Is it legal to record my business calls with Dimts?", "acceptedAnswer": { "@type": "Answer", "text": "Every recorded call starts with a spoken notice before anyone talks. Where the law asks for everyone's agreement, such as Gulf, German and Austrian numbers, both people press 1 or the call connects without recording. You are still responsible for the rules where you work." } },
+        { "@type": "Question", "name": "Do I need a new phone or SIM?", "acceptedAnswer": { "@type": "Answer", "text": "No. Dimts rings the phone you already have, then connects the other person. On a paid plan you also get a business number that customers can call." } },
+        { "@type": "Question", "name": "Which countries does Dimts work in?", "acceptedAnswer": { "@type": "Answer", "text": "Plan minutes cover calls in the US, Canada, the UK and the European Economic Area. Calls to the Gulf use prepaid credits on top of your plan." } },
+        { "@type": "Question", "name": "What happens after the free trial?", "acceptedAnswer": { "@type": "Answer", "text": "The trial lasts 21 days and includes 20 minutes of calls. Afterwards every past call stays readable and searchable for free; new recorded calls need Pro or Business." } },
+        { "@type": "Question", "name": "Who can see my calls?", "acceptedAnswer": { "@type": "Answer", "text": "Only you. Call content is encrypted at rest, and Dimts staff tools show account metadata, not recordings or transcripts. You can export or delete everything from Settings." } }
+      ]
+    }
+  ]
+}
+</script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="top">
+  <div class="wrap">
+    <a class="wordmark" href="/" aria-label="Dimts home">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect x="7" y="7" width="22" height="22" rx="2" fill="#f4c5cf" transform="rotate(6 18 18)"/><rect x="5" y="5" width="22" height="22" rx="2" fill="#f7e38a" transform="rotate(3 16 16)"/><rect x="3" y="3" width="22" height="22" rx="2" fill="#2b2e8e"/><path d="M8 10h12M8 15h12M8 20h7" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg>
+      Dimts
+    </a>
+    <nav aria-label="Main">
+      <a href="#how">How it works</a>
+      <a href="#pricing">Pricing</a>
+      <a href="#faq">Questions</a>
+      <a class="signin" href="https://dimts.vercel.app/">Sign in</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+  <section class="hero">
+    <div class="wrap">
+      <div>
+        <h1>The phone line that remembers what everyone promised.</h1>
+        <p class="lede">Dimts records your business calls with a consent notice, then writes down the prices, dates and promises, each linked to the second it was said, and drafts your follow-up email.</p>
+
+        <form class="join" data-waitlist data-source="home-hero" novalidate>
+          <label class="field" for="email-hero">Get the iPhone and Android apps first</label>
+          <div class="row">
+            <input id="email-hero" name="email" type="email" autocomplete="email" inputmode="email" placeholder="you@company.com" required>
+            <button class="button" type="submit">Join the waitlist</button>
+          </div>
+          <fieldset class="platforms">
+            <legend>Your phone:</legend>
+            <label><input type="radio" name="platform" value="iphone"> iPhone</label>
+            <label><input type="radio" name="platform" value="android"> Android</label>
+          </fieldset>
+          <div class="hp" aria-hidden="true"><label>Company <input name="company" tabindex="-1" autocomplete="off"></label></div>
+          <p class="error" role="alert" hidden></p>
+          <p class="note">Can't wait? Dimts already works in your browser. <a href="https://dimts.vercel.app/">Start your 21-day trial on the web</a>, no card needed.</p>
+        </form>
+      </div>
+
+      <div class="pad animate" aria-label="Example: a call with a customer, and the promises Dimts copied from it">
+        <div class="sheet">
+          <div class="sheet-head"><strong>Call with Marcus Reyes</strong><span>Tue 2:14 pm, 6 min</span></div>
+          <ol class="transcript">
+            <li style="--i:0"><time>00:48</time><b>Marcus</b><span>So for all forty panels, installed, where did we land?</span></li>
+            <li style="--i:1"><time>01:05</time><b>You</b><span><mark style="--i:1">$4,860 for the forty, installed</mark>, and that holds until the end of the month.</span></li>
+            <li style="--i:2"><time>03:41</time><b>You</b><span><mark style="--i:2">I'll send the revised quote with the twelve extra panels by Thursday.</mark></span></li>
+            <li style="--i:3"><time>04:12</time><b>Marcus</b><span>Great. <mark style="--i:3">I'll text you the site access code tomorrow morning.</mark></span></li>
+          </ol>
+          <div class="perforation" aria-hidden="true"></div>
+          <p class="copies-title">Copied to Marcus's page</p>
+          <ul class="slips">
+            <li class="slip agreed" style="--i:0"><span class="who">Agreed</span>$4,860 for 40 panels, installed. Holds to Oct 31.<span class="when">01:05</span></li>
+            <li class="slip owe" style="--i:1"><span class="who">You owe Marcus</span>Revised quote with 12 extra panels, by Thursday<span class="when">03:41</span></li>
+            <li class="slip wait" style="--i:2"><span class="who">Waiting on Marcus</span>Site access code, tomorrow morning<span class="when">04:12</span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="band" id="how" aria-labelledby="how-title">
+    <div class="wrap">
+      <div class="band-intro">
+        <h2 id="how-title">How a call becomes a list</h2>
+        <p>No new phone, no SIM, no app on the other side. Dimts sits between you and the person you're calling.</p>
+      </div>
+      <ol class="steps">
+        <li><h3>Dimts rings you</h3><p>Dial from Dimts, or let customers call your Dimts business number. Your own phone rings first.</p></li>
+        <li><h3>They hear a notice</h3><p>Before anyone speaks, the other person hears that the call is recorded. Where the law asks for it, both of you press 1.</p></li>
+        <li><h3>You just talk</h3><p>Prices, quantities, dates. Nobody takes notes, nobody puts anyone on hold.</p></li>
+        <li><h3>The list is waiting</h3><p>What was agreed, what you owe, what you're waiting on, and the follow-up email, ready to send.</p></li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="band tint" aria-labelledby="after-title">
+    <div class="wrap">
+      <div class="band-intro">
+        <h2 id="after-title">What you get after every call</h2>
+        <p>Every line links back to the second it was said, so when someone says "I never agreed to that", you can play it.</p>
+      </div>
+      <div class="recap">
+        <div class="recap-head"><strong>Marcus Reyes, Reyes Roofing</strong><span class="small">3 calls since September</span></div>
+        <dl>
+          <div class="field"><dt>Agreed<span>prices, quantities, dates</span></dt>
+            <dd><ul>
+              <li>$4,860 for 40 panels, installed <span class="t">Oct 13, 01:05</span></li>
+              <li>Price holds until October 31 <span class="t">Oct 13, 01:12</span></li>
+              <li>Install starts the week of November 3 <span class="t">Sep 29, 06:40</span></li>
+            </ul></dd></div>
+          <div class="field"><dt>Promises<span>across all your calls with Marcus</span></dt>
+            <dd><ul>
+              <li><span class="tag owe">You owe</span>Revised quote with 12 extra panels, by Thursday</li>
+              <li><span class="tag wait">Waiting on</span>Site access code, tomorrow morning</li>
+              <li><span class="tag wait">Waiting on</span>Deposit of $1,500, promised "before install" <span class="t">Sep 29</span></li>
+            </ul></dd></div>
+          <div class="field"><dt>Follow-up<span>drafted, not sent</span></dt>
+            <dd class="draft"><p>Hi Marcus, thanks for the call. Confirming $4,860 for the forty panels, installed, held until October 31. I'll have the revised quote with the twelve extra panels to you by Thursday.</p><p>Could you text the site access code when you get a chance?</p></dd></div>
+          <div class="field"><dt>Ask your calls</dt>
+            <dd>"Who am I still waiting on this week?" gets an answer with links to the calls it came from.</dd></div>
+        </dl>
+      </div>
+    </div>
+  </section>
+
+  <section class="band" aria-labelledby="compare-title">
+    <div class="wrap">
+      <div class="band-intro">
+        <h2 id="compare-title">Your phone can record. It can't remember.</h2>
+        <p>Phones now record and summarize one call at a time. Dimts keeps track of everything a customer said across all your calls with them.</p>
+      </div>
+      <div class="table-scroll">
+        <table class="compare">
+          <thead><tr><th scope="col"><span class="hp">Feature</span></th><th scope="col">Built-in call recording</th><th scope="col">Business phone systems</th><th scope="col" class="us">Dimts</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Summary of each call</th><td data-label="Built-in recording">Yes</td><td data-label="Business phone systems">Often, on higher plans</td><td class="us" data-label="Dimts">Yes</td></tr>
+            <tr><th scope="row">Works on any phone</th><td data-label="Built-in recording">Depends on the model and country</td><td data-label="Business phone systems">Through their app</td><td class="us" data-label="Dimts">Yes, it rings the phone you have</td></tr>
+            <tr><th scope="row">Promises tracked across every call with a person</th><td data-label="Built-in recording">No</td><td data-label="Business phone systems">No</td><td class="us" data-label="Dimts">Yes</td></tr>
+            <tr><th scope="row">Each price and date links to the second it was said</th><td data-label="Built-in recording">No</td><td data-label="Business phone systems">No</td><td class="us" data-label="Dimts">Yes</td></tr>
+            <tr><th scope="row">Follow-up email drafted</th><td data-label="Built-in recording">No</td><td data-label="Business phone systems">Sometimes</td><td class="us" data-label="Dimts">Yes</td></tr>
+            <tr><th scope="row">Consent handled for you, by country</th><td data-label="Built-in recording">A notice only</td><td data-label="Business phone systems">Up to you</td><td class="us" data-label="Dimts">Notice for everyone, press 1 where required</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="band tint" aria-labelledby="who-title">
+    <div class="wrap">
+      <div class="band-intro">
+        <h2 id="who-title">Made for people who sell by phone</h2>
+        <p>If a deal can fall apart because someone forgot what was said on Tuesday, Dimts is for you.</p>
+      </div>
+      <ul class="who-list">
+        <li><h3><a href="/real-estate-agents">Real estate agents</a></h3><p>Offer terms, showing feedback, and who promised the inspection report.</p></li>
+        <li><h3><a href="/contractors">Contractors and trades</a></h3><p>The quote you agreed on the phone, the extras, and the start date.</p></li>
+        <li><h3>Suppliers and wholesalers</h3><p>Quantities, unit prices and delivery dates, settled before the invoice goes out.</p></li>
+        <li><h3>Insurance and mortgage brokers</h3><p>What the client asked for, what you said you'd check, and by when.</p></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="band" id="pricing" aria-labelledby="pricing-title">
+    <div class="wrap">
+      <div class="band-intro">
+        <h2 id="pricing-title">Pricing</h2>
+        <p>Try Pro free for 21 days. Pay yearly and get two months free.</p>
+      </div>
+      <div class="table-scroll">
+        <table class="rates">
+          <thead><tr><th scope="col">Plan</th><th scope="col">Price</th><th scope="col">Recorded minutes a month</th><th scope="col">Includes</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Trial</th><td class="price">$0 <small>for 21 days</small></td><td>20 minutes</td><td>Everything in Pro. No card needed.</td></tr>
+            <tr class="featured"><th scope="row">Pro</th><td class="price">$20 <small>a month, or $200 a year</small></td><td>500</td><td>Business number, promises tracked across calls, drafted follow-ups, ask your calls</td></tr>
+            <tr><th scope="row">Business</th><td class="price">$50 <small>a month, or $500 a year</small></td><td>1,500</td><td>Everything in Pro, plus priority support</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="small rates-note">Minutes shown are for US and Canadian numbers. On UK numbers Pro includes 300 and Business 900; in the EU, 200 and 500. Calls to the Gulf use prepaid credits. After your plan's minutes, calls continue on credits from 3¢ a minute. Taxes may apply. After the trial, past calls stay readable for free.</p>
+    </div>
+  </section>
+
+  <section class="band tint" aria-labelledby="consent-title">
+    <div class="wrap">
+      <h2 id="consent-title">Recorded with consent, every time</h2>
+      <blockquote class="notice">"This call is recorded and summarized by Dimts AI."<span class="notice-cite">What the other person hears before anyone speaks.</span></blockquote>
+      <div class="two-col">
+        <p>The notice plays on every recorded call. On Gulf, German and Austrian numbers, where the law asks for it, both people press 1 to agree. Nobody presses 1? The call still connects, just without recording.</p>
+        <p>Call content is encrypted at rest and only you can read it. Anyone you've called can ask for their data to be deleted at <a href="https://dimts.vercel.app/privacy-request">the privacy request page</a>. Read our <a href="/record-business-calls-with-consent">guide to recording business calls legally</a>.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="band faq" id="faq" aria-labelledby="faq-title">
+    <div class="wrap">
+      <h2 id="faq-title">Questions</h2>
+      <details><summary>Is it legal to record my business calls with Dimts?</summary><p>Every recorded call starts with a spoken notice before anyone talks. Where the law asks for everyone's agreement, such as Gulf, German and Austrian numbers, both people press 1 or the call connects without recording. You are still responsible for the rules where you work; our <a href="/record-business-calls-with-consent">consent guide</a> covers the main ones.</p></details>
+      <details><summary>Do I need a new phone or SIM?</summary><p>No. Dimts rings the phone you already have, then connects the other person. On a paid plan you also get a business number that customers can call.</p></details>
+      <details><summary>Which countries does Dimts work in?</summary><p>Plan minutes cover calls in the US, Canada, the UK and the European Economic Area. Calls to the Gulf use prepaid credits on top of your plan.</p></details>
+      <details><summary>What happens after the free trial?</summary><p>The trial lasts 21 days and includes 20 minutes of calls. Afterwards every past call stays readable and searchable for free; new recorded calls need Pro or Business.</p></details>
+      <details><summary>Who can see my calls?</summary><p>Only you. Call content is encrypted at rest, and Dimts staff tools show account metadata, not recordings or transcripts. You can export or delete everything from Settings.</p></details>
+      <details><summary>When are the iPhone and Android apps coming?</summary><p>Soon. Join the waitlist and we'll email you once, the day they're in the stores. Everything already works in your browser, on any phone or computer.</p></details>
+    </div>
+  </section>
+
+  <section class="band closing" aria-labelledby="closing-title">
+    <div class="wrap">
+      <h2 id="closing-title">Stop losing what was said on the phone.</h2>
+      <form class="join" data-waitlist data-source="home-closing" novalidate>
+        <label class="field" for="email-closing">Join the waitlist for the iPhone and Android apps</label>
+        <div class="row">
+          <input id="email-closing" name="email" type="email" autocomplete="email" inputmode="email" placeholder="you@company.com" required>
+          <button class="button" type="submit">Join the waitlist</button>
+        </div>
+        <fieldset class="platforms">
+          <legend>Your phone:</legend>
+          <label><input type="radio" name="platform" value="iphone"> iPhone</label>
+          <label><input type="radio" name="platform" value="android"> Android</label>
+        </fieldset>
+        <div class="hp" aria-hidden="true"><label>Company <input name="company" tabindex="-1" autocomplete="off"></label></div>
+        <p class="error" role="alert" hidden></p>
+        <p class="note">We'll email you once, when the apps are out. Or <a href="https://dimts.vercel.app/">start on the web now</a>.</p>
+      </form>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    <span>© 2026 Dimts</span>
+    <nav aria-label="Footer">
+      <a href="/real-estate-agents">Real estate agents</a>
+      <a href="/contractors">Contractors</a>
+      <a href="/record-business-calls-with-consent">Recording calls legally</a>
+      <a href="https://dimts.vercel.app/privacy">Privacy</a>
+      <a href="https://dimts.vercel.app/terms">Terms</a>
+      <a href="https://dimts.vercel.app/subprocessors">Subprocessors</a>
+    </nav>
+  </div>
+</footer>
+<script src="/app.js" defer></script>
+</body>
+</html>

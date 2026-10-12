@@ -391,3 +391,13 @@ CREATE TABLE IF NOT EXISTS admin_challenges (
   kind TEXT NOT NULL CHECK (kind IN ('register','login')),
   expires_at TIMESTAMPTZ NOT NULL DEFAULT now() + interval '5 minutes'
 );
+
+-- Marketing site waitlist, 12 October 2026. One row per email; no phone, no call data.
+CREATE TABLE IF NOT EXISTS waitlist (
+  email TEXT PRIMARY KEY,
+  platform TEXT CHECK (platform IN ('iphone','android','web')),
+  work TEXT,
+  country TEXT,
+  source TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);

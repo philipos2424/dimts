@@ -22,6 +22,7 @@ import { eventsRouter } from './routes/events.js';
 import { briefingRouter, cronRouter } from './routes/briefing.js';
 import { myPrivacyRequestsRouter, privacyRequestsRouter } from './routes/privacy-requests.js';
 import { inboundRouter } from './routes/inbound.js';
+import { waitlistRouter } from './routes/waitlist.js';
 import { billingRouter, polarWebhookRouter } from './routes/billing.js';
 import { adminApiRouter, adminPageRouter } from './routes/admin.js';
 import { twimlRouter, webhooksRouter } from './routes/webhooks.js';
@@ -74,6 +75,7 @@ export function createApp({ webRoot = fileURLToPath(new URL('../dist/', import.m
   app.use('/api/me/privacy-requests', myPrivacyRequestsRouter);
   app.use('/api/me', meRouter);
   app.use('/api/privacy-requests', privacyRequestsRouter);
+  app.use('/api/waitlist', waitlistRouter);
   app.use('/api/admin', adminApiRouter);
   app.use('/admin', adminPageRouter);
   app.use('/twiml/incoming', inboundRouter);
