@@ -72,3 +72,56 @@ for (const form of document.querySelectorAll('form[data-waitlist]')) {
     }
   });
 }
+
+// "Where it goes" tabs: keyboard-accessible, and they step through on their own
+// while on screen until someone picks one.
+const channels = document.querySelector('[data-channels]');
+if (channels) {
+  const tabs = [...channels.querySelectorAll('[role=tab]')];
+  const CYCLE_MS = 5000;
+  const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  channels.style.setProperty('--cycle', `${CYCLE_MS}ms`);
+  const select = (tab, focus = false) => {
+    for (const t of tabs) {
+      const on = t === tab;
+      t.setAttribute('aria-selected', String(on));
+      t.tabIndex = on ? 0 : -1;
+      document.getElementById(t.getAttribute('aria-controls')).hidden = !on;
+    }
+    // On phones the tab row scrolls sideways; keep the selected tab in view without moving the page.
+    const row = tab.parentElement;
+    if (row.scrollWidth > row.clientWidth) row.scrollTo({ left: tab.offsetLeft - row.offsetLeft - 16, behavior: still ? 'auto' : 'smooth' });
+    if (focus) tab.focus();
+  };
+
+  let timer = null, chosen = false, visible = false, hovering = false;
+  const schedule = () => {
+    clearTimeout(timer);
+    const run = !still && !chosen && visible && !hovering;
+    channels.classList.toggle('auto', run);
+    if (!run) return;
+    timer = setTimeout(() => {
+      const i = tabs.findIndex(t => t.getAttribute('aria-selected') === 'true');
+      select(tabs[(i + 1) % tabs.length]);
+      // Restart the progress line on the newly selected tab.
+      channels.classList.remove('auto'); void channels.offsetWidth;
+      schedule();
+    }, CYCLE_MS);
+  };
+  const choose = (tab, focus) => { chosen = true; select(tab, focus); schedule(); };
+
+  tabs.forEach((tab, i) => {
+    tab.addEventListener('click', () => choose(tab));
+    tab.addEventListener('keydown', event => {
+      const next = { ArrowDown: i + 1, ArrowRight: i + 1, ArrowUp: i - 1, ArrowLeft: i - 1, Home: 0, End: tabs.length - 1 }[event.key];
+      if (next === undefined) return;
+      event.preventDefault();
+      choose(tabs[(next + tabs.length) % tabs.length], true);
+    });
+  });
+  channels.addEventListener('mouseenter', () => { hovering = true; schedule(); });
+  channels.addEventListener('mouseleave', () => { hovering = false; schedule(); });
+  if ('IntersectionObserver' in window) {
+    new IntersectionObserver(entries => { visible = entries.some(e => e.isIntersecting); schedule(); }, { threshold: 0.4 }).observe(channels);
+  }
+}

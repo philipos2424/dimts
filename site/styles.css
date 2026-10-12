@@ -262,3 +262,86 @@ table.compare { border-collapse: collapse; width: 100%; min-width: 40rem; font-s
   .compare td.us { font-weight: 600; }
   .compare td.us::before { color: var(--ink); }
 }
+
+/* Where the follow-up goes: tabs on the left, the channel's own context on the right. */
+.channels { display: grid; grid-template-columns: minmax(0, 21rem) minmax(0, 1fr); gap: clamp(1.5rem, 4vw, 3.5rem); align-items: start; }
+.channel-tabs { display: grid; gap: .25rem; }
+.channel-tabs button {
+  font: inherit; text-align: left; cursor: pointer; background: none; border: 0; border-left: 3px solid var(--rule);
+  padding: .8rem 1rem; color: var(--text); display: grid; gap: .15rem; position: relative;
+}
+.channel-tabs button strong { font-stretch: 112%; font-weight: 700; font-size: 1.05rem; }
+.channel-tabs button span { font-size: .92rem; color: var(--muted); line-height: 1.4; }
+.channel-tabs button:hover { background: #f4f4fa; }
+.channel-tabs button[aria-selected=true] { border-left-color: var(--ink); background: #f1f1fa; }
+.channel-tabs button[aria-selected=true] strong { color: var(--ink); }
+/* A thin progress line while the tabs advance on their own. */
+.channel-tabs button[aria-selected=true]::after { content: ''; position: absolute; left: -3px; top: 0; width: 3px; height: 0; background: var(--canary-edge); }
+.channels.auto .channel-tabs button[aria-selected=true]::after { animation: fill-down var(--cycle, 5s) linear forwards; }
+@keyframes fill-down { to { height: 100%; } }
+
+.stage { position: relative; min-height: 27rem; }
+.screen { animation: screen-in .45s cubic-bezier(.2, .8, .3, 1) both; }
+@keyframes screen-in { from { opacity: 0; transform: translateY(10px) scale(.985); } to { opacity: 1; transform: none; } }
+.screen .rise { opacity: 0; animation: line .45s ease-out forwards; animation-delay: calc(.25s + var(--d, 0) * .35s); }
+.context { margin: 1rem 0 0; font-size: .95rem; color: var(--muted); max-width: 46ch; }
+
+.mail, .chat, .cal, .lock { border-radius: 10px; overflow: hidden; border: 1px solid var(--perf); background: var(--sheet); box-shadow: 0 18px 40px -26px rgba(31, 33, 112, .45); max-width: 34rem; }
+.mail-row { display: flex; gap: .75rem; padding: .65rem 1.1rem; border-bottom: 1px solid var(--rule); font-size: .95rem; }
+.mail-row span { color: var(--muted); width: 4.2rem; flex: none; }
+.mail-body { padding: 1rem 1.1rem .25rem; font-size: .98rem; }
+.mail-body p { margin-bottom: .7rem; }
+.mail-actions { display: flex; flex-wrap: wrap; gap: .5rem; padding: .25rem 1.1rem 1.1rem; }
+.pill { display: inline-block; border: 1px solid var(--perf); border-radius: 999px; padding: .3rem .8rem; font-size: .88rem; color: var(--ink); }
+.pill.solid { background: var(--ink); border-color: var(--ink); color: #fff; }
+
+.chat-head { display: flex; gap: .7rem; align-items: center; padding: .7rem 1rem; color: #fff; }
+.chat-head small { display: block; opacity: .8; font-size: .8rem; }
+.avatar { width: 2.2rem; height: 2.2rem; border-radius: 50%; display: grid; place-items: center; font-size: .8rem; font-weight: 700; background: rgba(255, 255, 255, .25); }
+.chat-body { padding: 1.1rem 1rem 1.4rem; display: grid; gap: .6rem; min-height: 15rem; align-content: end; }
+.bubble { margin: 0; max-width: 85%; padding: .55rem .75rem 1.25rem; border-radius: 10px; font-size: .95rem; line-height: 1.4; position: relative; box-shadow: 0 1px 1px rgba(0, 0, 0, .08); }
+.bubble time { position: absolute; right: .6rem; bottom: .3rem; font-size: .72rem; color: #667; }
+.bubble.in { justify-self: start; background: #fff; border-top-left-radius: 3px; }
+.bubble.out { justify-self: end; border-top-right-radius: 3px; }
+.who-said { display: block; font-size: .8rem; font-weight: 650; color: #c0581a; }
+.wa .chat-head { background: #0b6b5f; }
+.wa .chat-body { background: #efe7dc; }
+.wa .bubble.out { background: #d9fdd3; }
+.wa .bubble.out time { color: #3a8b57; }
+.tg .chat-head { background: #3b7fc2; }
+.tg .chat-body { background: #d7e4ec; }
+.tg .bubble.out { background: #e1fec6; }
+
+.cal { display: grid; grid-template-columns: 6.5rem 1fr; }
+.cal-day { background: var(--ink); color: #fff; display: grid; place-content: center; text-align: center; padding: 1.25rem .5rem; gap: .1rem; }
+.cal-day strong { font-stretch: 125%; font-weight: 800; font-size: 2.6rem; line-height: 1; }
+.cal-day span { font-size: .85rem; opacity: .85; }
+.cal-event { padding: 1.1rem 1.2rem; border-left: 4px solid var(--canary-edge); margin: .9rem; background: rgba(247, 227, 138, .35); display: grid; gap: .2rem; }
+.cal-event strong { font-stretch: 112%; }
+.cal-event span { font-size: .9rem; color: var(--muted); }
+.cal-event p { margin: .4rem 0 0; font-size: .93rem; }
+.cal .mail-actions { grid-column: 1 / -1; padding-top: .9rem; border-top: 1px solid var(--rule); }
+
+.lock { background: linear-gradient(160deg, #23256e, #3b2f6b 60%, #5a3a5e); color: #fff; padding: 2rem 1.25rem 2.5rem; min-height: 22rem; }
+.lock-time { font-stretch: 112%; font-weight: 300; font-size: 4rem; line-height: 1; text-align: center; }
+.lock-date { text-align: center; font-size: .95rem; opacity: .85; margin: .4rem 0 2rem; }
+.notif { background: rgba(255, 255, 255, .88); color: var(--text); border-radius: 16px; padding: .8rem 1rem .9rem; max-width: 24rem; margin: 0 auto; }
+.notif-head { display: flex; align-items: center; gap: .45rem; font-size: .82rem; color: var(--muted); margin-bottom: .3rem; }
+.notif-head small { margin-left: auto; }
+.notif-icon { width: 1.1rem; height: 1.1rem; border-radius: 4px; background: var(--ink); box-shadow: 2px 2px 0 var(--canary); }
+.notif strong { display: block; font-size: .98rem; }
+.notif p { margin: .15rem 0 0; font-size: .92rem; }
+
+@media (max-width: 860px) {
+  .channels { grid-template-columns: 1fr; }
+  .channel-tabs { grid-auto-flow: column; grid-auto-columns: max-content; overflow-x: auto; gap: .25rem; padding-bottom: .25rem; scrollbar-width: thin; }
+  .channel-tabs button { border-left: 0; border-bottom: 3px solid var(--rule); padding: .6rem .9rem; }
+  .channel-tabs button span { display: none; }
+  .channel-tabs button[aria-selected=true] { border-bottom-color: var(--ink); }
+  .channel-tabs button[aria-selected=true]::after { display: none; }
+  .stage { min-height: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .screen, .screen .rise { animation: none !important; opacity: 1 !important; }
+  .channels.auto .channel-tabs button[aria-selected=true]::after { animation: none; }
+}

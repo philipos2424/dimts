@@ -52,6 +52,7 @@
         { "@type": "Question", "name": "Do I need a new phone or SIM?", "acceptedAnswer": { "@type": "Answer", "text": "No. Dimts rings the phone you already have, then connects the other person. On a paid plan you also get a business number that customers can call." } },
         { "@type": "Question", "name": "Which countries does Dimts work in?", "acceptedAnswer": { "@type": "Answer", "text": "Plan minutes cover calls in the US, Canada, the UK and the European Economic Area. Calls to the Gulf use prepaid credits on top of your plan." } },
         { "@type": "Question", "name": "What happens after the free trial?", "acceptedAnswer": { "@type": "Answer", "text": "The trial lasts 21 days and includes 20 minutes of calls. Afterwards every past call stays readable and searchable for free; new recorded calls need Pro or Business." } },
+        { "@type": "Question", "name": "Can I send follow-ups by WhatsApp or Telegram?", "acceptedAnswer": { "@type": "Answer", "text": "Yes, from the Dimts app: tap Share on the follow-up and pick WhatsApp, Telegram, text or any other app. Email opens in your mail app or saves as a Gmail draft, and meetings go to Google, Outlook or iCloud calendar. Nothing is sent until you tap send." } },
         { "@type": "Question", "name": "Who can see my calls?", "acceptedAnswer": { "@type": "Answer", "text": "Only you. Call content is encrypted at rest, and Dimts staff tools show account metadata, not recordings or transcripts. You can export or delete everything from Settings." } }
       ]
     }
@@ -167,6 +168,88 @@
     </div>
   </section>
 
+  <section class="band" id="channels" aria-labelledby="channels-title">
+    <div class="wrap">
+      <div class="band-intro">
+        <h2 id="channels-title">Then it goes wherever you work</h2>
+        <p>The follow-up from the call is ready to send the way your customer likes to hear from you. Nothing goes out until you've checked it and tapped send.</p>
+      </div>
+      <div class="channels" data-channels>
+        <div class="channel-tabs" role="tablist" aria-label="Where the follow-up goes">
+          <button role="tab" id="tab-email" aria-controls="panel-email" aria-selected="true"><strong>Email</strong><span>Opens in your mail app, or saves as a Gmail draft</span></button>
+          <button role="tab" id="tab-whatsapp" aria-controls="panel-whatsapp" aria-selected="false" tabindex="-1"><strong>WhatsApp</strong><span>Share it from the Dimts app to the customer's chat</span></button>
+          <button role="tab" id="tab-telegram" aria-controls="panel-telegram" aria-selected="false" tabindex="-1"><strong>Telegram</strong><span>Send the recap to your crew or your group</span></button>
+          <button role="tab" id="tab-calendar" aria-controls="panel-calendar" aria-selected="false" tabindex="-1"><strong>Calendar</strong><span>The visit you agreed on, filled in for Google, Outlook or iCloud</span></button>
+          <button role="tab" id="tab-reminder" aria-controls="panel-reminder" aria-selected="false" tabindex="-1"><strong>Reminders</strong><span>Your phone nudges you before a promise is due</span></button>
+        </div>
+
+        <div class="stage">
+          <div class="screen" role="tabpanel" id="panel-email" aria-labelledby="tab-email">
+            <div class="mail">
+              <div class="mail-row"><span>To</span>marcus@reyesroofing.com</div>
+              <div class="mail-row"><span>Subject</span>Your quote: 40 panels, installed</div>
+              <div class="mail-body">
+                <p class="rise" style="--d:0">Hi Marcus, thanks for the call.</p>
+                <p class="rise" style="--d:1">Confirming <b>$4,860 for the forty panels, installed</b>, held until October 31. I'll send the revised quote with the twelve extra panels by Thursday.</p>
+                <p class="rise" style="--d:2">Could you text the site access code when you get a chance?</p>
+              </div>
+              <div class="mail-actions rise" style="--d:3"><span class="pill solid">Open in Mail</span><span class="pill">Save as Gmail draft</span></div>
+            </div>
+            <p class="context">Written from what was said on the call, with the agreed price word for word.</p>
+          </div>
+
+          <div class="screen" role="tabpanel" id="panel-whatsapp" aria-labelledby="tab-whatsapp" hidden>
+            <div class="chat wa">
+              <div class="chat-head"><span class="avatar">MR</span><div><strong>Marcus Reyes</strong><small>Reyes Roofing</small></div></div>
+              <div class="chat-body">
+                <p class="bubble in rise" style="--d:0">Thanks, talk soon<time>2:21 pm</time></p>
+                <p class="bubble out rise" style="--d:1">Hi Marcus, confirming $4,860 for the forty panels, installed, held until Oct 31. Revised quote with the 12 extra panels coming Thursday. Could you send the site access code?<time>2:24 pm ✓✓</time></p>
+              </div>
+            </div>
+            <p class="context">In the Dimts app, tap Share and pick WhatsApp. The message is already written.</p>
+          </div>
+
+          <div class="screen" role="tabpanel" id="panel-telegram" aria-labelledby="tab-telegram" hidden>
+            <div class="chat tg">
+              <div class="chat-head"><span class="avatar">IC</span><div><strong>Install crew</strong><small>4 members</small></div></div>
+              <div class="chat-body">
+                <p class="bubble out rise" style="--d:0"><b>Reyes Roofing, agreed today</b><br>40 panels, installed. Start the week of Nov 3.<br>Site access code: coming tomorrow morning.<time>2:26 pm</time></p>
+                <p class="bubble in rise" style="--d:1"><span class="who-said">Sam</span>Got it. I'll load the van Friday.<time>2:31 pm</time></p>
+              </div>
+            </div>
+            <p class="context">Share the call recap to a person or a group, so the crew hears the same thing the customer did.</p>
+          </div>
+
+          <div class="screen" role="tabpanel" id="panel-calendar" aria-labelledby="tab-calendar" hidden>
+            <div class="cal">
+              <div class="cal-day rise" style="--d:0"><span>Thu</span><strong>16</strong><span>October</span></div>
+              <div class="cal-event rise" style="--d:1">
+                <strong>Site visit: Reyes Roofing</strong>
+                <span>9:00 – 9:30 am</span>
+                <p>Agreed on the call: $4,860 for 40 panels, installed. Bring the revised quote.</p>
+              </div>
+              <div class="mail-actions rise" style="--d:2"><span class="pill solid">Add to calendar</span><span class="pill">Google</span><span class="pill">Outlook</span><span class="pill">iCloud</span></div>
+            </div>
+            <p class="context">When a call sets a time, Dimts fills in the event. You check the time and tap Add.</p>
+          </div>
+
+          <div class="screen" role="tabpanel" id="panel-reminder" aria-labelledby="tab-reminder" hidden>
+            <div class="lock">
+              <div class="lock-time rise" style="--d:0">8:30</div>
+              <div class="lock-date rise" style="--d:0">Thursday, October 16</div>
+              <div class="notif rise" style="--d:1">
+                <div class="notif-head"><span class="notif-icon" aria-hidden="true"></span>Dimts<small>now</small></div>
+                <strong>Due today: revised quote for Marcus</strong>
+                <p>You promised it by Thursday on Tuesday's call (03:41).</p>
+              </div>
+            </div>
+            <p class="context">Promises you made become reminders, timed to when you said you'd do it.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <section class="band" aria-labelledby="compare-title">
     <div class="wrap">
       <div class="band-intro">
@@ -243,6 +326,7 @@
       <details><summary>Which countries does Dimts work in?</summary><p>Plan minutes cover calls in the US, Canada, the UK and the European Economic Area. Calls to the Gulf use prepaid credits on top of your plan.</p></details>
       <details><summary>What happens after the free trial?</summary><p>The trial lasts 21 days and includes 20 minutes of calls. Afterwards every past call stays readable and searchable for free; new recorded calls need Pro or Business.</p></details>
       <details><summary>Who can see my calls?</summary><p>Only you. Call content is encrypted at rest, and Dimts staff tools show account metadata, not recordings or transcripts. You can export or delete everything from Settings.</p></details>
+      <details><summary>Can I send follow-ups by WhatsApp or Telegram?</summary><p>Yes, from the Dimts app: tap Share on the follow-up and pick WhatsApp, Telegram, text or any other app. Email opens in your mail app or saves as a Gmail draft, and meetings go to Google, Outlook or iCloud calendar. Nothing is sent until you tap send.</p></details>
       <details><summary>When are the iPhone and Android apps coming?</summary><p>Soon. Join the waitlist and we'll email you once, the day they're in the stores. Everything already works in your browser, on any phone or computer.</p></details>
     </div>
   </section>
