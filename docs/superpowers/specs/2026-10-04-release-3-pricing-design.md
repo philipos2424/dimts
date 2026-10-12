@@ -168,3 +168,29 @@ thin. Do not lower it.
 - Auto top-up (Polar one-time purchases cannot charge a saved card off-session).
 - An in-app cancel screen (pause or downgrade, plus one "why" question) before Polar's portal.
 - Team seats.
+
+## Pricing v3 (12 October 2026): from $20, with price anchoring
+
+Founder decision: plans start at $20, and the plans screen uses price anchoring.
+
+| | Monthly | Yearly (10 months' price) | Shown on the yearly toggle |
+|---|---|---|---|
+| Pro (500 min) | $20 · €20 · £16 · C$28 · AED/SAR 75 | $200 | $16.67/mo, "billed $200 a year, save $40" |
+| Business (1,500 min) | $50 · €50 · £40 · C$70 · AED 185 · SAR 190 | $500 | $41.67/mo, "save $100" |
+
+- **Round numbers.** $20 and $50 read as deliberate. They also leave room for $19.99 in-app tiers.
+- **One price list everywhere.** The Ethiopia `lite` discount ($7/$19) is retired. At $7, card fees took about
+  14% and the minutes cost more than the plan. Ethiopian numbers can still sign up and buy, at the standard
+  price. Old `_lite` product keys still parse, so any past webhook or order is still understood.
+- **Anchoring, kept honest:**
+  - Business is listed first, so Pro is judged against $50.
+  - Yearly is selected by default and shows its monthly equivalent and the saving against this plan's
+    own monthly price.
+  - Monthly shows a per-day figure.
+  - There are no invented "was" prices or strike-throughs (EU price-reduction rules), and the renewal
+    line always states the amount billed.
+- **Polar.** `scripts/polar-setup.js` now archives any tagged product whose prices no longer match this
+  table (and the retired regional ones) and creates replacements, then prints the new `POLAR_PRODUCTS`.
+  Archived products take no new purchases. Existing subscribers keep their price.
+- **Margins.** US Pro at full use costs about $14 against $20. Every earlier conclusion holds, with about
+  $1 more margin per Pro user.

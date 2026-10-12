@@ -59,7 +59,7 @@ test('checkout uses the product for the region and charges the currency shown', 
   assert.equal(checkouts.at(-1).successUrl, 'https://calls.example.com/plans?checkout=done');
   user = { ...user, phone: '+251911234567' };
   await post('/api/billing/checkout', { item: 'business', interval: 'month' });
-  assert.equal(checkouts.at(-1).productId, ids.business_month_lite);
+  assert.equal(checkouts.at(-1).productId, ids.business_month, 'Ethiopian numbers buy the standard plan');
   assert.equal(checkouts.at(-1).currency, 'usd');
   await post('/api/billing/checkout', { item: 'credits_10' });
   assert.equal(checkouts.at(-1).productId, ids.credits_10);

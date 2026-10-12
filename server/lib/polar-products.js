@@ -2,7 +2,7 @@ import { CREDIT_PACKS, INTERVALS, PAID_PLANS, planProductKey } from './pricing.j
 
 /** Every product key Dimts sells; scripts/polar-setup.js creates one Polar product per key. */
 export const PRODUCT_KEYS = [
-  ...PAID_PLANS.flatMap(plan => INTERVALS.flatMap(interval => ['standard', 'lite'].map(region => planProductKey(plan, interval, region)))),
+  ...PAID_PLANS.flatMap(plan => INTERVALS.map(interval => planProductKey(plan, interval))),
   ...Object.keys(CREDIT_PACKS),
 ];
 
@@ -26,7 +26,7 @@ export function productKeyFor(productId, env = process.env) {
   return PRODUCT_KEYS.find(key => map[key] === productId) ?? null;
 }
 
-/** `pro_year_lite` → { plan: 'pro', interval: 'year' }; null for credit packs. */
+/** `pro_year` → { plan: 'pro', interval: 'year' }; null for credit packs. Old `_lite` keys still parse. */
 export function parsePlanKey(key) {
   const match = /^(pro|business)_(month|year)(?:_lite)?$/.exec(key ?? '');
   return match ? { plan: match[1], interval: match[2] } : null;

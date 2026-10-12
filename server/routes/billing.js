@@ -70,7 +70,7 @@ billingRouter.post('/checkout', async (req, res, next) => {
         const portal = await createPortalSession(user.id, returnUrls().returnUrl);
         return res.json({ kind: 'portal', url: portal.url });
       }
-      key = planProductKey(item, interval, region);
+      key = planProductKey(item, interval);
       price = pick(PLAN_PRICES[region][item][interval], currency);
     } else if (CREDIT_PACKS[item]) {
       key = item;
