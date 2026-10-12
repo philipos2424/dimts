@@ -351,3 +351,10 @@ CREATE TABLE IF NOT EXISTS provider_costs (
 );
 -- Our own estimate per finished call (carrier legs + recording + transcription), in micro-dollars.
 ALTER TABLE calls ADD COLUMN IF NOT EXISTS est_cost_micros BIGINT;
+-- Pre-launch waitlist sign-ups from the marketing site.
+CREATE TABLE IF NOT EXISTS waitlist (
+  email TEXT PRIMARY KEY,
+  platform TEXT CHECK (platform IN ('iphone','android','web')),
+  work TEXT, country TEXT, source TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
