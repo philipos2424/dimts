@@ -268,6 +268,39 @@ async function showCompliance() {
     <p class="muted small">Not checked here (outside the code): provider DPAs, lawyer review, Ethiopia and Germany/Austria counsel questions. See docs/legal/dpa-checklist.md.</p>`;
 }
 
+// Marketing-site waitlist: emails people gave to hear about the apps.
+async function showWaitlist() {
+  const w = await api('/waitlist');
+  stamp(`Updated ${when(new Date().toISOString())} UTC`);
+  // Fill in days with no sign-ups so the chart's gaps are real gaps.
+  const counts = Object.fromEntries(w.days.map(d => [d.day, d.n]));
+  const days = Array.from({ length: 30 }, (_, i) => {
+    const d = new Date(Date.now() - (29 - i) * 86400000).toISOString().slice(0, 10);
+    return { day: d, n: counts[d] ?? 0 };
+  });
+  main.innerHTML = `<h2>Waitlist</h2>
+    <p class="muted">People who joined from the website (dimts-site.vercel.app) to hear when the apps are out. The channel comes from the <code>?ref=</code> in the link they used.</p>
+    <div class="tiles">${tile('On the list', int(w.total))}${tile('Last 7 days', int(w.last_7d))}${tile('Last 24 hours', int(w.last_24h))}</div>
+    <div class="grid2">
+      ${card('Sign-ups per day (30 days)', bars(days, 'n', 'sign-ups'))}
+      ${card('Where they came from', table(['Channel', 'Sign-ups', 'Share'], w.channels.map(c => [esc(c.channel), int(c.n), pct(c.n, w.total)]), [1, 2]))}
+      ${card('Phone', table(['Phone', 'Sign-ups'], w.platforms.map(p => [label(p.platform), int(p.n)]), [1]))}
+    </div>
+    <div class="card"><div class="row"><h3>Everyone, newest first</h3><button class="btn primary" id="csv"${w.people.length ? '' : ' disabled'}>Download CSV</button></div>
+    ${table(['Joined (UTC)', 'Email', 'Phone', 'Country', 'Source'],
+      w.people.map(p => [when(p.created_at), esc(p.email), esc(p.platform ?? ''), esc(p.country ?? ''), esc(p.source ?? '')]))}</div>`;
+  document.getElementById('csv').onclick = () => {
+    const cell = v => (v == null ? '' : /[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v));
+    const csv = ['email,platform,work,country,source,joined',
+      ...w.people.map(p => [p.email, p.platform, p.work, p.country, p.source, p.created_at].map(cell).join(','))].join('\n');
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    link.download = `dimts-waitlist-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  };
+}
+
 const reasonSelect = id => `<select id="${id}"><option value="">Reason…</option>${reasons.map(r => `<option value="${esc(r)}">${label(r)}</option>`).join('')}</select>`;
 
 async function showCustomers(state = { q: '', plan: '', page: 0 }) {
@@ -501,7 +534,7 @@ function fail(err) {
 }
 
 const views = { today: showToday, growth: showGrowth, revenue: showRevenue, operations: showOperations,
-  customers: () => showCustomers(), compliance: showCompliance, access: showAccess };
+  customers: () => showCustomers(), waitlist: showWaitlist, compliance: showCompliance, access: showAccess };
 let current = 'today';
 async function show(name) {
   current = name;

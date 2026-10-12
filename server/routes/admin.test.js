@@ -284,3 +284,20 @@ test('a one-time setup link adds the first passkey and signs in, with no text or
   assert.equal((await api('/api/admin/setup/options', null, { method: 'POST', body: { setup: 'c'.repeat(64) } })).status, 404, 'only numbers on the staff list');
   delete process.env.ADMIN_SETUP_TOKEN;
 });
+
+test('staff see the waitlist with channels; everyone else is refused and the view is logged', async () => {
+  await db.query(`INSERT INTO waitlist(email,platform,source,created_at) VALUES
+    ('a@example.com','iphone','home-hero:linkedin',now()), ('b@example.com','android','home-hero:linkedin',now() - interval '3 days'),
+    ('c@example.com',NULL,'contractors',now() - interval '20 days') ON CONFLICT DO NOTHING`);
+  const outsider = await signedIn('+15555550777');
+  assert.equal((await api('/api/admin/waitlist', outsider.token)).status, 404); // the console does not admit it exists
+  const staff = await signedIn('+15555550100');
+  const { status, body } = await api('/api/admin/waitlist', staff.token);
+  assert.equal(status, 200);
+  assert.equal(body.total, 3);
+  assert.equal(body.last_7d, 2);
+  assert.deepEqual(body.channels, [{ channel: 'linkedin', n: 2 }, { channel: 'direct', n: 1 }]);
+  assert.deepEqual(body.people.map(p => p.email), ['a@example.com', 'b@example.com', 'c@example.com']);
+  const log = await api('/api/admin/access-log', staff.token);
+  assert.ok(log.body.events.some(e => e.action === 'admin_viewed_waitlist'));
+});
