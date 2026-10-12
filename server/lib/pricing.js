@@ -193,17 +193,17 @@ export function catalogFor(phone) {
 }
 
 /**
- * A new account tries Pro for 21 days, capped at 20 minutes, from its first
+ * A new account tries Pro for 21 days, capped at 5 minutes, from its first
  * call: a trial converts several times better than a permanent free tier, and
- * the cap bounds what one account can cost (about $0.45 in the US). The
+ * the cap bounds what one account can cost (about $0.15 in the US). The
  * shared monthly pool (GLOBAL_CALL_MINUTES_PER_MONTH) bounds all trials together.
  */
 export const TRIAL_DAYS = 21;
-// Twenty minutes: two or three real calls, so the memory across calls can show itself.
-export const TRIAL_MINUTES = 20;
-// A trial call that starts with minutes left may finish, up to this long. Cutting a
-// first call off mid-sentence, with the owner's customer on the line, loses the user.
-export const TRIAL_CALL_GRACE_SECONDS = 15 * 60;
+// Five minutes: one short real call. Every trial minute is a carrier cost to us.
+export const TRIAL_MINUTES = 5;
+// A trial call that starts with a minute left may run this long, so the last call
+// is not cut off mid-sentence; kept short because we pay for it.
+export const TRIAL_CALL_GRACE_SECONDS = 2 * 60;
 export const onTrial = (user, now = Date.now()) => (user?.tier ?? 'free') === 'free'
   && !!user?.trial_ends_at && new Date(user.trial_ends_at).getTime() > now;
 export const planOf = user => (onTrial(user) ? 'pro' : PLANS[user?.tier] ? user.tier : 'free');

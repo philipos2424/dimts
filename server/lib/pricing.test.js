@@ -80,7 +80,7 @@ test('over-plan minutes cover UK and EU carrier costs; US calls keep the base ra
   assert.deepEqual(['+14155550100', '+447700900123', '+4915112345678', '+971501234567'].map(p => planMinutes('pro', p)), [500, 300, 200, 500]);
   assert.equal(planMinutes('business', '+33612345678'), 500);
   assert.equal(planMinutes('free', '+33612345678'), 0, 'after the trial, Free is read-only');
-  assert.equal(planMinutes('pro', '+33612345678', { trial: true }), 20, 'the trial is capped everywhere');
+  assert.equal(planMinutes('pro', '+33612345678', { trial: true }), 5, 'the trial is capped everywhere');
 });
 
 test('a free account on its trial is treated as Pro until the trial ends', async () => {
