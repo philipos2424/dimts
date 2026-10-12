@@ -242,10 +242,35 @@ function deviceName(): string | undefined {
   }
   return undefined;
 }
-export function verifyLoginCode(phone: string, code: string) {
-  return request<{ token: string; phone: string }>('/api/auth/verify', '', {
-    method: 'POST', body: JSON.stringify({ phone, code, device: deviceName() }),
+/** With link, a pending social sign-in is attached to this phone once the code checks out. */
+export function verifyLoginCode(phone: string, code: string, link?: string) {
+  return request<{ token: string; phone: string; linked?: SocialProvider }>('/api/auth/verify', '', {
+    method: 'POST', body: JSON.stringify({ phone, code, link, device: deviceName() }),
   });
+}
+export type SocialProvider = 'google' | 'apple' | 'telegram' | 'chatgpt';
+export function getSocialProviders() {
+  return request<{ providers: SocialProvider[] }>('/api/auth/social/providers', '').then(r => r.providers);
+}
+export function startSocialSignIn(provider: SocialProvider, challenge: string, returnTo: string) {
+  return request<{ url: string }>('/api/auth/social/start', '', {
+    method: 'POST', body: JSON.stringify({ provider, challenge, return_to: returnTo }),
+  });
+}
+/** A known account signs straight in; a new one first confirms its mobile number. */
+export type SocialFinish = { token: string; phone: string }
+  | { status: 'phone_required'; link: string; provider: SocialProvider; label: string; phone: string | null };
+export function finishSocialSignIn(ticket: string, verifier: string) {
+  return request<SocialFinish>('/api/auth/social/finish', '', {
+    method: 'POST', body: JSON.stringify({ ticket, verifier, device: deviceName() }),
+  });
+}
+export type SignInMethod = { provider: SocialProvider; created_at: string; last_used_at: string | null };
+export function getSignInMethods() {
+  return request<{ methods: SignInMethod[]; available: SocialProvider[] }>('/api/me/sign-in-methods', '');
+}
+export function removeSignInMethod(provider: SocialProvider) {
+  return request<{ status: string }>(`/api/me/sign-in-methods/${provider}`, '', { method: 'DELETE' });
 }
 export type SignedInDevice = { id: string; device_name: string | null; created_at: string; last_seen_at: string | null; current: boolean };
 export function getSessions() {
@@ -331,6 +356,10 @@ function publicErrorMessage(status: number, body: string): string {
     caller_id_rejected: 'The carrier could not verify this number. Check it can receive calls, then try again.',
     caller_id_unavailable: 'Showing your own number is not available yet.',
     invalid_verification: 'Check your phone number and verification code, then try again.',
+    expired_social_request: 'Sign-in expired. Try again.',
+    invalid_social_request: 'Sign-in expired. Try again.',
+    provider_not_configured: 'This sign-in option is not available yet. Use your phone number instead.',
+    sign_in_method_not_found: 'This sign-in method is already removed.',
     verification_trial_number_required: 'Dimts cannot text this number yet. Try again later or contact support.',
     verification_country_disabled: 'Dimts cannot send codes to this country yet.',
     destination_trial_number_required: 'Dimts cannot call this number yet. No call was started.',
