@@ -345,3 +345,7 @@ table.compare { border-collapse: collapse; width: 100%; min-width: 40rem; font-s
   .screen, .screen .rise { animation: none !important; opacity: 1 !important; }
   .channels.auto .channel-tabs button[aria-selected=true]::after { animation: none; }
 }
+
+/* Pitch video page */
+.pitch-video { width: 100%; max-width: 64rem; height: auto; aspect-ratio: 16 / 9; background: var(--text); border-radius: 6px; margin-top: 1rem; }
+.pitch-actions { margin-top: 1.5rem; }
