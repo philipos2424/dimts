@@ -368,3 +368,22 @@ export async function accessLog() {
     WHERE a.action LIKE 'admin\\_%' ORDER BY a.created_at DESC, a.id DESC LIMIT 300`);
   return { events: rows.map(({ phone, ...row }) => ({ ...row, staff: maskPhone(phone) })) };
 }
+
+/**
+ * Marketing-site waitlist. Visitors gave these emails to hear about the apps,
+ * so unlike customer data they are shown in full. `source` is the form plus
+ * the link's ?ref= ("home-hero:linkedin"); the part after the colon is the channel.
+ */
+export async function waitlist() {
+  const [totals, channels, platforms, days, people] = await Promise.all([
+    query(`SELECT count(*)::int AS total, count(*) FILTER (WHERE created_at > now() - interval '7 days')::int AS last_7d,
+      count(*) FILTER (WHERE created_at > now() - interval '1 day')::int AS last_24h FROM waitlist`),
+    query(`SELECT COALESCE(NULLIF(split_part(source, ':', 2), ''), 'direct') AS channel, count(*)::int AS n
+      FROM waitlist GROUP BY 1 ORDER BY 2 DESC, 1`),
+    query(`SELECT COALESCE(platform, 'not given') AS platform, count(*)::int AS n FROM waitlist GROUP BY 1 ORDER BY 2 DESC`),
+    query(`SELECT to_char(date_trunc('day', created_at), 'YYYY-MM-DD') AS day, count(*)::int AS n
+      FROM waitlist WHERE created_at > now() - interval '30 days' GROUP BY 1 ORDER BY 1`),
+    query('SELECT email, platform, work, country, source, created_at FROM waitlist ORDER BY created_at DESC LIMIT 5000'),
+  ]);
+  return { ...totals.rows[0], channels: channels.rows, platforms: platforms.rows, days: days.rows, people: people.rows };
+}
