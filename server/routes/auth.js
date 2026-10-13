@@ -14,6 +14,7 @@ import { hit } from '../lib/rate-limit.js';
 import { hasAcceptedTerms } from '../lib/terms.js';
 import { checkReviewDemoCode, isReviewDemo } from '../lib/review-demo.js';
 import { resetReviewDemo } from '../services/review-demo.js';
+import { linkIdentity } from './social-signin.js';
 
 export const authRouter = express.Router();
 
@@ -49,10 +50,12 @@ authRouter.post('/start', async (req, res) => {
 });
 
 authRouter.post('/verify', async (req, res) => {
-  const { phone, code } = req.body ?? {};
+  const { phone, code, link } = req.body ?? {};
   if (!isE164(phone) || typeof code !== 'string' || !/^\d{4,10}$/.test(code)) {
     throw new HttpError(400, 'invalid_verification');
   }
+  // A social sign-in that still needs this phone confirmed.
+  if (link !== undefined && link !== null && (typeof link !== 'string' || !/^[a-f0-9]{64}$/.test(link))) throw new HttpError(400, 'invalid_verification');
   await limit(`check-phone:${phone}`, 15);
   await limit(`check-ip:${req.ip}`, 40);
   const demo = isReviewDemo(phone);
@@ -68,17 +71,24 @@ authRouter.post('/verify', async (req, res) => {
      RETURNING id, phone, tier, terms_version, (xmax = 0) AS created`, [phone]
   );
   if (demo) await resetReviewDemo(user);
-  if (user.created && !demo) defer(capture(user.id, 'signed_up', { country: signupCountryCode(phone) ?? 'other' }), 'analytics');
+  // The shared review-demo account never takes a reviewer's own Google or Apple ID.
+  const linked = link && !demo ? await linkIdentity(user.id, link, req) : null;
+  if (user.created && !demo) defer(capture(user.id, 'signed_up', { country: signupCountryCode(phone) ?? 'other', method: linked ?? 'phone' }), 'analytics');
+  await openSession(req, res, user, { demo, linked });
+});
+
+/** Issue a 30-day session for a verified account; shared by phone and social sign-in. */
+export async function openSession(req, res, user, { demo = false, linked = null, method = 'phone' } = {}) {
   const token = randomBytes(32).toString('hex');
   const device = deviceName(req);
   await query(
     `INSERT INTO sessions (token_hash, user_id, expires_at, device_name, last_seen_at)
      VALUES ($1, $2, now() + interval '30 days', $3, now())`, [hashToken(token), user.id, device]
   );
-  await audit({ userId: user.id, action: 'signed_in', req });
+  await audit({ userId: user.id, action: method === 'phone' ? 'signed_in' : `signed_in_${method}`, req });
   if (!demo) defer(sendNewSignInNotification(user.id, hashToken(token), device), `new-sign-in:${user.id}`);
-  res.set('Cache-Control', 'no-store').json({ token, phone: user.phone, terms_required: !hasAcceptedTerms(user) });
-});
+  res.set('Cache-Control', 'no-store').json({ token, phone: user.phone, terms_required: !hasAcceptedTerms(user), ...(linked ? { linked } : {}) });
+}
 
 /** A short label for Settings › Signed-in devices; the app sends its own, browsers get one from the user agent. */
 export function deviceName(req) {

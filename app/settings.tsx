@@ -14,6 +14,7 @@ import { FirstCallLink } from '../src/components/FirstCallLink';
 import { DataControls } from '../src/components/DataControls';
 import { AppLockSetting } from '../src/components/AppLockSetting';
 import { SignedInDevices } from '../src/components/SignedInDevices';
+import { SignInMethods } from '../src/components/SignInMethods';
 import type { Lang } from '../src/i18n';
 import { radius, space, useTheme } from '../src/theme';
 
@@ -43,6 +44,7 @@ export default function Settings() {
       <CallDeletionHistory />
       <NotificationSettings />
       <AppLockSetting />
+      <SignInMethods />
       <SignedInDevices />
       <DataControls />
       <Section title={t('language')}>

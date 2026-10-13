@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, TextInput, useWindowDimensions, View } from 'react-native';
 import { useApp } from '../src/AppContext';
-import { sendLoginCode, verifyLoginCode } from '../src/api';
+import { getSocialProviders, sendLoginCode, type SocialFinish, type SocialProvider, verifyLoginCode } from '../src/api';
+import { resumeSocialSignIn, socialSignIn } from '../src/socialSignIn';
+import { SocialSignInButton } from '../src/components/SocialSignInButton';
 import { Txt } from '../src/components/Txt';
 import { font, radius, space, type, useTheme } from '../src/theme';
 
@@ -55,13 +57,37 @@ export default function Onboarding() {
   const [error, setError] = useState('');
   const [touched, setTouched] = useState(false);
   const [notice, setNotice] = useState('');
+  const [providers, setProviders] = useState<SocialProvider[]>([]);
+  // A first-time social sign-in waiting for its phone to be confirmed.
+  const [pending, setPending] = useState<{ link: string; label: string } | null>(null);
+
+  useEffect(() => {
+    getSocialProviders().then(setProviders).catch(() => {});
+    setBusy(true);
+    resumeSocialSignIn().then(result => result && finishSocial(result))
+      .catch(err => setError(err instanceof Error ? err.message : 'Unable to sign in.'))
+      .finally(() => setBusy(false));
+  }, []);
+
+  async function finishSocial(result: SocialFinish) {
+    if ('token' in result) return signIn(result.token, result.phone);
+    setPending({ link: result.link, label: result.label });
+    if (result.phone) setValue(result.phone);
+    setSent(false); setCode('');
+  }
+  async function continueWith(provider: SocialProvider) {
+    setBusy(true); setError(''); setNotice('');
+    try { const result = await socialSignIn(provider); if (result) await finishSocial(result); }
+    catch (err) { setError(err instanceof Error ? err.message : 'Unable to sign in.'); }
+    finally { setBusy(false); }
+  }
 
   const valid = /^\+[1-9]\d{6,14}$/.test(value);
   async function submit() {
     setBusy(true); setError('');
     try {
       if (!sent) { await sendLoginCode(value); setSent(true); }
-      else { const session = await verifyLoginCode(value, code); await signIn(session.token, session.phone); }
+      else { const session = await verifyLoginCode(value, code, pending?.link); await signIn(session.token, session.phone); }
     } catch (err) { setError(err instanceof Error ? err.message : 'Unable to sign in.'); }
     finally { setBusy(false); }
   }
@@ -81,6 +107,26 @@ export default function Onboarding() {
         <Txt size="title" weight="bold">Sign in or create your account</Txt>
         <Txt size="caption" tone="muted">21-day free trial. No card needed.</Txt>
       </View>
+
+      {pending ? (
+        <View style={{ gap: space.xs, padding: space.md, borderRadius: radius.md, backgroundColor: c.bg, borderWidth: 1, borderColor: c.line }}>
+          <Txt weight="bold">One last step: confirm your mobile</Txt>
+          <Txt size="caption" tone="muted">
+            Dimts rings this phone for your calls, so we check it once. After that, Continue with {pending.label} signs you straight in.
+          </Txt>
+        </View>
+      ) : providers.length > 0 && !sent ? (
+        <View style={{ gap: space.sm }}>
+          {providers.map(provider => (
+            <SocialSignInButton key={provider} provider={provider} disabled={busy} onPress={() => continueWith(provider)} />
+          ))}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingTop: space.xs }}>
+            <View style={{ flex: 1, height: 1, backgroundColor: c.line }} />
+            <Txt size="caption" tone="faint">or use your mobile number</Txt>
+            <View style={{ flex: 1, height: 1, backgroundColor: c.line }} />
+          </View>
+        </View>
+      ) : null}
 
       <TextInput
         value={value}
@@ -142,6 +188,9 @@ export default function Onboarding() {
       </Pressable>}
       {sent && <Pressable onPress={() => { setSent(false); setCode(''); setError(''); setNotice(''); }}>
         <Txt tone="accent">Change number or send another code</Txt>
+      </Pressable>}
+      {pending && !busy && <Pressable onPress={() => { setPending(null); setSent(false); setCode(''); setError(''); }}>
+        <Txt tone="accent">Use a different sign-in option</Txt>
       </Pressable>}
 
       <Txt size="caption" tone="faint">

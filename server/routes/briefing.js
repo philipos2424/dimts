@@ -9,6 +9,7 @@ import { releaseExpiredNumbers } from '../services/release-numbers.js';
 import { syncProviderCosts } from '../services/provider-costs.js';
 import { encryptExisting } from '../services/encrypt-existing.js';
 import { encryptionEnabled } from '../lib/field-crypto.js';
+import { retryAppleRevocations } from '../services/apple-credentials.js';
 
 export const briefingRouter = express.Router();
 
@@ -53,11 +54,12 @@ cronRouter.get('/weekly-briefing', async (req, res) => {
 cronRouter.get('/retention', async (req, res) => {
   if (!authorizedCron(req)) return res.status(401).json({ error: 'unauthorized' });
   const result = await expireOldCalls();
+  const appleRevocations = await retryAppleRevocations().catch(() => ({ error: 'retry_failed' }));
   const numbers = await releaseExpiredNumbers().catch(err => ({ error: err?.message }));
   const costs = await syncProviderCosts().catch(err => ({ error: err?.message }));
   // Recordings are copied one by one, so keep that batch small enough for one run.
   const encryption = encryptionEnabled()
     ? await encryptExisting({ limit: 200, audioLimit: 20 }).catch(err => ({ error: err?.message }))
     : { skipped: 'encryption_off' };
-  res.json({ ...result, numbers, costs, encryption });
+  res.json({ ...result, numbers, costs, encryption, appleRevocations });
 });

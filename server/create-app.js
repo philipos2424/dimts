@@ -3,6 +3,7 @@ import { captureCallFailure } from './lib/sentry.js';
 import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
 import { authRouter } from './routes/auth.js';
+import { signInMethodsRouter, socialBrowserRouter, socialRouter } from './routes/social-signin.js';
 import { contactsRouter } from './routes/contacts.js';
 import { followupsRouter } from './routes/followups.js';
 import { contextRouter } from './routes/context.js';
@@ -51,7 +52,9 @@ export function createApp({ webRoot = fileURLToPath(new URL('../dist/', import.m
   app.use('/api', apiRateLimit);
   app.use('/api/health', healthRouter);
   app.use('/api/events', eventsRouter);
+  app.use('/api/auth/social', socialRouter);
   app.use('/api/auth', authRouter);
+  app.use('/oauth/signin', socialBrowserRouter);
   app.use('/api/notifications', notificationsRouter);
   app.use('/api/integrations/google', googleRouter);
   app.use('/oauth/google', googleBrowserRouter);
@@ -73,6 +76,7 @@ export function createApp({ webRoot = fileURLToPath(new URL('../dist/', import.m
   app.use('/api/briefing', briefingRouter);
   app.use('/api/cron', cronRouter);
   app.use('/api/me/privacy-requests', myPrivacyRequestsRouter);
+  app.use('/api/me/sign-in-methods', signInMethodsRouter);
   app.use('/api/me', meRouter);
   app.use('/api/privacy-requests', privacyRequestsRouter);
   app.use('/api/waitlist', waitlistRouter);

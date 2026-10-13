@@ -1,4 +1,4 @@
--- Dimts schema (SPEC.md §5)
+-- Dimts schema (SPEC.md Â§5)
 
 CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -401,3 +401,50 @@ CREATE TABLE IF NOT EXISTS waitlist (
   source TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- Sign in with Google, Apple, Telegram or ChatGPT (2026-10-12). Only a hash
+-- of the provider's subject ID is kept: no name, email or picture.
+CREATE TABLE IF NOT EXISTS user_identities (
+  provider TEXT NOT NULL CHECK (provider IN ('google','apple','telegram','chatgpt')),
+  subject_hash TEXT NOT NULL,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  last_used_at TIMESTAMPTZ,
+  PRIMARY KEY (provider, subject_hash)
+);
+CREATE INDEX IF NOT EXISTS user_identities_user_idx ON user_identities (user_id);
+-- One-time steps of a social sign-in: begin â†’ state â†’ done â†’ link (phone confirmation).
+CREATE TABLE IF NOT EXISTS social_signin_requests (
+  token_hash TEXT PRIMARY KEY,
+  phase TEXT NOT NULL CHECK (phase IN ('begin','state','done','link')),
+  provider TEXT NOT NULL,
+  app_challenge TEXT,
+  return_to TEXT,
+  cookie_hash TEXT,
+  subject_hash TEXT,
+  phone_hint TEXT,
+  expires_at TIMESTAMPTZ NOT NULL DEFAULT now() + interval '10 minutes'
+);
+CREATE INDEX IF NOT EXISTS social_signin_requests_expiry_idx ON social_signin_requests (expires_at);
+
+-- Apple grants are encrypted independently of account rows so failed revocation
+-- can be retried after account deletion. Successful revocation erases the row.
+CREATE TABLE IF NOT EXISTS apple_signin_credentials (
+  subject_hash TEXT PRIMARY KEY,
+  encrypted_token TEXT NOT NULL,
+  authorized_at TIMESTAMPTZ NOT NULL,
+  revoke_after TIMESTAMPTZ,
+  next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  attempts INT NOT NULL DEFAULT 0,
+  lease_id UUID,
+  lease_until TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS apple_signin_revocation_idx ON apple_signin_credentials (revoke_after,next_attempt_at);
+
+-- Short-lived security records reject replay and callbacks issued before revocation.
+CREATE TABLE IF NOT EXISTS apple_signin_events (
+  notification_id TEXT PRIMARY KEY,
+  subject_hash TEXT NOT NULL,
+  event_time TIMESTAMPTZ NOT NULL,
+  received_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS apple_signin_events_subject_idx ON apple_signin_events (subject_hash,event_time);
