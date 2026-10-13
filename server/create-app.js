@@ -8,6 +8,7 @@ import { followupsRouter } from './routes/followups.js';
 import { contextRouter } from './routes/context.js';
 import { googleRouter, googleBrowserRouter } from './routes/google.js';
 import { calendarActionsRouter } from './routes/calendar-actions.js';
+import { fileActionsRouter } from './routes/file-actions.js';
 import { emailActionsRouter } from './routes/email-actions.js';
 import { recordingRecoveryRouter } from './routes/recording-recovery.js';
 import { callDeletionRouter, deletionsRouter } from './routes/call-deletion.js';
@@ -64,6 +65,7 @@ export function createApp({ webRoot = fileURLToPath(new URL('../dist/', import.m
   app.use('/api/call-deletions', deletionsRouter);
   app.use('/api/calls', recordingRecoveryRouter);
   app.use('/api/calls', calendarActionsRouter);
+  app.use('/api/calls', fileActionsRouter);
   app.use('/api/calls', emailActionsRouter);
   app.use('/api/calls', followupsRouter);
   app.use('/api/calls', recapRouter);

@@ -3,6 +3,8 @@ import { recordingAccount } from '../lib/recording-account.js';
 
 /** Refuse deletion while a call or an external action is still unresolved. */
 export async function assertDeletable(tx, current) {
+  const { rows: fileWork } = await tx.query("SELECT id FROM file_actions WHERE call_id=$1 AND status IN ('sending','unknown')", [current.id]);
+  if (fileWork.length) throw new HttpError(409, 'external_action_unresolved', 'Check the file sending status before deleting this call.');
   if (['initiating','ringing','in-progress'].includes(current.status) ||
       (current.duration_sec == null && !current.budget_released)) throw new HttpError(409, 'call_not_finished', 'Wait until the call has finished before deleting it.');
   for (const table of ['calendar_actions','email_actions']) {
@@ -34,6 +36,7 @@ export async function scrubCall(tx, current) {
   [current.id, providerStatus, recordingAccount(current)]);
   await tx.query('DELETE FROM followup_events WHERE call_id=$1', [current.id]);
   await tx.query('DELETE FROM telegram_sends WHERE call_id=$1', [current.id]);
+  await tx.query('DELETE FROM file_actions WHERE call_id=$1', [current.id]);
   await tx.query('DELETE FROM promise_states WHERE call_id=$1', [current.id]);
   await tx.query('DELETE FROM call_notifications WHERE call_id=$1', [current.id]);
   await tx.query("UPDATE calendar_actions SET meeting='{}'::jsonb WHERE call_id=$1", [current.id]);

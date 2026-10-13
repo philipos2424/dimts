@@ -6,6 +6,7 @@ import { ApiError, captureSessionGuard, type CallDetail, getCall, reprocessCall,
 import { AgreementList } from '../../src/components/AgreementList';
 import { Button } from '../../src/components/Button';
 import { CallPromises } from '../../src/components/CallPromises';
+import { FileActions } from '../../src/components/FileActions';
 import { Card } from '../../src/components/Card';
 import { ConflictList } from '../../src/components/ConflictList';
 import { CapturePill } from '../../src/components/Pill';
@@ -217,6 +218,7 @@ export default function CallDetailScreen() {
               </View>
             )}
             <FollowupReview key={call.id} callId={call.id} initial={call.followups} />
+            <FileActions key={`files:${call.id}`} callId={call.id} />
             <RecapButton callId={call.id} />
             <Button compact variant="quiet" label="Ask about this call"
               onPress={() => router.push(`/?draft=${encodeURIComponent(`${call.contact_name ? `In my call with ${call.contact_name}, ` : 'In this call, '}`)}`)} />

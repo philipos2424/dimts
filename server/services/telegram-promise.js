@@ -68,6 +68,8 @@ export async function detectTelegramPromise(transcript, { signal } = {}) {
  * is unique and is claimed before MiniMe is asked).
  */
 export async function sendPromisedTelegram(callId, { signal } = {}) {
+  // Reviewed file actions take over when enabled; never send a parallel legacy draft.
+  if (process.env.MINIME_FILE_ACTIONS === '1') return { status: 'skipped' };
   if (!minimeConfigured()) return { status: 'skipped' };
   const call = await queryOne(`SELECT c.id, c.user_id, c.transcript, c.destination, c.status, u.language,
       k.display_name AS contact_name, l.auto_send

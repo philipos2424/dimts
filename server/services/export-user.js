@@ -25,6 +25,8 @@ export async function buildExport(userId) {
   const promiseStates = (await query(`SELECT p.call_id,p.item_index,p.status,p.updated_at FROM promise_states p
     JOIN calls c ON c.id=p.call_id WHERE c.user_id=$1 ORDER BY p.updated_at`, [userId])).rows;
   const minime = await queryOne('SELECT business_name,auto_send,linked_at FROM minime_links WHERE user_id=$1', [userId]);
+  const fileActions = (await query('SELECT id,user_id,call_id,payload,status,message_id,created_at FROM file_actions WHERE user_id=$1 ORDER BY created_at', [userId])).rows
+    .map(({ payload, user_id, ...row }) => { const { approval_hash, ...content } = JSON.parse(payload); return { ...row, ...content }; });
   const telegramSends = (await query(`SELECT call_id,request,draft,status,created_at FROM telegram_sends
     WHERE user_id=$1 ORDER BY created_at`, [userId])).rows;
   const auditEvents = (await query(`SELECT action,target_type,target_id,reason,created_at FROM audit_events
@@ -35,6 +37,6 @@ export async function buildExport(userId) {
     README: 'Everything Dimts holds about your account. Audio for each call is downloadable at its audio_path while signed in.',
     profile, calls, contacts, google_connections: google,
     calendar_actions: calendar, email_actions: email, deletions, promise_states: promiseStates,
-    minime_link: minime ?? null, telegram_sends: telegramSends, audit_events: auditEvents,
+    minime_link: minime ?? null, telegram_sends: telegramSends, file_actions: fileActions, audit_events: auditEvents,
   };
 }

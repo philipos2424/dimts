@@ -320,8 +320,20 @@ export function disconnectGoogle(kind: GoogleKind) {
 }
 
 /** MiniMe (Telegram business assistant) sends what the owner promised "on Telegram". */
-export type MiniMeStatus = { available: boolean; linked: boolean; business_name?: string | null; auto_send?: boolean };
+export type MiniMeStatus = { available: boolean; linked: boolean; business_name?: string | null; auto_send?: boolean; reviewed_file_actions?: boolean };
 export type TelegramSend = { request: string; draft: string; status: 'sending' | 'sent' | 'waiting' | 'failed'; updated_at: string };
+export type FileAction = {
+  id: string; call_id: string; version: number; request: string; channel: 'telegram' | 'whatsapp';
+  evidence: string[]; caption: string; status: 'needs_details' | 'ready_for_review' | 'sending' | 'sent' | 'failed' | 'unknown' | 'dismissed';
+  file?: { id: string; name: string; bytes: number }; recipient?: { id: string; name: string; phone: string };
+  message_id?: number; error_code?: string;
+};
+export type FileOptions = { files: { id: string; name: string }[]; recipients: { id: string; name: string; phone: string }[] };
+export const getFileActions = (callId: string) => request<{ available: boolean; actions: FileAction[] }>(`/api/calls/${callId}/file-actions`, '');
+export const prepareFileActions = (callId: string) => request<{ actions: FileAction[] }>(`/api/calls/${callId}/file-actions/prepare`, '', { method: 'POST' });
+export const getFileOptions = (callId: string, actionId: string) => request<FileOptions>(`/api/calls/${callId}/file-actions/${actionId}/options`, '');
+export const updateFileAction = (callId: string, actionId: string, operation: 'review' | 'send' | 'status' | 'dismiss', body: object) =>
+  request<{ action: FileAction; preview_url?: string }>(`/api/calls/${callId}/file-actions/${actionId}/${operation}`, '', { method: 'POST', body: JSON.stringify(body) });
 export function getMiniMeStatus() { return request<MiniMeStatus>('/api/minime', ''); }
 export function startMiniMeLink() { return request<{ url: string }>('/api/minime/link', '', { method: 'POST' }); }
 export function setMiniMeAutoSend(auto_send: boolean) {

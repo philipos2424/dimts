@@ -26,14 +26,14 @@ export function MiniMeConnection() {
   if (!status?.available) return null;
   return <View style={{ gap: space.sm, padding: space.md }}>
     <Txt weight="bold">MiniMe on Telegram</Txt>
-    <Txt tone="muted">When you tell a caller “I’ll send it to you on Telegram”, MiniMe sends it from your business after the call, using your catalog, and tells you in Telegram. Callers who have never messaged your business on Telegram get it as soon as they do.</Txt>
+    <Txt tone="muted">{status.reviewed_file_actions ? 'Open a finished call to find file requests. Choose a MiniMe file and Telegram recipient, review the details, then approve the send.' : 'When you tell a caller “I’ll send it to you on Telegram”, MiniMe sends it from your business after the call, using your catalog, and tells you in Telegram. Callers who have never messaged your business on Telegram get it as soon as they do.'}</Txt>
     {status.linked ? <>
       <Txt>Connected to {status.business_name || 'your MiniMe business'}</Txt>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
+      {!status.reviewed_file_actions && <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
         <Txt style={{ flex: 1 }}>Send Telegram promises automatically</Txt>
         <Switch value={!!status.auto_send} disabled={busy} accessibilityLabel="Send Telegram promises automatically"
           onValueChange={value => run(async () => setStatus(await setMiniMeAutoSend(value)))} />
-      </View>
+      </View>}
       <Pressable accessibilityRole="button" disabled={busy} onPress={() => run(async () => setStatus(await disconnectMiniMe()))}>
         <Txt tone="accent">Disconnect MiniMe</Txt>
       </Pressable>
