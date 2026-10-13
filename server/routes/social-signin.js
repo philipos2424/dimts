@@ -1,6 +1,7 @@
 import express from 'express';
 import { createHash, randomBytes } from 'node:crypto';
 import { query, queryOne } from '../db/pool.js';
+import * as database from '../db/pool.js';
 import { config } from '../config.js';
 import { audit } from '../lib/audit.js';
 import { hit } from '../lib/rate-limit.js';
@@ -8,6 +9,9 @@ import { hashToken, HttpError, resolveUser } from '../lib/users.js';
 import { authorizationUrl, completeSignIn, configuredProviders, providerConfig, providerLabel,
   SOCIAL_PROVIDERS, subjectHash } from '../services/social-signin.js';
 import { openSession } from './auth.js';
+import { defer } from '../lib/defer.js';
+import { bindAppleCredential, handleAppleRevocation, queueAppleRevocation, rememberAppleCredential, retryAppleRevocations } from '../services/apple-credentials.js';
+import { verifyAppleNotification } from '../services/social-signin.js';
 
 // Sign in with Google, Apple, Telegram or ChatGPT.
 //
@@ -38,12 +42,13 @@ const local = host => ['localhost', '127.0.0.1', '[::1]'].includes(host);
 
 /** Where the browser may hand the ticket back: the app's own scheme or the web app's sign-in page. */
 export function allowedReturn(value) {
+  if (typeof value !== 'string') return null;
   let url;
   try { url = new URL(value); } catch { return null; }
   if (url.username || url.password || url.hash || value.length > 300) return null;
   url.search = '';
-  const development = !process.env.VERCEL;
-  if (url.protocol === 'dimts:') return url.toString();
+  const development = !process.env.VERCEL && process.env.NODE_ENV !== 'production';
+  if (url.protocol === 'dimts:' && (url.host === 'onboarding' && !url.pathname || !url.host && url.pathname === '/onboarding')) return url.toString();
   if (url.protocol === 'exp:' && development) return url.toString(); // Expo Go
   if (url.protocol === 'https:' && url.origin === new URL(config.publicBaseUrl).origin && url.pathname === '/onboarding') return url.toString();
   if (url.protocol === 'http:' && development && local(url.hostname) && url.pathname === '/onboarding') return url.toString();
@@ -116,7 +121,10 @@ socialBrowserRouter.get('/:provider/callback', async (req, res) => {
   if (typeof req.query.code !== 'string' || !req.query.code || req.query.code.length > 4096) return back({ social_error: 'failed' });
   const provider = providerConfig(request.provider);
   let identity;
-  try { identity = await completeSignIn(provider, req.query.code, secret); }
+  try {
+    identity = await completeSignIn(provider, req.query.code, secret);
+    if (provider.name === 'apple') await rememberAppleCredential(identity);
+  }
   catch { return back({ social_error: 'failed' }); }
   const completion = randomToken();
   await query(`INSERT INTO social_signin_requests(token_hash,phase,provider,app_challenge,subject_hash,phone_hint,expires_at)
@@ -139,7 +147,10 @@ socialRouter.post('/finish', async (req, res) => {
   const user = await queryOne(`UPDATE user_identities i SET last_used_at=now() FROM users u
     WHERE i.provider=$1 AND i.subject_hash=$2 AND u.id=i.user_id AND u.deleted_at IS NULL
     RETURNING u.id, u.phone, u.tier, u.terms_version`, [done.provider, done.subject_hash]);
-  if (user) return openSession(req, res, user, { method: done.provider });
+  if (user) {
+    if (done.provider === 'apple') await bindAppleCredential(database, done.subject_hash);
+    return openSession(req, res, user, { method: done.provider });
+  }
   // First time with this account: confirm the mobile number once, then link.
   const link = randomToken();
   await query(`INSERT INTO social_signin_requests(token_hash,phase,provider,subject_hash,expires_at)
@@ -151,13 +162,21 @@ socialRouter.post('/finish', async (req, res) => {
 
 /** Called by /api/auth/verify once the phone code checks out. */
 export async function linkIdentity(userId, link, req) {
-  const row = await queryOne(`DELETE FROM social_signin_requests WHERE token_hash=$1 AND phase='link' AND expires_at>now()
-    RETURNING provider, subject_hash`, [hashToken(link)]);
-  if (!row) return null;
-  const saved = await queryOne(`INSERT INTO user_identities(provider,subject_hash,user_id,last_used_at) VALUES($1,$2,$3,now())
-    ON CONFLICT (provider, subject_hash) DO NOTHING RETURNING provider`, [row.provider, row.subject_hash, userId]);
-  if (saved) await audit({ userId, action: 'sign_in_method_linked', targetType: 'provider', targetId: row.provider, req });
-  return saved?.provider ?? null;
+  const provider = await database.withTransaction(async tx => {
+    const { rows: [user] } = await tx.query('SELECT id FROM users WHERE id=$1 AND deleted_at IS NULL FOR UPDATE', [userId]);
+    if (!user) throw new HttpError(401, 'session_expired');
+    const { rows: [row] } = await tx.query(`DELETE FROM social_signin_requests WHERE token_hash=$1 AND phase='link' AND expires_at>now()
+      RETURNING provider, subject_hash`, [hashToken(link)]);
+    if (!row) throw new HttpError(400, 'expired_social_request', 'Your sign-in link expired. Start signing in again.');
+    const { rows: [saved] } = await tx.query(`INSERT INTO user_identities(provider,subject_hash,user_id,last_used_at) VALUES($1,$2,$3,now())
+      ON CONFLICT (provider, subject_hash) DO UPDATE SET last_used_at=now()
+      WHERE user_identities.user_id=EXCLUDED.user_id RETURNING provider`, [row.provider, row.subject_hash, userId]);
+    if (!saved) throw new HttpError(409, 'identity_already_linked', 'This sign-in account is linked to another mobile number.');
+    if (row.provider === 'apple') await bindAppleCredential(tx, row.subject_hash);
+    return saved.provider;
+  });
+  await audit({ userId, action: 'sign_in_method_linked', targetType: 'provider', targetId: provider, req });
+  return provider;
 }
 
 // Settings › Sign-in methods.
@@ -171,8 +190,19 @@ signInMethodsRouter.get('/', async (req, res) => {
 signInMethodsRouter.delete('/:provider', async (req, res) => {
   const user = await resolveUser(req);
   if (!SOCIAL_PROVIDERS.includes(req.params.provider)) throw new HttpError(404, 'sign_in_method_not_found');
-  const { rows } = await query('DELETE FROM user_identities WHERE user_id=$1 AND provider=$2 RETURNING provider', [user.id, req.params.provider]);
+  const { rows } = await database.withTransaction(async tx => {
+    await tx.query('SELECT id FROM users WHERE id=$1 FOR UPDATE', [user.id]);
+    if (req.params.provider === 'apple') await queueAppleRevocation(tx, user.id);
+    return tx.query('DELETE FROM user_identities WHERE user_id=$1 AND provider=$2 RETURNING provider', [user.id, req.params.provider]);
+  });
   if (!rows.length) throw new HttpError(404, 'sign_in_method_not_found');
   await audit({ userId: user.id, action: 'sign_in_method_removed', targetType: 'provider', targetId: req.params.provider, req });
+  if (req.params.provider === 'apple') defer(retryAppleRevocations(), 'apple-revocation');
   res.json({ status: 'removed' });
+});
+
+socialBrowserRouter.post('/apple/notifications', async (req, res) => {
+  const event = await verifyAppleNotification(req.body?.payload);
+  await handleAppleRevocation(event);
+  res.sendStatus(200);
 });

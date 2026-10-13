@@ -1,6 +1,7 @@
 import { createHash, createPrivateKey, createPublicKey, sign, verify } from 'node:crypto';
 import { config } from '../config.js';
 import { HttpError } from '../lib/users.js';
+import { socialEncryptionKey } from '../lib/social-secrets.js';
 
 // Sign in with Google, Apple, Telegram and ChatGPT. All four are OpenID Connect
 // providers, so one authorization-code flow covers them: endpoints come from
@@ -60,13 +61,15 @@ function pair(idName, secretName, { secretOptional = false } = {}) {
 function appleCredentials() {
   const { APPLE_SIGNIN_SERVICE_ID: id, APPLE_TEAM_ID: team, APPLE_KEY_ID: kid, APPLE_PRIVATE_KEY: pem } = process.env;
   if (!id || !team || !kid || !pem) return null;
+  socialEncryptionKey();
+  const key = createPrivateKey(pem.replace(/\\n/g, '\n'));
+  if (key.asymmetricKeyType !== 'ec' || key.asymmetricKeyDetails?.namedCurve !== 'prime256v1') throw new Error('Apple requires a P-256 private key');
   return {
     id,
     get secret() {
       const now = Math.floor(Date.now() / 1000);
       const body = [{ alg: 'ES256', kid }, { iss: team, iat: now, exp: now + 300, aud: 'https://appleid.apple.com', sub: id }]
         .map(part => Buffer.from(JSON.stringify(part)).toString('base64url')).join('.');
-      const key = createPrivateKey(pem.replace(/\\n/g, '\n'));
       return `${body}.${sign('sha256', Buffer.from(body), { key, dsaEncoding: 'ieee-p1363' }).toString('base64url')}`;
     },
   };
@@ -146,7 +149,9 @@ export async function completeSignIn(provider, code, secret) {
     const tokens = await response.json().catch(() => ({}));
     if (!response.ok || typeof tokens.id_token !== 'string') throw new Error(`token endpoint returned ${response.status}`);
     const claims = await verifyIdToken(tokens.id_token, provider, meta, provider.nonce ? nonceFor(secret) : null);
-    return { subject: String(claims.sub), phone: provider.name === 'telegram' ? telegramPhone(claims) : null };
+    if (provider.name === 'apple' && (typeof tokens.refresh_token !== 'string' || !tokens.refresh_token)) throw new Error('Apple refresh token missing');
+    return { subject: claims.sub, phone: provider.name === 'telegram' ? telegramPhone(claims) : null,
+      ...(provider.name === 'apple' ? { refreshToken: tokens.refresh_token, authorizedAt: claims.iat } : {}) };
   } catch (err) {
     console.error(`[social-signin] ${provider.name} sign-in failed:`, err?.message);
     throw new HttpError(400, 'social_signin_failed', `Sign in with ${provider.label} failed. Try again.`);
@@ -162,6 +167,10 @@ const decode = part => JSON.parse(Buffer.from(part, 'base64url').toString('utf8'
 const ALGORITHMS = { RS256: { kty: 'RSA' }, ES256: { kty: 'EC', crv: 'P-256' } };
 
 export async function verifyIdToken(token, provider, meta, expectedNonce) {
+  return verifyProviderJwt(token, provider, meta, { expectedNonce });
+}
+
+async function verifyProviderJwt(token, provider, meta, { expectedNonce, notification = false } = {}) {
   const parts = token.split('.');
   if (parts.length !== 3) throw new Error('malformed id_token');
   const [header, claims] = [decode(parts[0]), decode(parts[1])];
@@ -182,11 +191,34 @@ export async function verifyIdToken(token, provider, meta, expectedNonce) {
   if (!provider.issuers.includes(claims.iss)) throw new Error('wrong issuer');
   if (!audiences.map(String).includes(String(clientId))) throw new Error('wrong audience');
   if (audiences.length > 1 && claims.azp !== clientId) throw new Error('wrong authorized party');
-  if (typeof claims.exp !== 'number' || claims.exp < now - 60) throw new Error('expired id_token');
-  if (typeof claims.iat === 'number' && claims.iat > now + 300) throw new Error('id_token from the future');
+  if ((!notification || claims.exp !== undefined) && (!Number.isFinite(claims.exp) || claims.exp < now - 60)) throw new Error('expired id_token');
+  if (!Number.isFinite(claims.iat) || claims.iat > now + 300) throw new Error('invalid token issue time');
+  if (claims.nbf !== undefined && (!Number.isFinite(claims.nbf) || claims.nbf > now + 60)) throw new Error('token not yet valid');
   if (expectedNonce && claims.nonce !== expectedNonce) throw new Error('wrong nonce');
-  if (claims.sub === undefined || claims.sub === null || String(claims.sub) === '') throw new Error('missing subject');
+  if (!notification && (typeof claims.sub !== 'string' || !claims.sub)) throw new Error('missing subject');
   return claims;
+}
+
+export async function revokeAppleToken(token) {
+  const provider = providerConfig('apple');
+  const response = await fetch('https://appleid.apple.com/auth/revoke', {
+    method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ client_id: provider.credentials.id, client_secret: provider.credentials.secret,
+      token, token_type_hint: 'refresh_token' }), signal: AbortSignal.timeout(15_000),
+  });
+  if (!response.ok) throw new Error(`Apple revocation returned ${response.status}`);
+}
+
+export async function verifyAppleNotification(payload) {
+  if (typeof payload !== 'string' || payload.length > 32000) throw new HttpError(400, 'invalid_apple_notification');
+  try {
+    const provider = providerConfig('apple');
+    const claims = await verifyProviderJwt(payload, provider, await metadata(provider), { notification: true });
+    const event = typeof claims.events === 'string' ? JSON.parse(claims.events) : claims.events;
+    if (!event || typeof event.sub !== 'string' || !event.sub || !Number.isFinite(event.event_time) ||
+      event.event_time <= 0 || event.event_time > Math.floor(Date.now() / 1000) + 300) throw new Error('Invalid event');
+    return { ...event, notificationId: createHash('sha256').update(typeof claims.jti === 'string' ? claims.jti : payload).digest('hex') };
+  } catch { throw new HttpError(400, 'invalid_apple_notification'); }
 }
 
 /** What the account table stores instead of the provider's raw ID. */

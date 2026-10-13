@@ -30,3 +30,34 @@ DROP POLICY IF EXISTS dimts_backend_access ON public.user_identities;
 CREATE POLICY dimts_backend_access ON public.user_identities FOR ALL TO dimts_caller_backend USING (true) WITH CHECK (true);
 DROP POLICY IF EXISTS dimts_backend_access ON public.social_signin_requests;
 CREATE POLICY dimts_backend_access ON public.social_signin_requests FOR ALL TO dimts_caller_backend USING (true) WITH CHECK (true);
+
+-- Apple grants are encrypted independently of account rows so failed revocation
+-- can be retried after account deletion. Successful revocation erases the row.
+CREATE TABLE IF NOT EXISTS apple_signin_credentials (
+  subject_hash TEXT PRIMARY KEY,
+  encrypted_token TEXT NOT NULL,
+  authorized_at TIMESTAMPTZ NOT NULL,
+  revoke_after TIMESTAMPTZ,
+  next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  attempts INT NOT NULL DEFAULT 0,
+  lease_id UUID,
+  lease_until TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS apple_signin_revocation_idx ON apple_signin_credentials (revoke_after,next_attempt_at);
+ALTER TABLE apple_signin_credentials ENABLE ROW LEVEL SECURITY;
+GRANT SELECT, INSERT, UPDATE, DELETE ON apple_signin_credentials TO dimts_caller_backend;
+DROP POLICY IF EXISTS dimts_backend_access ON public.apple_signin_credentials;
+CREATE POLICY dimts_backend_access ON public.apple_signin_credentials FOR ALL TO dimts_caller_backend USING (true) WITH CHECK (true);
+
+-- Short-lived security records reject replay and callbacks issued before revocation.
+CREATE TABLE IF NOT EXISTS apple_signin_events (
+  notification_id TEXT PRIMARY KEY,
+  subject_hash TEXT NOT NULL,
+  event_time TIMESTAMPTZ NOT NULL,
+  received_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS apple_signin_events_subject_idx ON apple_signin_events (subject_hash,event_time);
+ALTER TABLE apple_signin_events ENABLE ROW LEVEL SECURITY;
+GRANT SELECT, INSERT, UPDATE, DELETE ON apple_signin_events TO dimts_caller_backend;
+DROP POLICY IF EXISTS dimts_backend_access ON public.apple_signin_events;
+CREATE POLICY dimts_backend_access ON public.apple_signin_events FOR ALL TO dimts_caller_backend USING (true) WITH CHECK (true);

@@ -425,3 +425,26 @@ CREATE TABLE IF NOT EXISTS social_signin_requests (
   expires_at TIMESTAMPTZ NOT NULL DEFAULT now() + interval '10 minutes'
 );
 CREATE INDEX IF NOT EXISTS social_signin_requests_expiry_idx ON social_signin_requests (expires_at);
+
+-- Apple grants are encrypted independently of account rows so failed revocation
+-- can be retried after account deletion. Successful revocation erases the row.
+CREATE TABLE IF NOT EXISTS apple_signin_credentials (
+  subject_hash TEXT PRIMARY KEY,
+  encrypted_token TEXT NOT NULL,
+  authorized_at TIMESTAMPTZ NOT NULL,
+  revoke_after TIMESTAMPTZ,
+  next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  attempts INT NOT NULL DEFAULT 0,
+  lease_id UUID,
+  lease_until TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS apple_signin_revocation_idx ON apple_signin_credentials (revoke_after,next_attempt_at);
+
+-- Short-lived security records reject replay and callbacks issued before revocation.
+CREATE TABLE IF NOT EXISTS apple_signin_events (
+  notification_id TEXT PRIMARY KEY,
+  subject_hash TEXT NOT NULL,
+  event_time TIMESTAMPTZ NOT NULL,
+  received_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS apple_signin_events_subject_idx ON apple_signin_events (subject_hash,event_time);

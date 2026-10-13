@@ -55,7 +55,7 @@ authRouter.post('/verify', async (req, res) => {
     throw new HttpError(400, 'invalid_verification');
   }
   // A social sign-in that still needs this phone confirmed.
-  if (link !== undefined && link !== null && !/^[a-f0-9]{64}$/.test(link)) throw new HttpError(400, 'invalid_verification');
+  if (link !== undefined && link !== null && (typeof link !== 'string' || !/^[a-f0-9]{64}$/.test(link))) throw new HttpError(400, 'invalid_verification');
   await limit(`check-phone:${phone}`, 15);
   await limit(`check-ip:${req.ip}`, 40);
   const demo = isReviewDemo(phone);

@@ -29,15 +29,16 @@ export function SignInMethods() {
     finally { setBusy(''); }
   }
 
-  if (!methods || (!methods.length && !available && !error)) return null;
+  if (!error && (!methods || (!methods.length && !available))) return null;
+  const linked = methods ?? [];
   return (
     <Section title="Sign-in methods">
       <Txt tone="muted">
-        {methods.length
+        {linked.length
           ? 'These accounts sign you in without a text code. Your mobile number always works too.'
-          : 'Sign out, then choose Continue with Google, Apple, Telegram or ChatGPT to skip text codes next time.'}
+          : 'Sign out, then choose an available provider on the sign-in page to skip text codes next time.'}
       </Txt>
-      {methods.map(method => (
+      {linked.map(method => (
         <View key={method.provider} style={{ flexDirection: 'row', alignItems: 'center', gap: space.md,
           backgroundColor: c.card, borderRadius: radius.md, padding: space.md }}>
           <View style={{ flex: 1, gap: space.xs }}>

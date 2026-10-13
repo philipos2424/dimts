@@ -3,6 +3,7 @@ import { HttpError } from '../lib/users.js';
 import { defer } from '../lib/defer.js';
 import { assertDeletable, needsDeletionWork, scrubCall } from './scrub-call.js';
 import { processDeletion } from './process-deletion.js';
+import { queueAppleRevocation, retryAppleRevocations } from './apple-credentials.js';
 
 async function scrubCalls(tx, rows) {
   // Only live work blocks erasure: an active lease, or a job queued in the
@@ -35,6 +36,7 @@ export async function deleteAccount(userId) {
     const { rows } = await tx.query('SELECT * FROM calls WHERE user_id=$1 AND deleted_at IS NULL FOR UPDATE', [userId]);
     const ids = await scrubCalls(tx, rows);
     await tx.query('UPDATE privacy_request_targets SET resolved_at=COALESCE(resolved_at,now()) WHERE user_id=$1', [userId]);
+    await queueAppleRevocation(tx, userId);
     for (const table of ['contacts', 'google_oauth_requests', 'google_connections', 'notification_devices', 'sessions', 'admin_passkeys', 'admin_challenges', 'user_identities']) {
       await tx.query(`DELETE FROM ${table} WHERE user_id=$1`, [userId]);
     }
@@ -47,6 +49,7 @@ export async function deleteAccount(userId) {
     return ids;
   });
   queueRemoval(queued);
+  defer(retryAppleRevocations(), 'apple-revocation');
   return { queued: queued.length };
 }
 

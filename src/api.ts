@@ -357,6 +357,7 @@ function publicErrorMessage(status: number, body: string): string {
     caller_id_unavailable: 'Showing your own number is not available yet.',
     invalid_verification: 'Check your phone number and verification code, then try again.',
     expired_social_request: 'Sign-in expired. Try again.',
+    identity_already_linked: 'This sign-in account is linked to another mobile number. Choose a different sign-in option.',
     invalid_social_request: 'Sign-in expired. Try again.',
     provider_not_configured: 'This sign-in option is not available yet. Use your phone number instead.',
     sign_in_method_not_found: 'This sign-in method is already removed.',

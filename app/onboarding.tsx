@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, TextInput, useWindowDimensions, View } from 'react-native';
 import { useApp } from '../src/AppContext';
 import { getSocialProviders, sendLoginCode, type SocialFinish, type SocialProvider, verifyLoginCode } from '../src/api';
-import { PROVIDER_LABELS, resumeWebSocialSignIn, socialSignIn } from '../src/socialSignIn';
+import { resumeSocialSignIn, socialSignIn } from '../src/socialSignIn';
+import { SocialSignInButton } from '../src/components/SocialSignInButton';
 import { Txt } from '../src/components/Txt';
 import { font, radius, space, type, useTheme } from '../src/theme';
 
@@ -63,7 +64,7 @@ export default function Onboarding() {
   useEffect(() => {
     getSocialProviders().then(setProviders).catch(() => {});
     setBusy(true);
-    resumeWebSocialSignIn().then(result => result && finishSocial(result))
+    resumeSocialSignIn().then(result => result && finishSocial(result))
       .catch(err => setError(err instanceof Error ? err.message : 'Unable to sign in.'))
       .finally(() => setBusy(false));
   }, []);
@@ -117,11 +118,7 @@ export default function Onboarding() {
       ) : providers.length > 0 && !sent ? (
         <View style={{ gap: space.sm }}>
           {providers.map(provider => (
-            <Pressable key={provider} accessibilityRole="button" disabled={busy} onPress={() => continueWith(provider)}
-              style={{ alignItems: 'center', justifyContent: 'center', minHeight: 48, borderRadius: radius.md,
-                borderWidth: 1, borderColor: c.line, backgroundColor: c.bg, opacity: busy ? 0.6 : 1 }}>
-              <Txt weight="bold">Continue with {PROVIDER_LABELS[provider]}</Txt>
-            </Pressable>
+            <SocialSignInButton key={provider} provider={provider} disabled={busy} onPress={() => continueWith(provider)} />
           ))}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingTop: space.xs }}>
             <View style={{ flex: 1, height: 1, backgroundColor: c.line }} />
