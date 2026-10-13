@@ -71,12 +71,29 @@
           "value": "video/mp4"
         }
       ]
+    },
+    {
+      "source": "/pitch/reel-download",
+      "headers": [
+        {
+          "key": "Content-Disposition",
+          "value": "attachment; filename=\"dimts-reel.mp4\""
+        },
+        {
+          "key": "Content-Type",
+          "value": "video/mp4"
+        }
+      ]
     }
   ],
   "rewrites": [
     {
       "source": "/pitch/download",
       "destination": "/pitch/dimts-pitch.mp4"
+    },
+    {
+      "source": "/pitch/reel-download",
+      "destination": "/pitch/dimts-reel.mp4"
     }
   ]
 }
