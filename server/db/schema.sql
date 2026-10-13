@@ -1,4 +1,4 @@
--- Dimts schema (SPEC.md §5)
+-- Dimts schema (SPEC.md Ã‚Â§5)
 
 CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -401,3 +401,48 @@ CREATE TABLE IF NOT EXISTS waitlist (
   source TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- MiniMe link (2026-10-08): send what the owner promised "on Telegram" through their MiniMe.
+CREATE TABLE IF NOT EXISTS minime_links (
+  user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  business_id TEXT NOT NULL,
+  business_name TEXT,
+  auto_send BOOLEAN NOT NULL DEFAULT true,
+  linked_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS minime_link_tokens (
+  token_hash TEXT PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  expires_at TIMESTAMPTZ NOT NULL DEFAULT now() + interval '15 minutes'
+);
+CREATE TABLE IF NOT EXISTS telegram_sends (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  call_id UUID NOT NULL UNIQUE REFERENCES calls(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  request TEXT NOT NULL,
+  draft TEXT NOT NULL,
+  evidence JSONB NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('sending','sent','waiting','failed')),
+  error TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS telegram_sends_user_idx ON telegram_sends (user_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS file_actions (
+  id UUID PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  call_id UUID NOT NULL REFERENCES calls(id) ON DELETE CASCADE,
+  source_hash TEXT NOT NULL,
+  source_index INTEGER NOT NULL,
+  payload TEXT NOT NULL,
+  version INTEGER NOT NULL DEFAULT 1,
+  status TEXT NOT NULL DEFAULT 'needs_details' CHECK (status IN
+    ('needs_details','ready_for_review','sending','sent','failed','unknown','dismissed')),
+  execution_id UUID,
+  message_id BIGINT,
+  error_code TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(call_id, source_hash, source_index)
+);
+CREATE INDEX IF NOT EXISTS file_actions_owner ON file_actions(user_id, created_at DESC);

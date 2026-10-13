@@ -35,7 +35,8 @@ export async function deleteAccount(userId) {
     const { rows } = await tx.query('SELECT * FROM calls WHERE user_id=$1 AND deleted_at IS NULL FOR UPDATE', [userId]);
     const ids = await scrubCalls(tx, rows);
     await tx.query('UPDATE privacy_request_targets SET resolved_at=COALESCE(resolved_at,now()) WHERE user_id=$1', [userId]);
-    for (const table of ['contacts', 'google_oauth_requests', 'google_connections', 'notification_devices', 'sessions', 'admin_passkeys', 'admin_challenges']) {
+    for (const table of ['contacts', 'google_oauth_requests', 'google_connections', 'notification_devices', 'sessions', 'admin_passkeys', 'admin_challenges',
+      'minime_links', 'minime_link_tokens', 'telegram_sends', 'file_actions']) {
       await tx.query(`DELETE FROM ${table} WHERE user_id=$1`, [userId]);
     }
     // Move the released number to the back of the queue so it is not

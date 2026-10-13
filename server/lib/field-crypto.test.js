@@ -13,6 +13,17 @@ const withKeys = (value, work) => {
 };
 const context = (field = 'calls:transcript') => ({ userId: randomUUID(), rowId: randomUUID(), field });
 
+test('file action payloads cannot be moved to another action or owner', () => withKeys(`k1:${key()}`, () => {
+  const ctx = context('file_actions:payload');
+  const payload = sealText('{"request":"send prices"}', ctx);
+  assert.equal(openRows({ rows: [{ id: ctx.rowId, user_id: ctx.userId, payload }] }).rows[0].payload, '{"request":"send prices"}');
+  for (const row of [
+    { id: randomUUID(), user_id: ctx.userId, payload },
+    { id: ctx.rowId, user_id: randomUUID(), payload },
+    { payload },
+  ]) assert.throws(() => openRows({ rows: [row] }), /file action encryption context/);
+}));
+
 test('without keys, content passes through unchanged (local development and tests)', () => withKeys(undefined, () => {
   assert.equal(encryptionEnabled(), false);
   assert.equal(sealText('User: hello', context()), 'User: hello');

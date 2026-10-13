@@ -148,6 +148,10 @@ export function openRows(result) {
     for (const column of Object.keys(row)) {
       const parts = sealedParts(row[column]);
       if (!parts || parts.field.split(':')[1] !== column) continue;
+      if (parts.field === 'file_actions:payload' &&
+          (String(row.user_id).toLowerCase() !== parts.userId || String(row.id).toLowerCase() !== parts.rowId)) {
+        throw new Error('Invalid file action encryption context');
+      }
       // Every row belongs to one owner; never open a value sealed for another.
       if (row.user_id != null && String(row.user_id).toLowerCase() !== parts.userId) continue;
       row[column] = openValue(row[column]);
