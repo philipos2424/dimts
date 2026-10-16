@@ -8,6 +8,7 @@
 import { config } from '../config.js';
 import { query } from '../db/pool.js';
 import { telnyxRequest } from '../lib/telnyx-rest.js';
+import { DISCLOSED } from '../lib/disclosed-providers.js';
 
 const LOW_BALANCE_USD = () => Number(process.env.TELNYX_LOW_BALANCE_USD ?? 20);
 const FAILED_CALLS_ALERT = () => Number(process.env.FAILED_CALLS_ALERT ?? 3);
@@ -37,8 +38,12 @@ export const checks = {
     if (config.llmProvider === 'ollama' && new URL(config.ollamaBaseUrl).hostname === 'ollama.com' && !process.env.OLLAMA_API_KEY) missing.push('OLLAMA_API_KEY');
     if (config.transcribeProvider === 'elevenlabs' && !process.env.ELEVENLABS_API_KEY) missing.push('ELEVENLABS_API_KEY');
     if (config.transcribeProvider === 'whisper' && !process.env.WHISPER_API_TOKEN) missing.push('WHISPER_API_TOKEN');
-    return { ok: !missing.length, llm: config.llmProvider, transcription: config.transcribeProvider,
-      ...(missing.length ? { detail: `Missing ${missing.join(', ')}` } : {}) };
+    const problems = missing.length ? [`Missing ${missing.join(', ')}`] : [];
+    if (config.llmProvider !== DISCLOSED.llm || config.transcribeProvider !== DISCLOSED.transcription) {
+      problems.push(`Call content goes to ${config.llmProvider}/${config.transcribeProvider}, but users agreed to ${DISCLOSED.llm}/${DISCLOSED.transcription}. Set LLM_PROVIDER=${DISCLOSED.llm} and TRANSCRIBE_PROVIDER=${DISCLOSED.transcription}.`);
+    }
+    return { ok: !problems.length, llm: config.llmProvider, transcription: config.transcribeProvider,
+      ...(problems.length ? { detail: problems.join('; ') } : {}) };
   }),
 
   calls: () => check('calls', async () => {

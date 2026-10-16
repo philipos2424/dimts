@@ -34,3 +34,21 @@ test('EU residency and zero retention are switched on by environment', async t =
   await assert.rejects(transcribe(new Blob(['audio'], { type: 'audio/wav' })));
   assert.equal(called, 'https://api.eu.residency.elevenlabs.io/v1/speech-to-text?enable_logging=false');
 });
+
+
+test('production sends no audio to an undisclosed transcriber', async t => {
+  const saved = { ...process.env }; t.after(() => { process.env = saved; });
+  Object.assign(process.env, { VERCEL_ENV: 'production', TRANSCRIBE_PROVIDER: 'whisper', WHISPER_API_TOKEN: 'x'.repeat(32) });
+  const fetchMock = t.mock.method(globalThis, 'fetch', async () => new Response('{}'));
+  await assert.rejects(transcribe(new Blob(['audio'])), /TRANSCRIBE_PROVIDER=elevenlabs/);
+  assert.equal(fetchMock.mock.callCount(), 0);
+});
+
+test('ElevenLabs uploads refuse redirects', async t => {
+  const saved = { ...process.env }; t.after(() => { process.env = saved; });
+  Object.assign(process.env, { TRANSCRIBE_PROVIDER: 'elevenlabs', ELEVENLABS_API_KEY: 'synthetic-test-key' });
+  let options;
+  t.mock.method(globalThis, 'fetch', async (_url, o) => { options = o; return new Response('{}', { status: 500 }); });
+  await assert.rejects(transcribe(new Blob(['audio'])));
+  assert.equal(options.redirect, 'error');
+});

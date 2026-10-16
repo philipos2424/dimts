@@ -77,3 +77,13 @@ test('a missing AI key is reported', async () => {
     assert.match(byName(body).ai.detail, /OPENAI_API_KEY/);
   } finally { process.env.OPENAI_API_KEY = 'sk-test'; }
 });
+
+test('call content going to a provider users did not agree to fails the check', async () => {
+  process.env.LLM_PROVIDER = 'ollama';
+  try {
+    const { status, body } = await health();
+    assert.equal(status, 503);
+    assert.equal(byName(body).ai.ok, false);
+    assert.match(byName(body).ai.detail, /LLM_PROVIDER=openai/);
+  } finally { process.env.LLM_PROVIDER = 'openai'; }
+});

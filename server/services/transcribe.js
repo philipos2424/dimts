@@ -1,4 +1,5 @@
 import { config } from '../config.js';
+import { assertDisclosed } from '../lib/disclosed-providers.js';
 
 // ELEVENLABS_BASE_URL=https://api.eu.residency.elevenlabs.io keeps audio in
 // the EU and ELEVENLABS_ZERO_RETENTION=true stops ElevenLabs keeping it; both
@@ -145,6 +146,8 @@ async function callScribe(audio, fields, signal, keyterms = []) {
     method: 'POST',
     headers: { 'xi-api-key': config.elevenLabsApiKey },
     body: form,
+    // Audio goes only to the approved origin, never to a redirect target.
+    redirect: 'error',
     signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(120_000)]) : AbortSignal.timeout(120_000),
   });
 
@@ -161,6 +164,7 @@ async function callScribe(audio, fields, signal, keyterms = []) {
  */
 export async function transcribe(audioBlob, options = {}) {
   options.signal?.throwIfAborted();
+  assertDisclosed('transcription', config.transcribeProvider);
   if (config.transcribeProvider === 'whisper') {
     const form = new FormData();
     form.set('file', audioBlob, 'recording.mp3');

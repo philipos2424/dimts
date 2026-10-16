@@ -34,3 +34,26 @@ test('invalid model JSON cannot be passed into the call pipeline', async (t) => 
   t.mock.method(globalThis, 'fetch', async () => ({ ok: true, json: async () => ({ message: { content: 'not JSON' } }) }));
   await assert.rejects(completeJson('Summarize.', 'Hello'), /invalid JSON/);
 });
+
+
+test('production sends no transcript to an undisclosed model', async (t) => {
+  const saved = { ...process.env }; t.after(() => { process.env = saved; });
+  Object.assign(process.env, { VERCEL_ENV: 'production', LLM_PROVIDER: 'ollama', OLLAMA_BASE_URL: 'https://ollama.com', OLLAMA_API_KEY: 'k' });
+  const fetchMock = t.mock.method(globalThis, 'fetch', async () => new Response('{}'));
+  await assert.rejects(completeJson('Summarize.', 'User: hello'), /LLM_PROVIDER=openai/);
+  assert.equal(fetchMock.mock.callCount(), 0);
+});
+
+
+test('OpenAI requests refuse redirects', async (t) => {
+  const saved = { ...process.env }; t.after(() => { process.env = saved; });
+  Object.assign(process.env, { LLM_PROVIDER: 'openai', OPENAI_API_KEY: 'sk-test' });
+  delete process.env.OPENAI_BASE_URL;
+  let init;
+  t.mock.method(globalThis, 'fetch', async (_url, i) => {
+    init = i;
+    return new Response(JSON.stringify({ choices: [{ message: { content: '{"ok":true}' } }] }), { headers: { 'content-type': 'application/json' } });
+  });
+  await completeJson('Summarize.', 'User: hello');
+  assert.equal(init.redirect, 'error');
+});
