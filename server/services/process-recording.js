@@ -18,6 +18,7 @@ import { resolveAgreements } from '../lib/agreements.js';
 import { transcriptTurns } from '../lib/transcript-turns.js';
 import { checkConsistency } from './consistency.js';
 import { safeError } from '../lib/log-safe.js';
+import { notesReadyTimings } from '../lib/notes-timing.js';
 
 const DOWNLOAD_ATTEMPTS = 3;
 const DOWNLOAD_BACKOFF_MS = 2000;
@@ -105,6 +106,8 @@ export async function processRecording(callId, { force = false, signal: callerSi
   const deadline = AbortSignal.timeout(270_000);
   const signal = callerSignal ? AbortSignal.any([callerSignal, deadline]) : deadline;
   const lease = randomUUID();
+  const startedAtMs = Date.now();
+  let transcribeMs = null;
   const call = await queryOne(
     `WITH claimed AS (
        UPDATE calls SET processing_token = $2,
@@ -117,7 +120,7 @@ export async function processRecording(callId, { force = false, signal: callerSi
      SELECT c.id, c.user_id, c.recording_url, c.recording_sid, c.audio_object_key, c.contact_id, c.direction,c.voicemail,c.transcript,c.transcript_data,
             c.transcript_recording_url,c.language,c.language_probability,c.duration_sec,
             (SELECT u.language FROM users u WHERE u.id = c.user_id) AS owner_language,
-            (SELECT u.timezone FROM users u WHERE u.id = c.user_id) AS owner_timezone, c.created_at,
+            (SELECT u.timezone FROM users u WHERE u.id = c.user_id) AS owner_timezone, c.created_at, c.completed_at,
             k.display_name  AS contact_display_name,
             k.name_source   AS contact_name_source,
             k.name_confidence AS contact_name_confidence
@@ -157,8 +160,10 @@ export async function processRecording(callId, { force = false, signal: callerSi
       const { rows: named } = await query(`SELECT display_name FROM contacts WHERE user_id=$1 AND display_name IS NOT NULL
         ORDER BY last_call_at DESC NULLS LAST LIMIT 60`, [call.user_id]);
       stage = 'transcription';
+      const transcribeStart = Date.now();
       result = await transcribe(audio, { direction: call.direction, voicemail: call.voicemail, signal,
         names: named.map(r => r.display_name), phones: [call.user_phone, call.destination] });
+      transcribeMs = Date.now() - transcribeStart;
       stage = 'persist';
       const saved = await queryOne(`UPDATE calls SET transcript=$3,transcript_data=$4,
         language=$5,language_probability=$6,transcript_recording_url=$7,
@@ -177,8 +182,10 @@ export async function processRecording(callId, { force = false, signal: callerSi
 
     await renew();
     stage = 'summary';
+    const summaryStart = Date.now();
     const summary = await summarize(result.text, { signal, language: call.owner_language,
       callTime: call.created_at, timezone: call.owner_timezone });
+    const summaryMs = Date.now() - summaryStart;
     const agreements = resolveAgreements(summary.agreements, result.text, transcriptTurns({
       transcript: result.text, transcript_data: result.raw, recording_url: call.recording_url,
       transcript_recording_url: call.recording_url, direction: call.direction, duration_sec: call.duration_sec,
@@ -215,7 +222,8 @@ export async function processRecording(callId, { force = false, signal: callerSi
         JSON.stringify(agreements),
       ]
     );
-    if (saved.rows.length) capture(call.user_id, 'notes_ready', { direction: call.direction, voicemail: !!call.voicemail });
+    if (saved.rows.length) capture(call.user_id, 'notes_ready', { direction: call.direction, voicemail: !!call.voicemail,
+      ...notesReadyTimings({ completedAt: call.completed_at, startedAtMs, transcribeMs, summaryMs }) });
     // Only the worker that committed the notes may spend on identification or
     // update a contact. A stale worker cannot apply its old result.
     if (saved.rows.length) {
