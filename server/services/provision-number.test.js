@@ -13,12 +13,17 @@ mock.module('../db/pool.js', { namedExports: {
   queryOne: async (sql, params) => (await db.query(sql, params)).rows[0],
   withTransaction: work => db.transaction(work),
 } });
-const { buyPoolNumber, countryFor } = await import('./provision-number.js');
+const { buyPoolNumber, countryFor, numberCountries } = await import('./provision-number.js');
 const { claimNumber } = await import('../db/claim-number.js');
 const { assignNumberAfterUpgrade } = await import('./billing.js');
 const url = 'https://caller.example.com/twiml/incoming';
 const newUser = async (phone, tier = 'pro') => (await db.query('INSERT INTO users(phone,tier) VALUES($1,$2) RETURNING id', [phone, tier])).rows[0].id;
 test.after(() => db.close());
+const saveNumberEnv = () => {
+  const keys = ['NUMBER_COUNTRIES', 'NUMBER_REQUIREMENT_GROUPS'];
+  const before = keys.map(k => process.env[k]);
+  return () => keys.forEach((k, i) => { if (before[i] === undefined) delete process.env[k]; else process.env[k] = before[i]; });
+};
 
 test('numbers are local to the owner where we sell them, otherwise from the first listed country', () => {
   assert.equal(countryFor('+447700900123', ['US', 'GB']), 'GB');
@@ -28,6 +33,40 @@ test('numbers are local to the owner where we sell them, otherwise from the firs
   assert.equal(countryFor('+14165550100', ['US', 'CA']), 'CA');
   assert.equal(countryFor('+14165550100', ['US']), 'US');
   assert.equal(countryFor('+14155550100', ['CA', 'US']), 'US');
+});
+
+test('countries outside +1 are sold only once their carrier paperwork is approved', () => {
+  const saved = saveNumberEnv();
+  try {
+    process.env.NUMBER_COUNTRIES = 'US,CA,GB,DE';
+    delete process.env.NUMBER_REQUIREMENT_GROUPS;
+    assert.deepEqual(numberCountries(), ['US', 'CA']);
+    process.env.NUMBER_REQUIREMENT_GROUPS = 'GB=rg-uk, de = rg-de ,FR=rg-fr';
+    assert.deepEqual(numberCountries(), ['US', 'CA', 'GB', 'DE']);
+    process.env.NUMBER_COUNTRIES = 'GB';
+    delete process.env.NUMBER_REQUIREMENT_GROUPS;
+    assert.deepEqual(numberCountries(), ['US']);
+  } finally { saved(); }
+});
+
+test('a UK owner gets a UK number ordered with the approved requirement group', async () => {
+  const saved = saveNumberEnv();
+  process.env.NUMBER_COUNTRIES = 'US,GB';
+  process.env.NUMBER_REQUIREMENT_GROUPS = 'GB=rg-uk';
+  const calls = [];
+  mock.method(globalThis, 'fetch', async (href, init) => {
+    calls.push({ href: String(href), body: init.body && JSON.parse(init.body) });
+    const data = init.method === 'GET'
+      ? [{ phone_number: '+441135550101' }]
+      : { id: 'order-uk', status: 'pending', phone_numbers: [{ id: 'num-uk-1', phone_number: '+441135550101' }] };
+    return new Response(JSON.stringify({ data }), { status: 200 });
+  });
+  try {
+    assert.equal(await buyPoolNumber({ userId: await newUser('+447700900220'), ownerPhone: '+447700900220', voiceUrl: url }), '+441135550101');
+  } finally { mock.restoreAll(); saved(); await db.query("DELETE FROM agent_number_pool WHERE provider_sid='num-uk-1'"); }
+  assert.match(calls[0].href, /filter%5Bcountry_code%5D=GB/);
+  assert.doesNotMatch(calls[0].href, /national_destination_code/);
+  assert.deepEqual(calls[1].body.phone_numbers, [{ phone_number: '+441135550101', requirement_group_id: 'rg-uk' }]);
 });
 
 test('a +1 owner gets a number in their own area code, or any local one when it has none left', async () => {

@@ -10,12 +10,27 @@ import { twilioClient } from '../lib/twilio-client.js';
 const CALLING_CODES = { US: '1', CA: '1', GB: '44', IE: '353', DE: '49', FR: '33', NL: '31', ES: '34', IT: '39', SE: '46' };
 
 /**
- * Countries where numbers are bought automatically. Defaults to the US: UK and
- * EU local numbers need an address or ID on file at the carrier first, so an
- * operator adds them only once that paperwork is approved.
+ * Approved carrier paperwork per country, from NUMBER_REQUIREMENT_GROUPS
+ * ("GB=<id>,DE=<id>"). UK and EU local numbers need an address or ID on file;
+ * an order without it waits at the carrier while we would already have handed
+ * the number to a customer.
+ */
+export function requirementGroups() {
+  return Object.fromEntries((process.env.NUMBER_REQUIREMENT_GROUPS ?? '').split(',')
+    .map(pair => pair.split('=').map(s => s.trim()))
+    .filter(([country, id]) => country && id)
+    .map(([country, id]) => [country.toUpperCase(), id]));
+}
+
+/**
+ * Countries where numbers are bought automatically. Defaults to the US. +1
+ * countries need no paperwork; any other listed country is skipped until its
+ * requirement group is configured.
  */
 export function numberCountries() {
-  const listed = (process.env.NUMBER_COUNTRIES ?? 'US').split(',').map(c => c.trim().toUpperCase()).filter(c => CALLING_CODES[c]);
+  const groups = requirementGroups();
+  const listed = (process.env.NUMBER_COUNTRIES ?? 'US').split(',').map(c => c.trim().toUpperCase())
+    .filter(c => CALLING_CODES[c] && (CALLING_CODES[c] === '1' || groups[c]));
   return listed.length ? listed : ['US'];
 }
 
@@ -61,8 +76,13 @@ async function buyTelnyx(country, areaCode) {
   const phone = (areaCode && await findTelnyx(country, areaCode)) || await findTelnyx(country);
   if (!phone) return null;
   // The TeXML application routes the number to /twiml/incoming, as stock-number.js requires.
+  const requirementGroup = requirementGroups()[country];
   const order = await telnyxRequest('POST', '/number_orders', {
-    json: { phone_numbers: [{ phone_number: phone }], connection_id: config.telnyxTexmlAppId }, timeout: 20_000,
+    json: {
+      phone_numbers: [{ phone_number: phone, ...(requirementGroup && { requirement_group_id: requirementGroup }) }],
+      connection_id: config.telnyxTexmlAppId,
+    },
+    timeout: 20_000,
   });
   const ordered = order?.phoneNumbers?.find(n => n.phoneNumber === phone);
   if (!ordered || ordered.status === 'failure' || order.status === 'failure') throw new Error('Telnyx number order failed');
@@ -75,7 +95,11 @@ async function buyTwilio(country, areaCode, voiceUrl) {
   const [local] = areaCode ? await search({ areaCode: Number(areaCode) }) : [];
   const available = local ?? (await search({}))[0];
   if (!available) return null;
-  const number = await client.incomingPhoneNumbers.create({ phoneNumber: available.phoneNumber, voiceUrl, voiceMethod: 'POST' });
+  // On Twilio the approved paperwork is a regulatory bundle.
+  const bundleSid = requirementGroups()[country];
+  const number = await client.incomingPhoneNumbers.create({
+    phoneNumber: available.phoneNumber, voiceUrl, voiceMethod: 'POST', ...(bundleSid && { bundleSid }),
+  });
   return { phone: number.phoneNumber, sid: number.sid };
 }
 
