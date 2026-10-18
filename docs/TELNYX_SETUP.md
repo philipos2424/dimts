@@ -43,7 +43,8 @@ The API key needs number-ordering permission and the account needs a balance.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `NUMBER_COUNTRIES` | `US` | ISO countries to buy in. Owners elsewhere get a number from the first one. Add `GB` or EU countries only after a Telnyx requirement group (address/ID) is approved there. |
+| `NUMBER_COUNTRIES` | `US` | ISO countries to buy in (`US,CA,GB,IE,DE,FR,NL,ES,IT,SE` supported). Owners get a number in their own country, or none. US and CA need no paperwork. |
+| `NUMBER_REQUIREMENT_GROUPS` | empty | `GB=<id>,DE=<id>`: the approved Telnyx requirement group (address/ID) per non-+1 country. A listed country without one is skipped, so no order waits on paperwork after a customer was given the number. Create groups in Mission Control > Numbers > Requirement groups. |
 | `NUMBER_AUTOBUY_DAILY_MAX` | `20` | Purchases allowed per day across all accounts (each account: 2 an hour). |
 | `NUMBER_AUTOBUY` | on | `off` stops purchases; claims then use only hand-stocked numbers. |
 
