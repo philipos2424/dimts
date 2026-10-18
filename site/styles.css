@@ -350,3 +350,7 @@ table.compare { border-collapse: collapse; width: 100%; min-width: 40rem; font-s
 .pitch-video { width: 100%; max-width: 64rem; height: auto; aspect-ratio: 16 / 9; background: var(--text); border-radius: 6px; margin-top: 1rem; }
 .pitch-actions { margin-top: 1.5rem; }
 .pitch-video--vertical { max-width: 22rem; aspect-ratio: 9 / 16; display: block; }
+
+.who-list .h3 { font-size: 1.2rem; line-height: 1.2; font-weight: 700; font-stretch: 112%; margin: 0 0 .4rem; max-width: none; }
+.article .faq { margin-top: 3rem; }
+.article .who-list { padding-left: 0; max-width: none; }
