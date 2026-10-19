@@ -75,6 +75,11 @@ mock.module('../db/contacts.js', {
   },
 });
 
+const events = [];
+mock.module('../lib/analytics.js', { namedExports: {
+  capture: async (userId, event, properties) => { events.push({ userId, event, properties }); return true; },
+}});
+
 let identifyCalls = 0;
 const { processRecording } = await import('./process-recording.js');
 
@@ -97,7 +102,24 @@ test.beforeEach(() => {
   touched.length = 0;
   transcriptions.length = 0;
   updates.length = 0;
+  events.length = 0;
   claimed = false;
+});
+
+test('notes_ready reports the wait after hang-up and per-stage timings, never content', async () => {
+  call.user_id = 'u1';
+  call.completed_at = new Date(Date.now() - 30_000);
+  await processRecording('call-1');
+  const ready = events.find(e => e.event === 'notes_ready');
+  assert.ok(ready, 'notes_ready was sent');
+  const p = ready.properties;
+  assert.ok(p.seconds_after_hangup >= 30 && p.seconds_after_hangup < 60);
+  assert.ok(p.queue_seconds >= 30 && p.queue_seconds < 60);
+  for (const key of ['processing_seconds', 'transcribe_seconds', 'summary_seconds']) assert.equal(typeof p[key], 'number', key);
+  assert.equal(p.direction, 'outbound');
+  assert.equal(p.voicemail, false);
+  assert.deepEqual(Object.keys(p).sort(), ['direction', 'processing_seconds', 'queue_seconds',
+    'seconds_after_hangup', 'summary_seconds', 'transcribe_seconds', 'voicemail']);
 });
 
 test('names the contact from a confident identification', async () => {
