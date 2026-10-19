@@ -7,6 +7,7 @@
 export const EVENTS = new Set([
   'signed_up', 'call_started', 'first_call', 'notes_ready', 'ask_used', 'recap_shared',
   'paywall_viewed', 'checkout_started', 'subscribed', 'credits_bought', 'trial_started',
+  'demo_call_started',
 ]);
 
 /** Events the app itself may report; everything else is recorded where it happens. */
