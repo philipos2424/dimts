@@ -131,24 +131,66 @@ export function keytermsFor(names = [], phones = []) {
   return [...new Set(clean)].slice(0, 100);
 }
 
-async function callScribe(audio, fields, signal, keyterms = []) {
-  const form = new FormData();
-  form.set('file', audio, audio.type === 'audio/wav' ? 'recording.wav' : 'recording.mp3');
-  form.set('model_id', config.scribeModelId);
-  for (const [key, value] of Object.entries(fields)) {
-    form.set(key, String(value));
+// A rate limit, a 5xx or a dropped connection is usually gone a few seconds
+// later. Without a retry one blip costs the call its notes until the owner
+// retries by hand. Other 4xx answers (bad key, bad audio) will not change.
+export const SCRIBE_ATTEMPTS = 3;
+const RETRYABLE_STATUS = new Set([408, 429, 500, 502, 503, 504]);
+const MAX_RETRY_AFTER_MS = 10_000;
+
+/** Wait before attempt `attempt + 1`: Retry-After when given (capped), else 1s, 3s. */
+export function scribeRetryDelayMs(attempt, retryAfter) {
+  const seconds = Number(retryAfter);
+  if (retryAfter != null && retryAfter !== '' && Number.isFinite(seconds) && seconds >= 0) {
+    return Math.min(seconds * 1000, MAX_RETRY_AFTER_MS);
   }
-  // ElevenLabs reads a list as the same field repeated, not as JSON.
-  for (const term of keyterms) form.append('keyterms', term);
+  return attempt === 1 ? 1000 : 3000;
+}
 
-  const response = await fetch(endpoint(), {
-    method: 'POST',
-    headers: { 'xi-api-key': config.elevenLabsApiKey },
-    body: form,
-    signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(120_000)]) : AbortSignal.timeout(120_000),
+function sleep(ms, signal) {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(signal.reason);
+    const timer = setTimeout(() => { signal?.removeEventListener('abort', onAbort); resolve(); }, ms);
+    function onAbort() { clearTimeout(timer); reject(signal.reason); }
+    signal?.addEventListener('abort', onAbort, { once: true });
   });
+}
 
-  return response;
+async function callScribe(audio, fields, signal, keyterms = [], { wait = sleep } = {}) {
+  for (let attempt = 1; ; attempt += 1) {
+    signal?.throwIfAborted();
+    // FormData is rebuilt per attempt so a retry never resends a consumed body.
+    const form = new FormData();
+    form.set('file', audio, audio.type === 'audio/wav' ? 'recording.wav' : 'recording.mp3');
+    form.set('model_id', config.scribeModelId);
+    for (const [key, value] of Object.entries(fields)) {
+      form.set(key, String(value));
+    }
+    // ElevenLabs reads a list as the same field repeated, not as JSON.
+    for (const term of keyterms) form.append('keyterms', term);
+
+    let response;
+    try {
+      response = await fetch(endpoint(), {
+        method: 'POST',
+        headers: { 'xi-api-key': config.elevenLabsApiKey },
+        body: form,
+        signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(120_000)]) : AbortSignal.timeout(120_000),
+      });
+    } catch (err) {
+      // The caller's own deadline is final; only a network error or this
+      // attempt's timeout is worth another try.
+      if (signal?.aborted || attempt >= SCRIBE_ATTEMPTS) throw err;
+      console.warn(`[scribe] attempt ${attempt} failed (${err?.name ?? 'error'}); retrying`);
+      await wait(scribeRetryDelayMs(attempt), signal);
+      continue;
+    }
+
+    if (!RETRYABLE_STATUS.has(response.status) || attempt >= SCRIBE_ATTEMPTS) return response;
+    console.warn(`[scribe] attempt ${attempt} got HTTP ${response.status}; retrying`);
+    await response.body?.cancel().catch(() => {});
+    await wait(scribeRetryDelayMs(attempt, response.headers.get('retry-after')), signal);
+  }
 }
 
 /**
@@ -178,12 +220,13 @@ export async function transcribe(audioBlob, options = {}) {
   if (channels === 1 && !options.voicemail) console.warn('[scribe] recording is mono; transcribing without speaker labels');
   const multi = !options.voicemail && channels !== 1;
   const keyterms = keytermsFor(options.names, options.phones);
-  let response = await callScribe(audioBlob, multi ? { use_multi_channel: true } : {}, options.signal, keyterms);
+  const retry = { wait: options.retryWait };
+  let response = await callScribe(audioBlob, multi ? { use_multi_channel: true } : {}, options.signal, keyterms, retry);
 
   if (response.status === 400 && multi) {
     const first = await scribeError(response);
     console.warn('[scribe] multichannel rejected, retrying as one channel:', first.message);
-    response = await callScribe(audioBlob, {}, options.signal, keyterms);
+    response = await callScribe(audioBlob, {}, options.signal, keyterms, retry);
   }
 
   if (!response.ok) throw await scribeError(response);
