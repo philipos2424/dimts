@@ -8,9 +8,10 @@ async function scrubCalls(tx, rows) {
   // Only live work blocks erasure: an active lease, or a job queued in the
   // last 15 minutes that no worker has claimed yet. Expired leases do not.
   const now = Date.now();
+  // An app call waiting for an own-voice upload (no lease) has no work running.
   const live = call => call.status === 'processing' && (call.processing_until
     ? new Date(call.processing_until).getTime() > now
-    : !call.processing_requested_at || now - new Date(call.processing_requested_at).getTime() < 15 * 60_000);
+    : call.route !== 'app' && (!call.processing_requested_at || now - new Date(call.processing_requested_at).getTime() < 15 * 60_000));
   if (rows.some(live)) {
     throw new HttpError(409, 'call_processing', 'Wait until your latest call notes are ready, then try again.');
   }

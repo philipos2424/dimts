@@ -438,3 +438,22 @@ CREATE INDEX IF NOT EXISTS app_call_signals_call_idx ON app_call_signals (app_ca
 -- App-to-app call lifecycle, 22 October 2026: when both notices were shown, and the last sign of life.
 ALTER TABLE app_calls ADD COLUMN IF NOT EXISTS connected_at TIMESTAMPTZ;
 ALTER TABLE app_calls ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ;
+
+-- App-to-app call audio, 23 October 2026: each person's own-voice upload, in parts, and its notes.
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS own_audio_complete_at TIMESTAMPTZ;
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS own_audio_offset_ms INT;
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS own_audio_mime TEXT;
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS notes_partial BOOLEAN NOT NULL DEFAULT false;
+CREATE TABLE IF NOT EXISTS app_call_audio_parts (
+  call_id UUID NOT NULL REFERENCES calls(id) ON DELETE CASCADE,
+  idx INT NOT NULL,
+  total INT NOT NULL CHECK (total BETWEEN 1 AND 40),
+  sha256 TEXT NOT NULL,
+  size INT NOT NULL CHECK (size BETWEEN 1 AND 1048576),
+  encrypted BOOLEAN NOT NULL DEFAULT false,
+  data BYTEA NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (call_id, idx),
+  CHECK (idx >= 0 AND idx < total)
+);
+CREATE INDEX IF NOT EXISTS app_call_audio_parts_created_idx ON app_call_audio_parts (created_at);

@@ -9,8 +9,10 @@ import { deleteProviderRecording } from './delete-recording.js';
 /**
  * Copy a finished recording into EU storage. Twilio's copy is only queued for
  * removal after an independent size check proves the stored object is whole.
+ * An app call's own-voice upload has no carrier copy (`providerCopy: false`),
+ * so there is nothing to queue.
  */
-export async function archiveAudio(call, bytes) {
+export async function archiveAudio(call, bytes, { providerCopy = true } = {}) {
   if (!audioStoreConfigured()) return 'skipped';
   const key = objectKey(call.user_id, call.id);
   try {
@@ -24,8 +26,8 @@ export async function archiveAudio(call, bytes) {
       WHERE id=$1 AND audio_object_key IS NULL RETURNING id`, [call.id]);
     return 'upload_failed';
   }
-  const saved = await queryOne(`UPDATE calls SET audio_object_key=$2,audio_archived_at=now(),provider_archive_status='pending'
-    WHERE id=$1 AND deleted_at IS NULL RETURNING id`, [call.id, key]);
+  const saved = await queryOne(`UPDATE calls SET audio_object_key=$2,audio_archived_at=now(),provider_archive_status=$3
+    WHERE id=$1 AND deleted_at IS NULL RETURNING id`, [call.id, key, providerCopy ? 'pending' : 'removed']);
   if (!saved) {
     // Deleted while uploading: the stored copy must not outlive the call.
     await removeAudio(key);

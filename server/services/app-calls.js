@@ -5,6 +5,7 @@ import { HttpError, currentMonth } from '../lib/users.js';
 import { audit } from '../lib/audit.js';
 import { defer } from '../lib/defer.js';
 import { sendIncomingNotification } from './notifications.js';
+import { sweepAppCallAudio } from './app-call-audio.js';
 
 /** How long a call may ring before it counts as missed. */
 export const RING_SECONDS = 45;
@@ -89,7 +90,8 @@ async function finishRows(app, seconds) {
  * (the way reapStaleCalls does for phone calls); there is no cron. For this
  * person's calls it: times out rings (45 s), fails answered calls that never
  * connected (60 s), ends connected calls that went silent (90 s) or ran past
- * their reserved length plus a minute, and drops old signalling.
+ * their reserved length plus a minute, and drops old signalling. It also
+ * sweeps own-voice uploads (see sweepAppCallAudio).
  */
 export async function expireRingingAppCalls(userId) {
   const { rows } = await query(`UPDATE app_calls SET status='missed', ended_at=now()
@@ -114,6 +116,7 @@ export async function expireRingingAppCalls(userId) {
   await query(`DELETE FROM app_call_signals WHERE app_call_id IN (SELECT id FROM app_calls
     WHERE status IN ('ended','declined','missed','failed') AND COALESCE(ended_at, created_at) < now() - make_interval(mins => $2)
       AND (caller_id=$1 OR callee_id=$1))`, [userId, SIGNAL_RETENTION_MINUTES]);
+  await sweepAppCallAudio(userId);
 }
 
 export async function answerAppCall(user, id) {

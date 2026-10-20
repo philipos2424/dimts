@@ -156,12 +156,17 @@ function sleep(ms, signal) {
   });
 }
 
+// The upload's name tells the provider the container; phone recordings are
+// MP3 (or WAV), app-call own-voice files come in the formats phones record.
+const FILE_EXTENSIONS = { 'audio/wav': 'wav', 'audio/mp4': 'm4a', 'audio/x-m4a': 'm4a', 'audio/aac': 'aac',
+  'audio/ogg': 'ogg', 'audio/webm': 'webm', 'audio/mpeg': 'mp3' };
+
 async function callScribe(audio, fields, signal, keyterms = [], { wait = sleep } = {}) {
   for (let attempt = 1; ; attempt += 1) {
     signal?.throwIfAborted();
     // FormData is rebuilt per attempt so a retry never resends a consumed body.
     const form = new FormData();
-    form.set('file', audio, audio.type === 'audio/wav' ? 'recording.wav' : 'recording.mp3');
+    form.set('file', audio, `recording.${FILE_EXTENSIONS[audio.type] ?? 'mp3'}`);
     form.set('model_id', config.scribeModelId);
     for (const [key, value] of Object.entries(fields)) {
       form.set(key, String(value));
@@ -193,6 +198,42 @@ async function callScribe(audio, fields, signal, keyterms = [], { wait = sleep }
   }
 }
 
+async function callWhisper(audio, filename, signal) {
+  const form = new FormData();
+  form.set('file', audio, filename);
+  const response = await fetch(`${config.whisperBaseUrl}/transcribe`, {
+    method: 'POST', body: form,
+    headers: { Authorization: `Bearer ${config.whisperApiToken}` },
+    signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(300_000)]) : AbortSignal.timeout(300_000),
+  });
+  if (response.status === 422) throw new Error('The saved recording could not be decoded in a supported audio layout. Play or export it to check the file; AI notes were not generated.');
+  if (!response.ok) throw new Error(`Local Whisper failed (HTTP ${response.status})`);
+  return response.json();
+}
+
+/**
+ * Transcribe one person's own-voice recording (an app call): one speaker, one
+ * channel, so no multichannel request and no diarization. Uses the same
+ * provider request, retries and keyterms as `transcribe`.
+ *
+ * Returns { text, words, raw }: `raw` is the provider's single-channel result
+ * (language fields included), `words` its timed words.
+ */
+export async function transcribeVoice(audio, { mime, signal, names, phones, retryWait } = {}) {
+  signal?.throwIfAborted();
+  const blob = mime && audio.type !== mime ? new Blob([audio], { type: mime }) : audio;
+  let data;
+  if (config.transcribeProvider === 'whisper') {
+    data = await callWhisper(blob, `recording.${FILE_EXTENSIONS[blob.type] ?? 'mp3'}`, signal);
+  } else if (config.transcribeProvider === 'elevenlabs') {
+    const response = await callScribe(blob, {}, signal, keytermsFor(names, phones), { wait: retryWait });
+    if (!response.ok) throw await scribeError(response);
+    data = await response.json();
+  } else throw new Error('Unsupported TRANSCRIBE_PROVIDER');
+  const single = Array.isArray(data?.transcripts) ? data.transcripts[0] ?? {} : data ?? {};
+  return { text: String(single.text ?? '').trim(), words: Array.isArray(single.words) ? single.words : [], raw: single };
+}
+
 /**
  * Transcribe a dual-channel recording.
  *
@@ -204,16 +245,7 @@ async function callScribe(audio, fields, signal, keyterms = [], { wait = sleep }
 export async function transcribe(audioBlob, options = {}) {
   options.signal?.throwIfAborted();
   if (config.transcribeProvider === 'whisper') {
-    const form = new FormData();
-    form.set('file', audioBlob, 'recording.mp3');
-    const response = await fetch(`${config.whisperBaseUrl}/transcribe`, {
-      method: 'POST', body: form,
-      headers: { Authorization: `Bearer ${config.whisperApiToken}` },
-      signal: options.signal ? AbortSignal.any([options.signal, AbortSignal.timeout(300_000)]) : AbortSignal.timeout(300_000),
-    });
-    if (response.status === 422) throw new Error('The saved recording could not be decoded in a supported audio layout. Play or export it to check the file; AI notes were not generated.');
-    if (!response.ok) throw new Error(`Local Whisper failed (HTTP ${response.status})`);
-    return normalizeScribeResponse(await response.json(), options);
+    return normalizeScribeResponse(await callWhisper(audioBlob, 'recording.mp3', options.signal), options);
   }
   if (config.transcribeProvider !== 'elevenlabs') throw new Error('Unsupported TRANSCRIBE_PROVIDER');
   const channels = mp3Channels(new Uint8Array(await audioBlob.slice(0, 128 * 1024).arrayBuffer()));

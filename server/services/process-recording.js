@@ -118,7 +118,7 @@ export async function processRecording(callId, { force = false, signal: callerSi
        RETURNING *
      )
      SELECT c.id, c.user_id, c.recording_url, c.recording_sid, c.audio_object_key, c.contact_id, c.direction,c.voicemail,c.transcript,c.transcript_data,
-            c.transcript_recording_url,c.language,c.language_probability,c.duration_sec,
+            c.transcript_recording_url,c.language,c.language_probability,c.duration_sec,c.route,c.notes_partial,
             (SELECT u.language FROM users u WHERE u.id = c.user_id) AS owner_language,
             (SELECT u.timezone FROM users u WHERE u.id = c.user_id) AS owner_timezone, c.created_at, c.completed_at,
             k.display_name  AS contact_display_name,
@@ -150,19 +150,26 @@ export async function processRecording(callId, { force = false, signal: callerSi
       if (!owned) throw new Error('Processing ownership changed');
     }
     let result;
+    // An app call has each person's own-voice file instead of one two-channel
+    // recording; only loading and transcription differ.
+    const app = call.route === 'app';
+    let partial = app && call.notes_partial === true;
     if (!force && call.transcript_recording_url === call.recording_url && call.transcript?.trim()) {
       result = { text: call.transcript, raw: call.transcript_data,
         language: call.language, languageProbability: call.language_probability };
     } else {
-      const audio = await loadAudio(call, signal);
+      // Loaded only for app calls, so the phone path's modules are unchanged.
+      const appAudio = app ? await import('./app-call-transcript.js') : null;
+      const audio = app ? await appAudio.loadAppAudio(callId, signal) : await loadAudio(call, signal);
       await renew();
       // The owner's own contact names help the transcriber spell them.
       const { rows: named } = await query(`SELECT display_name FROM contacts WHERE user_id=$1 AND display_name IS NOT NULL
         ORDER BY last_call_at DESC NULLS LAST LIMIT 60`, [call.user_id]);
       stage = 'transcription';
       const transcribeStart = Date.now();
-      result = await transcribe(audio, { direction: call.direction, voicemail: call.voicemail, signal,
-        names: named.map(r => r.display_name), phones: [call.user_phone, call.destination] });
+      result = app ? await appAudio.transcribeAppAudio(audio, { signal, names: named.map(r => r.display_name) })
+        : await transcribe(audio, { direction: call.direction, voicemail: call.voicemail, signal,
+          names: named.map(r => r.display_name), phones: [call.user_phone, call.destination] });
       transcribeMs = Date.now() - transcribeStart;
       stage = 'persist';
       const saved = await queryOne(`UPDATE calls SET transcript=$3,transcript_data=$4,
@@ -171,10 +178,17 @@ export async function processRecording(callId, { force = false, signal: callerSi
         WHERE id=$1 AND processing_token=$2 AND status='processing' RETURNING id`,
         [callId, lease, seal('transcript', result.text), seal('transcript_data', result.raw), result.language, result.languageProbability, call.recording_url]);
       if (!saved) throw new Error('Processing ownership changed');
+      if (app) {
+        // One-sided notes say so on the row.
+        partial = result.partial;
+        await query('UPDATE calls SET notes_partial=$3 WHERE id=$1 AND processing_token=$2', [callId, lease, partial]);
+      }
     }
 
     stage = 'quality';
-    const qualityError = call.voicemail ? voicemailQualityError(result.raw) : recordingQualityError(result.raw);
+    // One-sided app notes cannot meet the two-channel rule; silence still stops them.
+    const qualityError = call.voicemail ? voicemailQualityError(result.raw)
+      : partial ? recordingQualityError({ audio_quality: result.raw?.audio_quality }) : recordingQualityError(result.raw);
     if (qualityError) throw new Error(qualityError);
     if (!result.text.trim()) {
       throw new Error('Transcription returned no speech');

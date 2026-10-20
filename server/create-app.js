@@ -14,6 +14,7 @@ import { callDeletionRouter, deletionsRouter } from './routes/call-deletion.js';
 import { notificationsRouter } from './routes/notifications.js';
 import { callsRouter, usageRouter } from './routes/calls.js';
 import { appCallsRouter } from './routes/app-calls.js';
+import { appCallAudioRouter } from './routes/app-call-audio.js';
 import { meRouter } from './routes/me.js';
 import { promisesRouter } from './routes/promises.js';
 import { recapRouter } from './routes/recap.js';
@@ -60,6 +61,7 @@ export function createApp({ webRoot = fileURLToPath(new URL('../dist/', import.m
   app.use('/api', contextRouter);
 
   app.use('/api/app-calls', appCallsRouter);
+  app.use('/api/calls', appCallAudioRouter);
   app.use('/api/calls', callsRouter);
   app.use('/api/calls', callDeletionRouter);
   app.use('/api/call-deletions', deletionsRouter);

@@ -25,6 +25,7 @@ import { isReviewDemo } from '../lib/review-demo.js';
 import { createReviewDemoCall } from '../services/review-demo.js';
 import { chooseRoute } from '../lib/app-call-route.js';
 import { startAppCall } from '../services/app-calls.js';
+import { processAppCallNotes } from '../services/app-call-audio.js';
 
 export const callsRouter = express.Router();
 
@@ -220,7 +221,7 @@ callsRouter.get('/:id', async (req, res, next) => {
               c.record_enabled, c.parent_consent_at, c.child_consent_at, c.recording_start_status,
               c.consent_mode, c.consent_scope, c.other_party_notice_issued_at,
               c.deleted_at,c.provider_deletion_status,c.provider_deletion_error,c.provider_deleted_at,
-              c.agreements, c.conflicts, c.contact_id, c.audio_object_key,
+              c.agreements, c.conflicts, c.contact_id, c.audio_object_key, c.route, c.notes_partial,
               k.display_name AS contact_name, k.company
          FROM calls c
          LEFT JOIN contacts k ON k.id = c.contact_id
@@ -262,7 +263,7 @@ callsRouter.post('/:id/process', async (req, res, next) => {
   try {
     const user = await resolveUser(req);
     const call = await queryOne(
-      'SELECT id, recording_url, status, processing_until FROM calls WHERE id = $1 AND user_id = $2',
+      'SELECT id, recording_url, status, processing_until, route FROM calls WHERE id = $1 AND user_id = $2',
       [req.params.id, user.id]
     );
 
@@ -271,7 +272,8 @@ callsRouter.post('/:id/process', async (req, res, next) => {
     if (!['failed', 'processing'].includes(call.status)) throw new HttpError(409, 'processing_not_retryable');
     if (call.processing_until && new Date(call.processing_until) > new Date()) throw new HttpError(409, 'processing_active');
 
-    defer(processRecording(call.id), `reprocess:${call.id}`);
+    // An app call still waits for the other person's upload (or ten minutes) first.
+    defer(call.route === 'app' ? processAppCallNotes(call.id) : processRecording(call.id), `reprocess:${call.id}`);
     res.status(202).json({ status: 'processing' });
   } catch (err) {
     next(err);
@@ -286,11 +288,13 @@ callsRouter.get('/:id/audio', async (req, res, next) => {
   try {
     const user = await resolveUser(req);
     const call = await queryOne(
-      'SELECT id, recording_url, recording_sid, audio_object_key, voicemail FROM calls WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL',
+      'SELECT id, recording_url, recording_sid, audio_object_key, voicemail, route, own_audio_mime FROM calls WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL',
       [req.params.id, user.id]
     );
 
     if (!call?.recording_url && !call?.audio_object_key) throw new HttpError(404, 'recording_not_found');
+    // An app call's audio exists only in our storage; its recording_url is a marker, never a carrier URL.
+    if (call.route === 'app' && !call.audio_object_key) throw new HttpError(404, 'recording_not_found');
 
     const range = req.get('range');
     if (range && (range.length > 64 || !/^bytes=(?:\d+-\d*|-\d+)$/.test(range))) {
@@ -313,7 +317,8 @@ callsRouter.get('/:id/audio', async (req, res, next) => {
       throw new HttpError(502, 'recording_fetch_failed');
     }
 
-    res.set('Content-Type', 'audio/mpeg');
+    // Phone recordings are MP3; an app call's own-voice file keeps the format it was recorded in.
+    res.set('Content-Type', call.route === 'app' ? call.own_audio_mime || 'application/octet-stream' : 'audio/mpeg');
     res.set('Cache-Control', 'private, no-store');
     if (upstream.status === 206) {
       const contentRange = upstream.headers.get('content-range');

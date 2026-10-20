@@ -58,6 +58,23 @@ export function encryptAudio(key, bytes) {
   return Buffer.concat(parts);
 }
 
+/** The inverse of encryptAudio for a whole object held in memory. Throws on any tampering. */
+export function decryptAudio(key, sealed) {
+  const body = Buffer.from(sealed.buffer ?? sealed, sealed.byteOffset ?? 0, sealed.byteLength);
+  if (body.length < HEADER + OVERHEAD || body.subarray(0, 4).toString() !== MAGIC) throw new Error('Not a valid encrypted recording');
+  const secret = userKey(ownerOf(key), body.subarray(4, HEADER).toString().replace(/\0+$/, ''));
+  const count = chunkCount(body.length - HEADER), plain = [];
+  for (let index = 0, at = HEADER; index < count; index++) {
+    const sealedChunk = body.subarray(at, Math.min(at + CHUNK + OVERHEAD, body.length));
+    const decipher = createDecipheriv('aes-256-gcm', secret, sealedChunk.subarray(0, 12));
+    decipher.setAAD(chunkAad(key, index, count));
+    decipher.setAuthTag(sealedChunk.subarray(sealedChunk.length - 16));
+    plain.push(decipher.update(sealedChunk.subarray(12, sealedChunk.length - 16)), decipher.final());
+    at += sealedChunk.length;
+  }
+  return Buffer.concat(plain);
+}
+
 /** Uploads the recording and returns the number of bytes stored. */
 export async function putAudio(key, bytes) {
   const encrypted = isEncryptedKey(checked(key));
