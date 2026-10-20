@@ -184,3 +184,15 @@ test('an empty APP_CALLS_BLOCKED_PREFIXES still blocks +251 for callee and calle
     assert.equal(await route(q), 'phone');
   } finally { delete process.env.APP_CALLS_BLOCKED_PREFIXES; }
 });
+
+test('blank or separator-only APP_CALLS_BLOCKED_PREFIXES still blocks +251 for callee and caller', async () => {
+  for (const [n, value] of [' ', ',', ' , '].entries()) {
+    const p = await pair({ phone: `+25191100010${n}` });
+    const q = await pair({}, { phone: `+25191100011${n}` });
+    process.env.APP_CALLS_BLOCKED_PREFIXES = value;
+    try {
+      assert.equal(await route(p), 'phone', JSON.stringify(value));
+      assert.equal(await route(q), 'phone', JSON.stringify(value));
+    } finally { delete process.env.APP_CALLS_BLOCKED_PREFIXES; }
+  }
+});
