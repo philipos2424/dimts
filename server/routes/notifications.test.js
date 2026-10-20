@@ -117,3 +117,15 @@ test('interrupted ticket storage and expired receipts remain unconfirmed without
   await db.query("INSERT INTO call_notifications(call_id,device_id,user_id,created_at) VALUES($1,$2,$3,now()-interval '3 minutes')",[queued,device.id,users[0].id]);
   await checkPushReceipts(users[0].id);assert.equal((await jobs(queued))[0].error_code,'alert_expired');
 });
+
+test('device registration stores app_calls_supported, defaulting to false for old clients',async()=>{
+  const supported=async()=>(await db.query('SELECT app_calls_supported FROM notification_devices WHERE push_token=$1',[pushToken(7)])).rows[0].app_calls_supported;
+  assert.equal((await request('/device','POST',{token:pushToken(7)})).status,200);
+  assert.equal(await supported(),false);
+  assert.equal((await request('/device','POST',{token:pushToken(7),app_calls_supported:true})).status,200);
+  assert.equal(await supported(),true);
+  assert.equal((await request('/device','POST',{token:pushToken(7),app_calls_supported:'yes'})).status,400);
+  assert.equal(await supported(),true,'a rejected request changes nothing');
+  assert.equal((await request('/device','POST',{token:pushToken(7)})).status,200);
+  assert.equal(await supported(),false,'a client without the flag cannot keep it set');
+});

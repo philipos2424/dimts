@@ -2,7 +2,7 @@
 
 > **DRAFT. Requires review by a qualified lawyer before the EU launch.**
 > The app shows this text from `src/legal.ts`. Keep the two in sync.
-> Version `2026-10-07` (matches `TERMS_VERSION`).
+> Version `2026-10-21` (matches `TERMS_VERSION`).
 
 ## Who we are
 Dimts is an AI assistant for business phone calls. For your account data,

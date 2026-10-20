@@ -10,7 +10,7 @@ test('call reservations enforce idempotency, concurrency and minute budgets usin
   const db = new PGlite();
   try {
     await db.exec(await readFile(new URL('./schema.sql', import.meta.url), 'utf8'));
-    const owner = (await db.query("INSERT INTO users(phone,terms_version) VALUES('+15555550101','2026-10-07') RETURNING *")).rows[0];
+    const owner = (await db.query("INSERT INTO users(phone,terms_version) VALUES('+15555550101','2026-10-21') RETURNING *")).rows[0];
     const reserve = async (key, dest = '+15555550102', record = true) => {
       const fresh = (await db.query('SELECT * FROM users WHERE id=$1', [owner.id])).rows[0];
       return db.transaction(tx => reserveCallInTransaction(tx, fresh, dest, record, key));
@@ -73,7 +73,7 @@ test('new calls snapshot notice consent with the owner side pre-agreed from thei
   const db = new PGlite();
   try {
     await db.exec(await readFile(new URL('./schema.sql', import.meta.url), 'utf8'));
-    const owner = (await db.query("INSERT INTO users(phone,terms_version) VALUES('+15555550101','2026-10-07') RETURNING *")).rows[0];
+    const owner = (await db.query("INSERT INTO users(phone,terms_version) VALUES('+15555550101','2026-10-21') RETURNING *")).rows[0];
     process.env.RECORDING_CONSENT_MODE = 'owner_only';
     const out = await db.transaction(tx => reserveCallInTransaction(tx, owner, '+15555550102', true, 'out'));
     assert.equal(out.call.consent_mode, 'notice'); assert.equal(out.call.consent_scope, null);

@@ -83,6 +83,7 @@ meRouter.get('/', async (req, res, next) => {
       retention_months: user.retention_months ?? null,
       timezone: user.timezone ?? null,
       caller_id: !!user.caller_id_verified_at,
+      app_calls_findable: !!(await queryOne('SELECT app_calls_findable FROM users WHERE id=$1', [user.id]))?.app_calls_findable,
     });
   } catch (err) { next(err); }
 });
@@ -140,17 +141,20 @@ meRouter.patch('/', async (req, res, next) => {
   try {
     const user = await resolveUser(req);
     const body = req.body ?? {};
-    const setLanguage = 'language' in body, setRetention = 'retention_months' in body, setTimezone = 'timezone' in body;
+    const setLanguage = 'language' in body, setRetention = 'retention_months' in body, setTimezone = 'timezone' in body, setFindable = 'app_calls_findable' in body;
     if (setLanguage && !['en', 'am'].includes(body.language)) throw new HttpError(400, 'invalid_language');
     if (setRetention && body.retention_months !== null && !RETENTION_MONTHS.includes(body.retention_months)) throw new HttpError(400, 'invalid_retention');
     if (setTimezone && !validTimezone(body.timezone)) throw new HttpError(400, 'invalid_timezone');
-    if (!setLanguage && !setRetention && !setTimezone) throw new HttpError(400, 'nothing_to_change');
+    if (setFindable && typeof body.app_calls_findable !== 'boolean') throw new HttpError(400, 'invalid_app_calls_findable');
+    if (!setLanguage && !setRetention && !setTimezone && !setFindable) throw new HttpError(400, 'nothing_to_change');
     const row = await queryOne(`UPDATE users SET language=CASE WHEN $2 THEN $3 ELSE language END,
       retention_months=CASE WHEN $4 THEN $5::int ELSE retention_months END,
-      timezone=CASE WHEN $6 THEN $7 ELSE timezone END WHERE id=$1 RETURNING language,retention_months,timezone`,
+      timezone=CASE WHEN $6 THEN $7 ELSE timezone END,
+      app_calls_findable=CASE WHEN $8 THEN $9::boolean ELSE app_calls_findable END WHERE id=$1 RETURNING language,retention_months,timezone,app_calls_findable`,
     [user.id, setLanguage, setLanguage ? body.language : null, setRetention, setRetention ? body.retention_months : null,
-      setTimezone, setTimezone ? body.timezone : null]);
+      setTimezone, setTimezone ? body.timezone : null, setFindable, setFindable ? body.app_calls_findable : null]);
     if (setRetention) await audit({ userId: user.id, action: 'retention_changed', targetType: 'retention', targetId: body.retention_months ?? 'off', req });
+    if (setFindable) await audit({ userId: user.id, action: 'app_calls_findable_changed', targetType: 'app_calls', targetId: body.app_calls_findable ? 'on' : 'off', req });
     res.json(row);
   } catch (err) { next(err); }
 });

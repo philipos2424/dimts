@@ -401,3 +401,25 @@ CREATE TABLE IF NOT EXISTS waitlist (
   source TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- App-to-app calls, 21 October 2026. Inert until APP_CALLS_ENABLED=true.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS app_calls_findable BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE notification_devices ADD COLUMN IF NOT EXISTS app_calls_supported BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS route TEXT NOT NULL DEFAULT 'phone';
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'calls_route_check') THEN
+    ALTER TABLE calls ADD CONSTRAINT calls_route_check CHECK (route IN ('phone','app'));
+  END IF;
+END $$;
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS app_call_id UUID;
+CREATE TABLE IF NOT EXISTS app_calls (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  caller_id UUID NOT NULL REFERENCES users(id),
+  callee_id UUID NOT NULL REFERENCES users(id),
+  caller_call_id UUID REFERENCES calls(id),
+  callee_call_id UUID REFERENCES calls(id),
+  status TEXT NOT NULL DEFAULT 'ringing' CHECK (status IN ('ringing','connecting','connected','ended','declined','missed','failed')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  answered_at TIMESTAMPTZ,
+  ended_at TIMESTAMPTZ
+);

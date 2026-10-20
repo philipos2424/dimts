@@ -7,6 +7,9 @@ export const notificationsRouter = express.Router();
 notificationsRouter.post('/device', async (req,res) => {
   const user=await resolveUser(req), token=req.body?.token;
   if(!validPushToken(token))throw new HttpError(400,'invalid_push_token');
+  // Old clients omit this; they cannot take app calls, so it stays false.
+  const appCalls=req.body?.app_calls_supported??false;
+  if(typeof appCalls!=='boolean')throw new HttpError(400,'invalid_app_calls_supported');
   const session=hashToken(req.get('authorization').slice(7));
   await db.withTransaction(async tx=>{
     await tx.query('SELECT id FROM users WHERE id=$1 FOR UPDATE',[user.id]);
@@ -14,9 +17,9 @@ notificationsRouter.post('/device', async (req,res) => {
       (SELECT token_hash FROM sessions WHERE expires_at<=now())`,[user.id]);
     const {rows}=await tx.query('SELECT id FROM notification_devices WHERE user_id=$1 AND NOT disabled AND push_token<>$2',[user.id,token]);
     if(rows.length>=5)throw new HttpError(409,'device_limit','Remove a device before enabling another.');
-    await tx.query(`INSERT INTO notification_devices(user_id,session_hash,push_token) VALUES($1,$2,$3)
+    await tx.query(`INSERT INTO notification_devices(user_id,session_hash,push_token,app_calls_supported) VALUES($1,$2,$3,$4)
       ON CONFLICT(push_token) DO UPDATE SET user_id=EXCLUDED.user_id,session_hash=EXCLUDED.session_hash,
-        disabled=false,updated_at=now()`,[user.id,session,token]);
+        disabled=false,app_calls_supported=EXCLUDED.app_calls_supported,updated_at=now()`,[user.id,session,token,appCalls]);
   });
   res.json({status:'registered'});
 });

@@ -19,7 +19,7 @@ function limit(name, fallback) {
  * How long this call may last and what it may cost: plan minutes first, then
  * credits. Throws when neither can pay for a minute.
  */
-async function callBudget(db, user, destination, direction, tier) {
+async function callBudget(db, user, destination, direction, tier, { noSurcharge = false } = {}) {
   // Pending or uncertain calls reserve their whole cap. A definitively failed
   // request with no provider SID releases its minutes but still counts daily.
   // Finished calls count only the plan minutes they used (finish-call.js).
@@ -37,7 +37,7 @@ async function callBudget(db, user, destination, direction, tier) {
   // Granted minutes are the founder's own decision, so the shared free pool does not limit them.
   const pooled = override == null && (tier === 'free' || trial);
   const pooledSecondsLeft = pooled ? Math.min(ownPlanSeconds, Math.max(0, freePool)) : ownPlanSeconds;
-  const surcharge = callSurcharge(user.phone, destination, direction);
+  const surcharge = noSurcharge ? 0 : callSurcharge(user.phone, destination, direction);
   // A trial call is not cut off the moment its minutes run out: with a minute left it
   // may run to the grace length, paid from the shared pool, never from the owner's card.
   const planSecondsLeft = trial && pooled && surcharge === 0 && pooledSecondsLeft >= 60
@@ -52,6 +52,20 @@ async function callBudget(db, user, destination, direction, tier) {
       : "You have used this month's minutes. Add credits or upgrade to keep calling.");
   }
   return { remaining, planSeconds: Math.min(planSecondsLeft, remaining), surcharge, overage };
+}
+
+/**
+ * Whether this user could pay for at least a minute of a call with no country
+ * surcharge (an app call). The same minutes-then-credits rule as a phone call.
+ */
+export async function canAffordMinute(db, user) {
+  try {
+    await callBudget(db, user, user.phone, 'inbound', planOf(user), { noSurcharge: true });
+    return true;
+  } catch (err) {
+    if (err instanceof HttpError && (err.status === 402 || err.status === 429)) return false;
+    throw err;
+  }
 }
 
 export function reserveCall(user, destination, record, requestKey, options = {}) {

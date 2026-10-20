@@ -59,3 +59,19 @@ test('the summary language is validated, saved and returned', async () => {
   assert.equal(saved.status, 200); assert.equal(saved.body.language, 'am');
   assert.equal((await api('/api/me', owner.token)).body.language, 'am');
 });
+
+test('app_calls_findable is off by default, returned by GET and changed only by a boolean, with an audit event', async () => {
+  const owner = await signedIn('+15555550230');
+  assert.equal((await api('/api/me', owner.token)).body.app_calls_findable, false);
+  for (const bad of ['true', 1, null]) {
+    const refused = await api('/api/me', owner.token, { method: 'PATCH', body: { app_calls_findable: bad } });
+    assert.equal(refused.status, 400); assert.equal(refused.body.error, 'invalid_app_calls_findable');
+  }
+  const on = await api('/api/me', owner.token, { method: 'PATCH', body: { app_calls_findable: true } });
+  assert.equal(on.status, 200); assert.equal(on.body.app_calls_findable, true);
+  assert.equal((await api('/api/me', owner.token)).body.app_calls_findable, true);
+  const off = await api('/api/me', owner.token, { method: 'PATCH', body: { app_calls_findable: false, language: 'am' } });
+  assert.equal(off.body.app_calls_findable, false); assert.equal(off.body.language, 'am');
+  const events = (await db.query("SELECT target_id FROM audit_events WHERE user_id=$1 AND action='app_calls_findable_changed' ORDER BY id", [owner.id])).rows;
+  assert.deepEqual(events.map(e => e.target_id), ['on', 'off']);
+});
