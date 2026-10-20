@@ -59,9 +59,13 @@ test('nothing is deleted while a call is active or still being processed', async
 
 test('deleting an account removes everything personal, frees the number and signs out every session', async () => {
   const a = await account();
+  const peer = (await db.query("INSERT INTO users(phone) VALUES('+15555550997') RETURNING id")).rows[0];
+  const appCall = (await db.query('INSERT INTO app_calls(caller_id,callee_id) VALUES($1,$2) RETURNING id', [peer.id, a.id])).rows[0];
+  await db.query("INSERT INTO app_call_signals(app_call_id,from_user,kind) VALUES($1,$2,'offer'),($1,$3,'answer')", [appCall.id, peer.id, a.id]);
   const response = await send('/api/me', a.token, 'DELETE', { confirm: 'delete-account' });
   assert.equal(response.status, 202);
   assert.equal((await response.json()).queued, 1);
+  assert.equal(await count('SELECT count(*)::int n FROM app_call_signals WHERE app_call_id=$1', [appCall.id]), 0, 'signalling is removed');
   assert.equal(await count('SELECT count(*)::int n FROM calls WHERE user_id=$1 AND deleted_at IS NULL', [a.id]), 0);
   assert.equal(await count('SELECT count(*)::int n FROM calls WHERE user_id=$1 AND transcript IS NOT NULL', [a.id]), 0);
   for (const table of ['contacts', 'google_connections', 'sessions', 'notification_devices'])

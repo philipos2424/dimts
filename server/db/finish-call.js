@@ -46,7 +46,8 @@ export async function finishCall(call, seconds, status, month) {
   }
   if (finished && connected) {
     // Our side of the ledger: what this call cost, for unit economics.
-    const cost = estimateCallCost({ ownerPhone: call.user_phone, otherPhone: call.destination, direction: call.direction,
+    // An app call has no carrier legs to price.
+    const cost = call.route === 'app' ? 0 : estimateCallCost({ ownerPhone: call.user_phone, otherPhone: call.destination, direction: call.direction,
       seconds, recorded: call.record_enabled !== false });
     await query('UPDATE calls SET est_cost_micros=$2 WHERE id=$1', [call.id, cost]).catch(err => console.error('[cost] estimate not saved', err?.message));
     if (finished.user_id) defer(sendBalanceAlerts(finished.user_id), `balance-alerts:${finished.user_id}`);

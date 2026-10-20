@@ -434,3 +434,7 @@ CREATE TABLE IF NOT EXISTS app_call_signals (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS app_call_signals_call_idx ON app_call_signals (app_call_id, id);
+
+-- App-to-app call lifecycle, 22 October 2026: when both notices were shown, and the last sign of life.
+ALTER TABLE app_calls ADD COLUMN IF NOT EXISTS connected_at TIMESTAMPTZ;
+ALTER TABLE app_calls ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ;

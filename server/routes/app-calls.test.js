@@ -106,10 +106,11 @@ test('signals: only the other person sees them, ordered, bounded, validated and 
   for (const bad of ['abc', '-1', '1.5', '99999999999999999999', '']) {
     assert.equal((await call(c.callee, `${path}?after=${bad}`)).status, 400, `after=${bad}`);
   }
-  for (const body of [{ kind: 'nope', payload: {} }, { kind: 'offer' }, { kind: 'offer', payload: [] }, { kind: 'offer', payload: 'x' }, { kind: 'offer', payload: null },
+  for (const body of [{ kind: 'nope', payload: {} }, { kind: 'bye', payload: {} }, { kind: 'offer' }, { kind: 'offer', payload: [] }, { kind: 'offer', payload: 'x' }, { kind: 'offer', payload: null },
     { kind: 'offer', payload: { blob: 'x'.repeat(17000) } }, { payload: {} }]) {
     assert.equal((await call(c.caller, path, 'POST', body)).status, 400, JSON.stringify(body).slice(0, 40));
   }
+  assert.equal((await call(c.caller, path, 'POST', { kind: 'bye', payload: {} })).data.error, 'invalid_kind');
   assert.equal((await call(c.caller, path, 'POST', { kind: 'recording-stopped', payload: {} })).status, 201);
   for (let i = 0; i < 60; i++) await db.query("INSERT INTO app_call_signals(app_call_id,from_user,kind,payload) VALUES($1,$2,'candidate','{}')", [c.appCallId, c.caller.id]);
   assert.equal((await call(c.callee, path)).data.signals.length, 50, 'at most 50 per read');
@@ -218,4 +219,17 @@ test('starting an app call pushes the existing incoming-call alert with the app 
   const calleeRow = (await db.query('SELECT id FROM calls WHERE app_call_id=$1 AND direction=$2', [started.appCallId, 'inbound'])).rows[0];
   assert.deepEqual(pushes[0][0].data, { type: 'incoming-call', callId: calleeRow.id, appCallId: started.appCallId });
   assert.ok(!JSON.stringify(pushes).includes(caller.phone), 'no caller details in the push');
+});
+
+test('heartbeat is for participants only, flag gated and rate limited per person', async () => {
+  const c = await fresh();
+  assert.equal((await call(c.stranger, `/${c.appCallId}/heartbeat`, 'POST', {})).status, 404);
+  assert.equal((await call(c.callee, `/${c.appCallId}/answer`, 'POST')).status, 200);
+  assert.equal((await call(c.callee, `/${c.appCallId}/heartbeat`, 'POST', {})).data.status, 'connecting');
+  process.env.APP_CALLS_ENABLED = 'false';
+  try { assert.equal((await call(c.callee, `/${c.appCallId}/heartbeat`, 'POST', {})).status, 404); } finally { process.env.APP_CALLS_ENABLED = 'true'; }
+  const window = Math.floor(Date.now() / 1000 / 60) * 60;
+  const key = createHash('sha256').update(`app-heartbeat:${c.caller.id}`).digest('hex');
+  await db.query('INSERT INTO rate_limits(key,window_start,hits) VALUES($1,to_timestamp($2),30)', [key, window]);
+  assert.equal((await call(c.caller, `/${c.appCallId}/heartbeat`, 'POST', {})).status, 429);
 });

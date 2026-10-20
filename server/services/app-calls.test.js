@@ -25,6 +25,14 @@ async function user(over = {}) {
 }
 const row = async id => (await db.query('SELECT * FROM calls WHERE id=$1', [id])).rows[0];
 const appRow = async id => (await db.query('SELECT * FROM app_calls WHERE id=$1', [id])).rows[0];
+async function connect(a, b, key) {
+  const started = await svc.startAppCall(a, b, key);
+  await svc.answerAppCall(b, started.appCallId);
+  await svc.reportConnected(a, started.appCallId);
+  await svc.reportConnected(b, started.appCallId);
+  return started;
+}
+const ago = (id, column, seconds) => db.query(`UPDATE app_calls SET ${column}=now()-make_interval(secs => $2) WHERE id=$1`, [id, seconds]);
 const count = async table => (await db.query(`SELECT count(*)::int AS n FROM ${table}`)).rows[0].n;
 
 test('starting creates two linked rows and one app_calls row with no carrier leg', async () => {
@@ -74,7 +82,7 @@ test('a budget failure rolls back and propagates for the phone fallback', async 
 });
 
 test('neither person is ever surcharged, even when the callee number is a surcharge country', async () => {
-  const [a, b] = [await user(), await user({ phone: '+971500000123' })];
+  const [a, b] = [await user(), await user({ phone: '+251911000123' })];
   const { appCallId } = await svc.startAppCall(a, b, 'key-surcharge1');
   const app = await appRow(appCallId);
   assert.equal((await row(app.caller_call_id)).surcharge_cents, 0);
@@ -120,9 +128,9 @@ test('ringing for more than 45 seconds becomes missed for the callee and failed 
 test('end twice finishes once: one usage addition and one ledger charge per person', async () => {
   const [a, b] = [await user({ override: 0 }), await user({ override: 0 })];
   for (const u of [a, b]) await db.query("INSERT INTO credit_ledger(user_id,amount_cents,reason,source_key) VALUES($1,5000,'grant',$2)", [u.id, `topup-${u.id}`]);
-  const { appCallId } = await svc.startAppCall(a, b, 'key-end-twice-1');
-  await svc.answerAppCall(b, appCallId);
-  await db.query("UPDATE app_calls SET answered_at=now()-interval '90 seconds' WHERE id=$1", [appCallId]);
+  const { appCallId } = await connect(a, b, 'key-end-twice-1');
+  assert.ok((await appRow(appCallId)).connected_at);
+  await ago(appCallId, 'connected_at', 90);
   await svc.endAppCall(a, appCallId, 75);
   await svc.endAppCall(a, appCallId, 75);
   await svc.endAppCall(b, appCallId, 80);
@@ -142,8 +150,7 @@ test('end twice finishes once: one usage addition and one ledger charge per pers
 
 test('reported seconds are capped by what the server measured and never billed if never connected', async () => {
   const [a, b] = [await user(), await user()];
-  const one = await svc.startAppCall(a, b, 'key-cap-000001');
-  await svc.answerAppCall(b, one.appCallId);
+  const one = await connect(a, b, 'key-cap-000001');
   await svc.endAppCall(a, one.appCallId, 3600);
   const capped = await row((await appRow(one.appCallId)).caller_call_id);
   assert.ok(capped.duration_sec <= 2, `measured seconds win, got ${capped.duration_sec}`);
@@ -164,4 +171,110 @@ test('an ended call can never go back', async () => {
   await assert.rejects(svc.reportConnected(a, appCallId), { status: 409 });
   await assert.rejects(svc.declineAppCall(b, appCallId), { status: 409 });
   assert.equal((await appRow(appCallId)).status, 'ended');
+});
+
+test('an answered call that never connected bills nothing, however long the client reports', async () => {
+  const [a, b] = [await user({ override: 0 }), await user({ override: 0 })];
+  for (const u of [a, b]) await db.query("INSERT INTO credit_ledger(user_id,amount_cents,reason,source_key) VALUES($1,5000,'grant',$2)", [u.id, `topup-${u.id}`]);
+  const { appCallId } = await svc.startAppCall(a, b, 'key-noconnect-1');
+  await svc.answerAppCall(b, appCallId); // ICE failed: nobody ever reported the notice
+  await ago(appCallId, 'answered_at', 30);
+  await svc.endAppCall(a, appCallId, 120);
+  const app = await appRow(appCallId);
+  assert.equal(app.status, 'ended');
+  assert.equal(app.connected_at, null);
+  for (const u of [a, b]) {
+    assert.equal((await db.query('SELECT count(*)::int AS n FROM usage_minutes WHERE user_id=$1', [u.id])).rows[0].n, 0);
+    assert.equal((await db.query("SELECT count(*)::int AS n FROM credit_ledger WHERE user_id=$1 AND reason='call'", [u.id])).rows[0].n, 0);
+  }
+  assert.equal((await row(app.caller_call_id)).duration_sec, 0);
+});
+
+test('a connected call, ended once, bills one ledger entry and one usage row per person', async () => {
+  const [a, b] = [await user({ override: 0 }), await user({ override: 0 })];
+  for (const u of [a, b]) await db.query("INSERT INTO credit_ledger(user_id,amount_cents,reason,source_key) VALUES($1,5000,'grant',$2)", [u.id, `topup-${u.id}`]);
+  const { appCallId } = await connect(a, b, 'key-connected-1');
+  await ago(appCallId, 'connected_at', 100);
+  await svc.endAppCall(a, appCallId, 120); // reported more than measured: capped at about 100
+  for (const u of [a, b]) {
+    assert.equal((await db.query("SELECT count(*)::int AS n FROM credit_ledger WHERE user_id=$1 AND reason='call'", [u.id])).rows[0].n, 1);
+    const used = (await db.query('SELECT minutes_used::float8 AS m FROM usage_minutes WHERE user_id=$1', [u.id])).rows;
+    assert.equal(used.length, 1);
+    assert.ok(used[0].m * 60 >= 99 && used[0].m * 60 <= 102, `capped by measured time, got ${used[0].m * 60}`);
+  }
+});
+
+test('stuck calls are swept and free both people to start a new call', async () => {
+  const make = async () => [await user(), await user()];
+  // Starting again would be 409 call_in_progress if either row were still active.
+  const again = (a, b, key) => svc.startAppCall(a, b, key);
+  // (a) answered but never connected for more than 60 s: failed, nothing billed
+  let [a, b] = await make();
+  let c = await svc.startAppCall(a, b, 'key-sweep-a-001');
+  await svc.answerAppCall(b, c.appCallId);
+  await svc.expireRingingAppCalls(a.id);
+  assert.equal((await appRow(c.appCallId)).status, 'connecting', 'not yet');
+  await ago(c.appCallId, 'answered_at', 70);
+  await again(a, b, 'key-sweep-a-002');
+  let app = await appRow(c.appCallId);
+  assert.equal(app.status, 'failed');
+  assert.deepEqual([(await row(app.caller_call_id)).duration_sec, (await row(app.callee_call_id)).duration_sec], [0, 0]);
+  // (b) connected but not heard from for more than 90 s: ended at last_seen minus connected
+  [a, b] = await make();
+  c = await connect(a, b, 'key-sweep-b-001');
+  await ago(c.appCallId, 'connected_at', 200);
+  await ago(c.appCallId, 'last_seen_at', 120);
+  await again(a, b, 'key-sweep-b-002');
+  app = await appRow(c.appCallId);
+  assert.equal(app.status, 'ended');
+  const dur = (await row(app.caller_call_id)).duration_sec;
+  assert.ok(dur >= 79 && dur <= 81, `last seen minus connected is 80 s, got ${dur}`);
+  assert.equal((await row(app.callee_call_id)).duration_sec, dur);
+  // (c) past max_duration_sec plus the grace, even while heartbeating
+  [a, b] = await make();
+  c = await connect(a, b, 'key-sweep-c-001');
+  await db.query('UPDATE calls SET max_duration_sec=60 WHERE app_call_id=$1', [c.appCallId]);
+  await ago(c.appCallId, 'connected_at', 200);
+  await svc.heartbeat(a, c.appCallId);
+  await again(a, b, 'key-sweep-c-002');
+  app = await appRow(c.appCallId);
+  assert.equal(app.status, 'ended');
+  assert.equal((await row(app.caller_call_id)).duration_sec, 60, 'never more than max_duration_sec');
+});
+
+test('a heartbeating call is not swept, and an ended call is not revived by one', async () => {
+  const [a, b] = [await user(), await user()];
+  const c = await connect(a, b, 'key-heartbeat-01');
+  await ago(c.appCallId, 'connected_at', 200);
+  await ago(c.appCallId, 'last_seen_at', 100);
+  await svc.heartbeat(b, c.appCallId);
+  await svc.expireRingingAppCalls(a.id);
+  assert.equal((await appRow(c.appCallId)).status, 'connected');
+  await svc.endAppCall(a, c.appCallId, 5);
+  const before = (await appRow(c.appCallId)).last_seen_at;
+  await svc.heartbeat(b, c.appCallId);
+  assert.deepEqual((await appRow(c.appCallId)).last_seen_at, before);
+});
+
+test('terminal calls drop their signals after ten minutes and a call holds at most 500', async () => {
+  const [a, b] = [await user(), await user()];
+  const c = await svc.startAppCall(a, b, 'key-signals-001');
+  await db.query("INSERT INTO app_call_signals(app_call_id,from_user,kind) SELECT $1,$2,'candidate' FROM generate_series(1,500)", [c.appCallId, a.id]);
+  await assert.rejects(svc.addSignal(a, c.appCallId, 'candidate', {}), { status: 429, code: 'too_many_signals' });
+  await svc.endAppCall(a, c.appCallId, 0);
+  await svc.expireRingingAppCalls(a.id);
+  assert.ok((await count('app_call_signals')) >= 500, 'kept for a while after the end');
+  await ago(c.appCallId, 'ended_at', 11 * 60);
+  await svc.expireRingingAppCalls(b.id);
+  assert.equal((await db.query('SELECT count(*)::int AS n FROM app_call_signals WHERE app_call_id=$1', [c.appCallId])).rows[0].n, 0);
+});
+
+test('a callee who cannot be recorded under the notice rule is refused and nothing is left behind', async () => {
+  const [calls, apps] = [await count('calls'), await count('app_calls')];
+  const noTerms = (await db.query("INSERT INTO users(phone,trial_ends_at) VALUES('+15555559901',now()+interval '3 days') RETURNING *")).rows[0];
+  await assert.rejects(svc.startAppCall(await user(), noTerms, 'key-consent-fail1'), { status: 409, code: 'app_call_unavailable' });
+  const gulf = await user({ phone: '+971500000777' }); // both people must press 1 there: not a notice call
+  await assert.rejects(svc.startAppCall(await user(), gulf, 'key-consent-fail2'), { status: 409, code: 'app_call_unavailable' });
+  assert.equal(await count('calls'), calls);
+  assert.equal(await count('app_calls'), apps);
 });

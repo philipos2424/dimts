@@ -1,4 +1,4 @@
-import test from 'node:test';
+import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { PGlite } from '@electric-sql/pglite';
 import { readFile } from 'node:fs/promises';
@@ -18,5 +18,22 @@ test('usage failure rolls back duration; retries count connected minutes exactly
     assert.equal((await db.query(FINISH_CALL_SQL, params)).rows.length, 1);
     assert.equal((await db.query(FINISH_CALL_SQL, params)).rows.length, 0);
     assert.equal(Number((await db.query('SELECT minutes_used FROM usage_minutes WHERE user_id=$1', [user.id])).rows[0].minutes_used), 2);
+  } finally { await db.close(); }
+});
+
+test('an app call is not priced as a carrier leg; a phone call still is', async () => {
+  const db = new PGlite();
+  try {
+    await db.exec(await readFile(new URL('./schema.sql', import.meta.url), 'utf8'));
+    const user = (await db.query("INSERT INTO users(phone) VALUES('+15555550101') RETURNING id")).rows[0];
+    const make = async route => (await db.query("INSERT INTO calls(user_id,user_phone,destination,route) VALUES($1,'+15555550101','+15555550102',$2) RETURNING *", [user.id, route])).rows[0];
+    const [phone, app] = [await make('phone'), await make('app')];
+    mock.module('./pool.js', { namedExports: { query: (sql, p) => db.query(sql, p), queryOne: async (sql, p) => (await db.query(sql, p)).rows[0], withTransaction: w => db.transaction(w), getPool: () => ({}) } });
+    const { finishCall } = await import('./finish-call.js?priced');
+    await finishCall(phone, 120, 'completed', '2026-10');
+    await finishCall(app, 120, 'completed', '2026-10');
+    const cost = async id => Number((await db.query('SELECT est_cost_micros FROM calls WHERE id=$1', [id])).rows[0].est_cost_micros);
+    assert.ok(await cost(phone.id) > 0);
+    assert.equal(await cost(app.id), 0);
   } finally { await db.close(); }
 });

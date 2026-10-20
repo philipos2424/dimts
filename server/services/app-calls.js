@@ -8,6 +8,15 @@ import { sendIncomingNotification } from './notifications.js';
 
 /** How long a call may ring before it counts as missed. */
 export const RING_SECONDS = 45;
+/** An answered call must reach 'connected' (both notices shown) within this. */
+export const CONNECT_SECONDS = 60;
+/** A connected call with no heartbeat for this long is over. */
+export const SILENCE_SECONDS = 90;
+/** Grace past the reserved maximum before the server ends a call itself. */
+export const MAX_GRACE_SECONDS = 60;
+/** Terminal calls keep their signalling this long. */
+const SIGNAL_RETENTION_MINUTES = 10;
+const MAX_SIGNALS_PER_CALL = 500;
 const LIVE = ['ringing', 'connecting', 'connected'];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const query = (sql, params) => database.query(sql, params);
@@ -22,6 +31,9 @@ const notFound = () => new HttpError(404, 'app_call_not_found');
  * same app call.
  */
 export async function startAppCall(caller, callee, requestKey) {
+  // Free anyone whose earlier call is stuck, so it cannot block this one.
+  await expireRingingAppCalls(caller.id);
+  await expireRingingAppCalls(callee.id);
   const made = await database.withTransaction(async tx => {
     // The same global lock reserveCall takes, so a retry sees the first attempt.
     await tx.query('SELECT id FROM call_budget_lock WHERE id=1 FOR UPDATE');
@@ -34,6 +46,10 @@ export async function startAppCall(caller, callee, requestKey) {
     const appCallId = (await tx.query('INSERT INTO app_calls(caller_id,callee_id) VALUES($1,$2) RETURNING id', [caller.id, callee.id])).rows[0].id;
     const callerRow = (await reserveCallInTransaction(tx, caller, callee.phone, true, requestKey, { route: 'app', appCallId })).call;
     const calleeRow = (await reserveCallInTransaction(tx, callee, caller.phone, true, `appcall-${appCallId}`, { route: 'app', appCallId, direction: 'inbound' })).call;
+    // Fail closed: an app call is only ever a recorded, notice-mode call.
+    for (const r of [callerRow, calleeRow]) {
+      if (r.record_enabled !== true || r.consent_mode !== 'notice') throw new HttpError(409, 'app_call_unavailable', 'This call cannot be placed over the internet.');
+    }
     await tx.query('UPDATE app_calls SET caller_call_id=$2, callee_call_id=$3 WHERE id=$1', [appCallId, callerRow.id, calleeRow.id]);
     return { appCallId, callId: callerRow.id, calleeCallId: calleeRow.id, created: true };
   });
@@ -60,14 +76,44 @@ async function closeUnconnected(app, reason, callerError) {
   if (app.caller_call_id) await query("UPDATE calls SET error=$2 WHERE id=$1 AND status='failed' AND duration_sec=0", [app.caller_call_id, callerError]);
 }
 
+/** Finish both people's rows when a call ends: never-connected calls bill nothing. */
+async function finishRows(app, seconds) {
+  for (const callId of [app.caller_call_id, app.callee_call_id]) {
+    const call = callId && await queryOne('SELECT * FROM calls WHERE id=$1', [callId]);
+    if (call) await finishCall(call, seconds, seconds > 0 ? 'completed' : 'canceled', currentMonth());
+  }
+}
+
 /**
- * Time out rings nobody answered. Cheaper than a cron: run on the reads that
- * could show the outcome (like reapStaleCalls for phone calls).
+ * The lazy sweep, run on the reads and starts that could meet a stuck call
+ * (the way reapStaleCalls does for phone calls); there is no cron. For this
+ * person's calls it: times out rings (45 s), fails answered calls that never
+ * connected (60 s), ends connected calls that went silent (90 s) or ran past
+ * their reserved length plus a minute, and drops old signalling.
  */
 export async function expireRingingAppCalls(userId) {
   const { rows } = await query(`UPDATE app_calls SET status='missed', ended_at=now()
     WHERE status='ringing' AND created_at < now() - make_interval(secs => $2) AND (caller_id=$1 OR callee_id=$1) RETURNING *`, [userId, RING_SECONDS]);
   for (const app of rows) await closeUnconnected(app, 'no-answer', 'No answer');
+  const failed = await query(`UPDATE app_calls SET status='failed', ended_at=now()
+    WHERE status='connecting' AND answered_at < now() - make_interval(secs => $2) AND (caller_id=$1 OR callee_id=$1) RETURNING *`, [userId, CONNECT_SECONDS]);
+  for (const app of failed.rows) await closeUnconnected(app, 'failed', 'Could not connect');
+  const stale = await query(`SELECT a.id FROM app_calls a JOIN calls c ON c.id=a.caller_call_id JOIN calls d ON d.id=a.callee_call_id
+    WHERE a.status='connected' AND (a.caller_id=$1 OR a.callee_id=$1)
+      AND (a.last_seen_at < now() - make_interval(secs => $2)
+        OR a.connected_at + make_interval(secs => LEAST(c.max_duration_sec, d.max_duration_sec) + $3) < now())`, [userId, SILENCE_SECONDS, MAX_GRACE_SECONDS]);
+  for (const { id } of stale.rows) {
+    const ended = await queryOne("UPDATE app_calls SET status='ended', ended_at=now() WHERE id=$1 AND status='connected' RETURNING *", [id]);
+    if (!ended) continue;
+    const { seen_sec: seen, cap } = await queryOne(`SELECT GREATEST(0, floor(extract(epoch FROM a.last_seen_at - a.connected_at)))::int AS seen_sec,
+      LEAST(c.max_duration_sec, d.max_duration_sec) AS cap FROM app_calls a JOIN calls c ON c.id=a.caller_call_id JOIN calls d ON d.id=a.callee_call_id
+      WHERE a.id=$1`, [id]);
+    await finishRows(ended, Math.max(0, Math.min(seen, cap ?? seen)));
+    await audit({ action: 'app_call_ended', targetType: 'app_call', targetId: id });
+  }
+  await query(`DELETE FROM app_call_signals WHERE app_call_id IN (SELECT id FROM app_calls
+    WHERE status IN ('ended','declined','missed','failed') AND COALESCE(ended_at, created_at) < now() - make_interval(mins => $2)
+      AND (caller_id=$1 OR callee_id=$1))`, [userId, SIGNAL_RETENTION_MINUTES]);
 }
 
 export async function answerAppCall(user, id) {
@@ -103,7 +149,7 @@ export async function reportConnected(user, id) {
     WHERE id=$1 AND duration_sec IS NULL`, [peerCall]);
   const { n } = await queryOne('SELECT count(*)::int AS n FROM calls WHERE id IN ($1,$2) AND other_party_notice_issued_at IS NOT NULL',
     [app.caller_call_id, app.callee_call_id]);
-  if (n === 2) await query("UPDATE app_calls SET status='connected' WHERE id=$1 AND status='connecting'", [app.id]);
+  if (n === 2) await query("UPDATE app_calls SET status='connected', connected_at=now(), last_seen_at=now() WHERE id=$1 AND status='connecting'", [app.id]);
   return { status: (await queryOne('SELECT status FROM app_calls WHERE id=$1', [app.id])).status };
 }
 
@@ -120,15 +166,12 @@ export async function endAppCall(user, id, reportedSeconds) {
     await query("INSERT INTO app_call_signals(app_call_id,from_user,kind) VALUES($1,$2,'bye')", [app.id, user.id]);
     await audit({ userId: user.id, action: 'app_call_ended', targetType: 'app_call', targetId: app.id });
   }
-  const current = await queryOne(`SELECT *, CASE WHEN answered_at IS NULL OR ended_at IS NULL THEN 0
-    ELSE GREATEST(0, floor(extract(epoch FROM ended_at - answered_at)))::int END AS measured_sec FROM app_calls WHERE id=$1`, [app.id]);
+  const current = await queryOne(`SELECT *, CASE WHEN connected_at IS NULL OR ended_at IS NULL THEN NULL
+    ELSE GREATEST(0, floor(extract(epoch FROM ended_at - connected_at)))::int END AS measured_sec FROM app_calls WHERE id=$1`, [app.id]);
   if (current.status === 'ended') {
-    const answered = current.answered_at != null;
-    const seconds = answered ? Math.max(0, Math.min(reportedSeconds, current.measured_sec)) : 0;
-    for (const callId of [current.caller_call_id, current.callee_call_id]) {
-      const call = await queryOne('SELECT * FROM calls WHERE id=$1', [callId]);
-      if (call) await finishCall(call, seconds, answered ? 'completed' : 'canceled', currentMonth());
-    }
+    // Only a call that really connected (both notices shown) can bill.
+    const seconds = current.measured_sec == null ? 0 : Math.max(0, Math.min(reportedSeconds, current.measured_sec));
+    await finishRows(current, seconds);
   }
   return { status: current.status };
 }
@@ -138,6 +181,13 @@ export async function getAppCallStatus(user, id) {
   const { app, role } = await participant(user, id);
   const bye = await queryOne("SELECT 1 AS found FROM app_call_signals WHERE app_call_id=$1 AND from_user<>$2 AND kind='bye' LIMIT 1", [app.id, user.id]);
   return { status: app.status, role, peerEnded: !!bye };
+}
+
+/** Sign of life from either client; only a live call is touched. */
+export async function heartbeat(user, id) {
+  const { app } = await participant(user, id);
+  const live = await queryOne("UPDATE app_calls SET last_seen_at=now() WHERE id=$1 AND status IN ('connecting','connected') RETURNING status", [app.id]);
+  return { status: live?.status ?? (await queryOne('SELECT status FROM app_calls WHERE id=$1', [app.id])).status };
 }
 
 /** The signed-in person's ringing app call, for a foreground app. */
@@ -160,6 +210,8 @@ export async function addSignal(user, id, kind, payload) {
   await expireRingingAppCalls(user.id);
   const { app } = await participant(user, id);
   if (!LIVE.includes(app.status)) throw new HttpError(409, 'call_over', 'This call has ended.');
+  const { n } = await queryOne('SELECT count(*)::int AS n FROM app_call_signals WHERE app_call_id=$1', [app.id]);
+  if (n >= MAX_SIGNALS_PER_CALL) throw new HttpError(429, 'too_many_signals', 'Too many signals for this call.');
   const row = await queryOne('INSERT INTO app_call_signals(app_call_id,from_user,kind,payload) VALUES($1,$2,$3,$4) RETURNING id::float8 AS id',
     [app.id, user.id, kind, JSON.stringify(payload)]);
   return { id: row.id };

@@ -115,6 +115,5 @@ test('an app call reservation has no carrier leg or surcharge but keeps the one-
     assert.deepEqual([app.call.route, app.call.surcharge_cents, app.call.twilio_call_sid, app.call.twilio_account_sid], ['app', 0, null, null]);
     await assert.rejects(reserve('app-call-key-2', { route: 'app' }), { code: 'call_in_progress' });
     await assert.rejects(reserve('app-call-key-1'), { code: 'request_key_reused' }, 'a phone request cannot reuse an app key');
-    process.env.TWILIO_ACCOUNT_SID = account;
-  } finally { await db.close(); }
+  } finally { process.env.TWILIO_ACCOUNT_SID = account; await db.close(); }
 });
