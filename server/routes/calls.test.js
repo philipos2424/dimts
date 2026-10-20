@@ -34,15 +34,23 @@ mock.module('../services/originate.js', { namedExports: {
   isE164: n => /^\+[1-9]\d{6,14}$/.test(n), fetchRecording: async () => {},
   originateCall: async () => { providerCalls++; return 'CA_TEST'; },
 } });
+let routeResult = { route: 'phone' };
+let chooseCalls = [];
+mock.module('../lib/app-call-route.js', { namedExports: { chooseRoute: async (...args) => { chooseCalls.push(args); return routeResult; } } });
+let startAppCall = async () => { throw new Error('startAppCall not expected'); };
+const started = [];
+mock.module('../services/app-calls.js', { namedExports: { startAppCall: (...args) => { started.push(args); return startAppCall(...args); } } });
+const sentry = [];
+mock.module('../lib/sentry.js', { namedExports: { captureCallFailure: (...args) => { sentry.push(args); } } });
 const { callsRouter } = await import('./calls.js');
 const app = express(); app.use(express.json()); app.use('/calls', callsRouter);
 app.use((err, _req, res, _next) => res.status(err.status || 500).json({ error: err.code || err.message }));
 test.after(() => db.close());
-async function post(key, destination = '+15555550102') {
+async function post(key, destination = '+15555550102', extra = {}) {
   const server = app.listen(0);
   try {
     const response = await fetch(`http://127.0.0.1:${server.address().port}/calls`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json', ...(key ? { 'Idempotency-Key': key } : {}) }, body: JSON.stringify({ destination }),
+      method: 'POST', headers: { 'Content-Type': 'application/json', ...(key ? { 'Idempotency-Key': key } : {}) }, body: JSON.stringify({ destination, ...extra }),
     });
     return { status: response.status, data: await response.json() };
   } finally { server.close(); }
@@ -95,4 +103,72 @@ test('ending a call checks ownership before touching the provider', async () => 
     assert.equal((await fetch(`${url}${own.id}/end`, { method: 'POST' })).status, 200);
     assert.equal(stops, 1);
   } finally { server.close(); }
+});
+
+const callee = (await db.query("INSERT INTO users(phone,terms_version) VALUES('+15555550177','2026-10-21') RETURNING *")).rows[0];
+async function finishAll() { await db.query("UPDATE calls SET status='completed', budget_released=true WHERE user_id=$1", [user.id]); }
+function appRoute() { routeResult = { route: 'app', callee }; startAppCall = async () => ({ appCallId: 'app-1', callId: 'call-1' }); }
+function reset() { routeResult = { route: 'phone' }; startAppCall = async () => { throw new Error('startAppCall not expected'); }; chooseCalls = []; started.length = 0; sentry.length = 0; }
+
+test('phone responses carry route phone, 201 and the 200 replay', async () => {
+  reset(); await finishAll();
+  const first = await post('route-phone-0001'), retry = await post('route-phone-0001');
+  assert.equal(first.status, 201); assert.equal(first.data.route, 'phone');
+  assert.equal(retry.status, 200); assert.equal(retry.data.route, 'phone');
+  assert.equal(started.length, 0);
+});
+
+test('a qualifying callee starts an app call and never originates', async () => {
+  reset(); await finishAll(); appRoute();
+  const dialled = providerCalls, checks = preflights;
+  const result = await post('route-app-0001', callee.phone);
+  assert.equal(result.status, 201);
+  assert.deepEqual(result.data, { callId: 'call-1', status: 'ringing', route: 'app', appCallId: 'app-1' });
+  assert.equal(providerCalls, dialled); assert.equal(preflights, checks);
+  assert.equal(started.length, 1); assert.equal(started[0][1], callee); assert.equal(started[0][2], 'route-app-0001');
+});
+
+test("route 'phone' in the body forces the phone path; unknown route is invalid_route; unrecorded stays phone", async () => {
+  reset(); await finishAll(); appRoute();
+  const bad = await post('route-bad-0001', callee.phone, { route: 'carrier' });
+  assert.equal(bad.status, 400); assert.equal(bad.data.error, 'invalid_route');
+  const dialled = providerCalls;
+  const forced = await post('route-forced-0001', callee.phone, { route: 'phone' });
+  assert.equal(forced.status, 201); assert.equal(forced.data.route, 'phone');
+  assert.equal(providerCalls, dialled + 1); assert.equal(started.length, 0); assert.equal(chooseCalls.length, 0);
+  await finishAll();
+  const quiet = await post('route-quiet-0001', callee.phone, { record: false });
+  assert.equal(quiet.data.route, 'phone'); assert.equal(chooseCalls.length, 0);
+  await finishAll();
+  const explicit = await post('route-explicit-0001', callee.phone, { route: 'app' });
+  assert.equal(explicit.data.route, 'app'); assert.equal(chooseCalls.length, 1);
+});
+
+test('a retried app call replays 200 with the app call; another destination or forced phone is request_key_reused', async () => {
+  reset(); await finishAll();
+  const appCall = (await db.query('INSERT INTO app_calls(caller_id,callee_id) VALUES($1,$2) RETURNING id', [user.id, callee.id])).rows[0];
+  const row = (await db.query(`INSERT INTO calls(user_id,user_phone,destination,request_key,status,route,app_call_id,record_enabled)
+    VALUES($1,$2,$3,'route-replay-0001','ringing','app',$4,true) RETURNING id`, [user.id, user.phone, callee.phone, appCall.id])).rows[0];
+  const retry = await post('route-replay-0001', callee.phone);
+  assert.equal(retry.status, 200);
+  assert.deepEqual(retry.data, { callId: row.id, status: 'ringing', route: 'app', appCallId: appCall.id });
+  assert.equal(started.length, 0); assert.equal(chooseCalls.length, 0);
+  const other = await post('route-replay-0001', '+15555550188');
+  assert.equal(other.status, 409); assert.equal(other.data.error, 'request_key_reused');
+  const forced = await post('route-replay-0001', callee.phone, { route: 'phone' });
+  assert.equal(forced.status, 409); assert.equal(forced.data.error, 'request_key_reused');
+  await db.query("UPDATE calls SET status='completed' WHERE id=$1", [row.id]);
+});
+
+test('a failing app start falls back to the phone path; unexpected errors are reported', async () => {
+  reset(); await finishAll(); appRoute();
+  startAppCall = async () => { throw Object.assign(new Error('busy'), { status: 409, code: 'call_in_progress' }); };
+  const dialled = providerCalls;
+  const busy = await post('route-fallback-0001', callee.phone);
+  assert.equal(busy.status, 201); assert.equal(busy.data.route, 'phone'); assert.equal(providerCalls, dialled + 1);
+  await finishAll(); sentry.length = 0;
+  startAppCall = async () => { throw new TypeError('boom'); };
+  const broken = await post('route-fallback-0002', callee.phone);
+  assert.equal(broken.status, 201); assert.equal(broken.data.route, 'phone'); assert.equal(providerCalls, dialled + 2);
+  assert.equal(sentry.length, 1); assert.equal(sentry[0][1].stage, 'app_route'); assert.equal(sentry[0][1].userId, user.id);
 });

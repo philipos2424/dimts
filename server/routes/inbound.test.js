@@ -26,6 +26,8 @@ mock.module('../db/reserve-call.js', { namedExports: {
   },
   // Imported by the app-call service that create-app mounts; inbound calls never reach it.
   reserveCallInTransaction: async () => { throw new Error('unexpected app-call reservation'); },
+  // Imported by the app-call router that calls.js uses; inbound calls never choose a route.
+  canAffordMinute: async () => { throw new Error('unexpected route choice'); },
 } });
 
 const balanceAlerts = [];

@@ -23,6 +23,8 @@ import { scheduleArchiveRetries } from '../services/archive-audio.js';
 import { audit } from '../lib/audit.js';
 import { isReviewDemo } from '../lib/review-demo.js';
 import { createReviewDemoCall } from '../services/review-demo.js';
+import { chooseRoute } from '../lib/app-call-route.js';
+import { startAppCall } from '../services/app-calls.js';
 
 export const callsRouter = express.Router();
 
@@ -59,10 +61,11 @@ async function reapStaleCalls(userId) {
 callsRouter.post('/', async (req, res, next) => {
   try {
     const user = await resolveUser(req);
-    const { destination, record = true } = req.body ?? {};
+    const { destination, record = true, route: requestedRoute } = req.body ?? {};
     const requestKey = req.get('Idempotency-Key');
     if (!requestKey || !/^[a-zA-Z0-9_-]{8,120}$/.test(requestKey)) throw new HttpError(400, 'request_key_required', 'A valid Idempotency-Key is required.');
     if (typeof record !== 'boolean') throw new HttpError(400, 'invalid_recording_option');
+    if (requestedRoute !== undefined && requestedRoute !== 'phone' && requestedRoute !== 'app') throw new HttpError(400, 'invalid_route');
     if ([user.phone, user.agent_number, config.carrierNumber].includes(destination)) {
       throw new HttpError(400, 'call_loop', 'Choose a different destination from your own handset and Twilio number.');
     }
@@ -77,7 +80,7 @@ callsRouter.post('/', async (req, res, next) => {
     // The review account's number is fictional: file sample notes, ring no one.
     if (isReviewDemo(user.phone)) {
       const call = await createReviewDemoCall(user, destination);
-      return res.status(201).json({ callId: call.id, status: call.status });
+      return res.status(201).json({ callId: call.id, status: call.status, route: 'phone' });
     }
     // Toll fraud dials premium and unserved countries; both legs are billed to us.
     if (!canCall(destination)) {
@@ -90,13 +93,36 @@ callsRouter.post('/', async (req, res, next) => {
     // Validate callback configuration before reserving or spending anything.
     const callback = new URL(config.publicBaseUrl);
     if (callback.protocol !== 'https:') throw new HttpError(503, 'callbacks_unavailable');
+
+    // A retry of an app call returns the existing row. The same key for anything else is a different call.
+    const prior = await queryOne('SELECT id, status, destination, route, app_call_id FROM calls WHERE user_id=$1 AND request_key=$2', [user.id, requestKey]);
+    if (prior?.route === 'app') {
+      if (prior.destination !== destination || requestedRoute === 'phone') throw new HttpError(409, 'request_key_reused', 'Use a new request key for a different call.');
+      return res.status(200).json({ callId: prior.id, status: prior.status, route: 'app', appCallId: prior.app_call_id });
+    }
+
+    // Internet call to another Dimts user, when this person asked for nothing else. App calls are always recorded.
+    if (requestedRoute !== 'phone' && record === true) {
+      const choice = await chooseRoute(user, destination);
+      if (choice.route === 'app') {
+        try {
+          await reapStaleCalls(user.id);
+          const started = await startAppCall(user, choice.callee, requestKey);
+          return res.status(201).json({ callId: started.callId, status: 'ringing', route: 'app', appCallId: started.appCallId });
+        } catch (err) {
+          // Anything that goes wrong falls back to the phone call, which reports its own errors.
+          if (!(err instanceof HttpError)) captureCallFailure(err, { userId: user.id, stage: 'app_route' });
+        }
+      }
+    }
+
     await reapStaleCalls(user.id);
     const active = await queryOne(`SELECT * FROM calls WHERE user_id=$1 AND request_key<>$2 AND status IN ('initiating','ringing','in-progress') LIMIT 1`, [user.id, requestKey]);
     if (active?.twilio_call_sid) await reconcileCall(active);
     const previous = await queryOne('SELECT id FROM calls WHERE user_id=$1 AND request_key=$2', [user.id, requestKey]);
     if (!previous) await checkCallDestination(user.phone, destination);
     const { call, created } = await reserveCall(user, destination, record, requestKey);
-    if (!created) return res.status(200).json({ callId: call.id, status: call.status });
+    if (!created) return res.status(200).json({ callId: call.id, status: call.status, route: 'phone' });
 
     try {
       const sid = await originateCall({
@@ -120,7 +146,7 @@ callsRouter.post('/', async (req, res, next) => {
       throw err;
     }
 
-    res.status(201).json({ callId: call.id, status: call.status });
+    res.status(201).json({ callId: call.id, status: call.status, route: 'phone' });
   } catch (err) {
     next(err);
   }
