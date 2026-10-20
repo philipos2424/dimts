@@ -9,7 +9,9 @@ const PHONE = { route: 'phone' };
 const list = value => String(value ?? '').split(',').map(item => item.trim()).filter(Boolean);
 
 /** Numbers whose calling code starts with one of these never use app calls. +251 by default. */
-const blocked = number => list(process.env.APP_CALLS_BLOCKED_PREFIXES ?? '251').some(prefix => number.slice(1).startsWith(prefix));
+// `||`, not `??`: an empty value (a common way to "unset" on a host) must keep +251 blocked.
+// Lifting the gate takes an explicit non-empty list of other prefixes.
+const blocked = number => list(process.env.APP_CALLS_BLOCKED_PREFIXES || '251').some(prefix => number.slice(1).startsWith(prefix));
 
 /** Notice-mode recording only, and never where both people must press 1. */
 const noticeOnly = numbers => !numbers.some(requiresExplicitConsent) && recordingPolicy(process.env, numbers).mode === 'notice';

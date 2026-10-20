@@ -174,3 +174,13 @@ test('a database error returns phone and never throws', async () => {
   failQueries = true;
   try { assert.deepEqual(await chooseRoute(p.caller, p.callee.phone), { route: 'phone' }); } finally { failQueries = false; }
 });
+
+test('an empty APP_CALLS_BLOCKED_PREFIXES still blocks +251 for callee and caller', async () => {
+  const p = await pair({ phone: '+251911000003' });
+  const q = await pair({}, { phone: '+251911000004' });
+  process.env.APP_CALLS_BLOCKED_PREFIXES = '';
+  try {
+    assert.equal(await route(p), 'phone');
+    assert.equal(await route(q), 'phone');
+  } finally { delete process.env.APP_CALLS_BLOCKED_PREFIXES; }
+});
