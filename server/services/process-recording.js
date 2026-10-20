@@ -172,17 +172,15 @@ export async function processRecording(callId, { force = false, signal: callerSi
           names: named.map(r => r.display_name), phones: [call.user_phone, call.destination] });
       transcribeMs = Date.now() - transcribeStart;
       stage = 'persist';
+      // One-sided app notes say so on the row, in the same write as the
+      // checkpoint, so a retry that reuses the checkpoint knows it is partial.
+      if (app) partial = result.partial === true;
       const saved = await queryOne(`UPDATE calls SET transcript=$3,transcript_data=$4,
         language=$5,language_probability=$6,transcript_recording_url=$7,
-        processing_until=now()+interval '10 minutes'
+        notes_partial=$8,processing_until=now()+interval '10 minutes'
         WHERE id=$1 AND processing_token=$2 AND status='processing' RETURNING id`,
-        [callId, lease, seal('transcript', result.text), seal('transcript_data', result.raw), result.language, result.languageProbability, call.recording_url]);
+        [callId, lease, seal('transcript', result.text), seal('transcript_data', result.raw), result.language, result.languageProbability, call.recording_url, partial]);
       if (!saved) throw new Error('Processing ownership changed');
-      if (app) {
-        // One-sided notes say so on the row.
-        partial = result.partial;
-        await query('UPDATE calls SET notes_partial=$3 WHERE id=$1 AND processing_token=$2', [callId, lease, partial]);
-      }
     }
 
     stage = 'quality';

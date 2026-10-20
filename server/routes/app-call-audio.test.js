@@ -188,3 +188,22 @@ test('a manual retry of an app call still waits for the other person, and the ca
   assert.equal(detail.notes_partial, true);
   assert.equal(detail.audio_url, `/api/calls/${c.callerCall}/audio`);
 });
+
+test('opening the calls list sweeps waiting app notes when the feature is on, and does nothing extra when it is off', async () => {
+  const c = await talked();
+  await putPart(c.caller, c.callerCall, randomBytes(400));
+  await complete(c.caller, c.callerCall, { offsetMs: 0, mime: 'audio/mp4' });
+  await drainDeferredWork();
+  notes.length = 0;
+  await db.query("UPDATE calls SET completed_at=now()-interval '11 minutes' WHERE app_call_id=$1", [c.appCallId]);
+  const list = () => realFetch(`${base}/api/calls`, { headers: { Authorization: `Bearer ${c.caller.token}` } });
+  process.env.APP_CALLS_ENABLED = 'false';
+  try {
+    assert.equal((await list()).status, 200);
+    await drainDeferredWork();
+    assert.deepEqual(notes, [], 'flag off: no sweep');
+  } finally { process.env.APP_CALLS_ENABLED = 'true'; }
+  assert.equal((await list()).status, 200);
+  await drainDeferredWork();
+  assert.deepEqual(notes, [c.callerCall], 'flag on: the one-sided notes are retried');
+});

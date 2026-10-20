@@ -16,9 +16,17 @@ process.env.ELEVENLABS_API_KEY = 'xi-test';
 const { openRows } = await import('../lib/field-crypto.js');
 const db = new PGlite();
 await db.exec(await readFile(new URL('../db/schema.sql', import.meta.url), 'utf8'));
+// crashAfterCheckpoint: the statement right after the transcript checkpoint fails once, like a worker dying there.
+let crashAfterCheckpoint = false, checkpointed = false;
+async function run(sql, p) {
+  if (checkpointed) { checkpointed = false; throw new Error('worker died'); }
+  const result = openRows(await db.query(sql, p));
+  if (crashAfterCheckpoint && sql.includes('UPDATE calls SET transcript=$3')) { crashAfterCheckpoint = false; checkpointed = true; }
+  return result;
+}
 mock.module('../db/pool.js', { namedExports: {
-  query: async (sql, p) => openRows(await db.query(sql, p)),
-  queryOne: async (sql, p) => openRows(await db.query(sql, p)).rows[0],
+  query: (sql, p) => run(sql, p),
+  queryOne: async (sql, p) => (await run(sql, p)).rows[0],
   withTransaction: work => db.transaction(tx => work({ query: async (sql, p) => openRows(await tx.query(sql, p)) })),
   getPool: () => ({}),
 } });
@@ -378,4 +386,23 @@ test('a person can delete their account while their app call waits for uploads; 
   const mine = await row(c.callerCall);
   assert.equal(mine.status, 'ready', mine.error);
   assert.equal(mine.notes_partial, true);
+});
+
+test('a worker that dies right after the transcript checkpoint leaves a partial row that a retry finishes without transcribing again', async t => {
+  t.mock.method(console, 'error', () => {}); // the dead worker's background job is reported; expected here
+  const c = await talked();
+  await db.query("UPDATE calls SET completed_at=now()-interval '11 minutes' WHERE app_call_id=$1", [c.appCallId]);
+  crashAfterCheckpoint = true;
+  await upload(c.caller, c.callerCall, callerWords);
+  let mine = await row(c.callerCall);
+  assert.equal(mine.status, 'failed', 'the worker died after the checkpoint');
+  assert.equal(mine.transcript, 'User: Hello Sara deal?', 'the checkpoint was saved');
+  assert.equal(mine.notes_partial, true, 'saved together with the checkpoint');
+  const transcribed = scribe.length;
+  const { processRecording } = await import('./process-recording.js');
+  await processRecording(c.callerCall);
+  mine = await row(c.callerCall);
+  assert.equal(mine.status, 'ready', mine.error);
+  assert.equal(mine.notes_partial, true);
+  assert.equal(scribe.length, transcribed, 'the retry reused the checkpoint');
 });

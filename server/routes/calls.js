@@ -25,7 +25,7 @@ import { isReviewDemo } from '../lib/review-demo.js';
 import { createReviewDemoCall } from '../services/review-demo.js';
 import { chooseRoute } from '../lib/app-call-route.js';
 import { startAppCall } from '../services/app-calls.js';
-import { processAppCallNotes } from '../services/app-call-audio.js';
+import { processAppCallNotes, sweepAppCallAudio } from '../services/app-call-audio.js';
 
 export const callsRouter = express.Router();
 
@@ -47,6 +47,8 @@ const LIST_COLUMNS = `
 async function reapStaleCalls(userId) {
   await expireRecordingWait(userId);
   await expireProcessing(userId);
+  // App call own-voice uploads: retry waiting notes, expire missing uploads.
+  if (process.env.APP_CALLS_ENABLED === 'true') await sweepAppCallAudio(userId);
   const stale = await query(
     `UPDATE calls
         SET status = 'failed',
