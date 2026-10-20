@@ -172,3 +172,42 @@ test('a failing app start falls back to the phone path; unexpected errors are re
   assert.equal(broken.status, 201); assert.equal(broken.data.route, 'phone'); assert.equal(providerCalls, dialled + 2);
   assert.equal(sentry.length, 1); assert.equal(sentry[0][1].stage, 'app_route'); assert.equal(sentry[0][1].userId, user.id);
 });
+
+test('a racing same-key retry replays the app call without phone fallback or Sentry', async () => {
+  reset(); await finishAll(); appRoute();
+  const appCall = (await db.query('INSERT INTO app_calls(caller_id,callee_id) VALUES($1,$2) RETURNING id', [user.id, callee.id])).rows[0];
+  const dialled = providerCalls;
+  startAppCall = async () => {
+    const row = (await db.query(`INSERT INTO calls(user_id,user_phone,destination,request_key,status,route,app_call_id,record_enabled)
+      VALUES($1,$2,$3,'route-race-0001','ringing','app',$4,true) RETURNING id`, [user.id, user.phone, callee.phone, appCall.id])).rows[0];
+    startAppCall.rowId = row.id;
+    throw Object.assign(new Error('duplicate key value violates unique constraint'), { code: '23505' });
+  };
+  const result = await post('route-race-0001', callee.phone);
+  assert.equal(result.status, 200);
+  assert.deepEqual(result.data, { callId: startAppCall.rowId, status: 'ringing', route: 'app', appCallId: appCall.id });
+  assert.equal(providerCalls, dialled); assert.equal(sentry.length, 0);
+  await finishAll();
+});
+
+test('the phone idempotent replay reports the returned row route and app call', async () => {
+  reset(); await finishAll();
+  const appCall = (await db.query('INSERT INTO app_calls(caller_id,callee_id) VALUES($1,$2) RETURNING id', [user.id, callee.id])).rows[0];
+  const row = (await db.query(`INSERT INTO calls(user_id,user_phone,destination,request_key,status,route,app_call_id,record_enabled)
+    VALUES($1,$2,$3,'route-label-0001','ringing','app',$4,true) RETURNING id`, [user.id, user.phone, callee.phone, appCall.id])).rows[0];
+  // route 'app' rows are replayed by the app branch; the shared replay must agree with it.
+  const result = await post('route-label-0001', callee.phone);
+  assert.deepEqual(result.data, { callId: row.id, status: 'ringing', route: 'app', appCallId: appCall.id });
+  await finishAll();
+});
+
+test('a failure after a successful app start never reaches the phone path', async () => {
+  reset(); await finishAll(); appRoute();
+  const dialled = providerCalls, before = (await db.query('SELECT count(*)::int AS n FROM calls')).rows[0].n;
+  startAppCall = async () => ({ appCallId: undefined, callId: { toJSON() { throw new Error('serialize boom'); } } });
+  const result = await post('route-after-0001', callee.phone);
+  assert.equal(result.status, 500);
+  assert.equal(providerCalls, dialled);
+  assert.equal((await db.query('SELECT count(*)::int AS n FROM calls')).rows[0].n, before);
+  assert.equal(sentry.length, 0);
+});

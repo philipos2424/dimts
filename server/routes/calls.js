@@ -95,24 +95,30 @@ callsRouter.post('/', async (req, res, next) => {
     if (callback.protocol !== 'https:') throw new HttpError(503, 'callbacks_unavailable');
 
     // A retry of an app call returns the existing row. The same key for anything else is a different call.
-    const prior = await queryOne('SELECT id, status, destination, route, app_call_id FROM calls WHERE user_id=$1 AND request_key=$2', [user.id, requestKey]);
-    if (prior?.route === 'app') {
+    const priorSql = 'SELECT id, status, destination, route, app_call_id FROM calls WHERE user_id=$1 AND request_key=$2';
+    const replayApp = prior => {
       if (prior.destination !== destination || requestedRoute === 'phone') throw new HttpError(409, 'request_key_reused', 'Use a new request key for a different call.');
       return res.status(200).json({ callId: prior.id, status: prior.status, route: 'app', appCallId: prior.app_call_id });
-    }
+    };
+    const prior = await queryOne(priorSql, [user.id, requestKey]);
+    if (prior?.route === 'app') return replayApp(prior);
 
     // Internet call to another Dimts user, when this person asked for nothing else. App calls are always recorded.
     if (requestedRoute !== 'phone' && record === true) {
       const choice = await chooseRoute(user, destination);
       if (choice.route === 'app') {
+        await reapStaleCalls(user.id);
+        let started = null;
         try {
-          await reapStaleCalls(user.id);
-          const started = await startAppCall(user, choice.callee, requestKey);
-          return res.status(201).json({ callId: started.callId, status: 'ringing', route: 'app', appCallId: started.appCallId });
+          started = await startAppCall(user, choice.callee, requestKey);
         } catch (err) {
-          // Anything that goes wrong falls back to the phone call, which reports its own errors.
+          // A concurrent retry with the same key may have created the call first: replay it.
+          const raced = await queryOne(priorSql, [user.id, requestKey]);
+          if (raced?.route === 'app') return replayApp(raced);
+          // Otherwise fall back to the phone call, which reports its own errors.
           if (!(err instanceof HttpError)) captureCallFailure(err, { userId: user.id, stage: 'app_route' });
         }
+        if (started) return res.status(201).json({ callId: started.callId, status: 'ringing', route: 'app', appCallId: started.appCallId });
       }
     }
 
@@ -122,7 +128,7 @@ callsRouter.post('/', async (req, res, next) => {
     const previous = await queryOne('SELECT id FROM calls WHERE user_id=$1 AND request_key=$2', [user.id, requestKey]);
     if (!previous) await checkCallDestination(user.phone, destination);
     const { call, created } = await reserveCall(user, destination, record, requestKey);
-    if (!created) return res.status(200).json({ callId: call.id, status: call.status, route: 'phone' });
+    if (!created) return res.status(200).json({ callId: call.id, status: call.status, route: call.route ?? 'phone', ...(call.route === 'app' ? { appCallId: call.app_call_id } : {}) });
 
     try {
       const sid = await originateCall({
