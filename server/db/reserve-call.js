@@ -74,6 +74,8 @@ export function reserveCall(user, destination, record, requestKey, options = {})
 
 export async function reserveCallInTransaction(db, user, destination, record, requestKey, options = {}) {
   const direction = options.direction ?? 'outbound';
+  // Internet call between two Dimts users: no carrier leg, no country surcharge.
+  const app = options.route === 'app';
   // Recording consent comes from the owner's accepted terms. Without it an
   // outbound recorded call is refused; an inbound caller still gets through.
   if (record && !hasAcceptedTerms(user)) {
@@ -85,7 +87,7 @@ export async function reserveCallInTransaction(db, user, destination, record, re
   await db.query('SELECT id FROM call_budget_lock WHERE id=1 FOR UPDATE');
   const existing = (await db.query('SELECT * FROM calls WHERE user_id=$1 AND request_key=$2', [user.id, requestKey])).rows[0];
   if (existing) {
-    if (existing.destination !== destination || existing.record_enabled !== record || existing.direction !== direction) throw new HttpError(409, 'request_key_reused', 'Use a new request key for a different call.');
+    if (existing.destination !== destination || existing.record_enabled !== record || existing.direction !== direction || (existing.route ?? 'phone') !== (app ? 'app' : 'phone')) throw new HttpError(409, 'request_key_reused', 'Use a new request key for a different call.');
     return { call: existing, created: false };
   }
   const active = (await db.query(`SELECT id FROM calls WHERE user_id=$1
@@ -108,22 +110,23 @@ export async function reserveCallInTransaction(db, user, destination, record, re
   // leave a message: the call is recorded as missed, with voicemail, at no charge.
   const { remaining, planSeconds, surcharge, overage } = options.voicemailOnly
     ? { remaining: VOICEMAIL_MAX_SECONDS, planSeconds: 0, surcharge: 0, overage: 0 }
-    : await callBudget(db, user, destination, direction, tier);
-  const account = config.providerAccountSid;
-  if (!isAccountSid(account)) throw new Error(`Invalid ${config.carrier === 'telnyx' ? 'TELNYX' : 'TWILIO'}_ACCOUNT_SID`);
+    : await callBudget(db, user, destination, direction, tier, { noSurcharge: app });
+  // An app call has no carrier leg, so it needs no carrier account.
+  const account = app ? null : config.providerAccountSid;
+  if (!app && !isAccountSid(account)) throw new Error(`Invalid ${config.carrier === 'telnyx' ? 'TELNYX' : 'TWILIO'}_ACCOUNT_SID`);
   const contactId = options.contactId !== undefined ? options.contactId : (await db.query(`INSERT INTO contacts(user_id,phone) VALUES($1,$2)
     ON CONFLICT(user_id,phone) DO UPDATE SET phone=EXCLUDED.phone RETURNING id`, [user.id, destination])).rows[0].id;
   const policy = recordingPolicy(process.env, [user.phone, destination]);
   // Notice calls carry the owner's account-level consent on the owner's own leg.
   // Outgoing calls show the owner's own mobile once the carrier has verified it.
-  const callerId = direction === 'outbound' && user.caller_id_verified_at ? user.phone : null;
+  const callerId = !app && direction === 'outbound' && user.caller_id_verified_at ? user.phone : null;
   const call = (await db.query(`INSERT INTO calls(user_id,user_phone,destination,contact_id,record_enabled,request_key,max_duration_sec,status,direction,twilio_call_sid,agent_number,twilio_account_sid,consent_mode,consent_scope,
-      parent_consent_at,child_consent_at,caller_id,billing_tier,plan_seconds,surcharge_cents,overage_cents)
+      parent_consent_at,child_consent_at,caller_id,billing_tier,plan_seconds,surcharge_cents,overage_cents,route,app_call_id)
     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::text,$10,$11,$12,$13::text,$14,
       CASE WHEN $13::text='notice' AND $5 AND $9::text='outbound' THEN now() END,
-      CASE WHEN $13::text='notice' AND $5 AND $9::text='inbound' THEN now() END,$15,$16,$17,$18,$19) RETURNING *`,
+      CASE WHEN $13::text='notice' AND $5 AND $9::text='inbound' THEN now() END,$15,$16,$17,$18,$19,$20,$21) RETURNING *`,
     [user.id, user.phone, destination, contactId, record, requestKey, remaining, direction === 'inbound' ? 'ringing' : 'initiating', direction, options.callSid ?? null, user.agent_number ?? null, account, policy.mode, policy.scope, callerId,
-      onTrial(user) ? 'trial' : tier, planSeconds, surcharge, overage])).rows[0];
+      onTrial(user) ? 'trial' : tier, planSeconds, surcharge, overage, app ? 'app' : 'phone', app ? options.appCallId ?? null : null])).rows[0];
   if (options.voicemailOnly) {
     const missed = (await db.query(`UPDATE calls SET status='missed', voicemail=true, duration_sec=0, completed_at=now()
       WHERE id=$1 RETURNING *`, [call.id])).rows[0];

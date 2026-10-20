@@ -11,8 +11,8 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
   google_connections, calendar_actions, email_actions, notification_devices,
   call_notifications, audit_events, rate_limits, privacy_requests, privacy_request_targets, promise_states,
   credit_ledger, subscriptions, billing_events, billing_alerts, payments, provider_costs,
-  admin_passkeys, admin_challenges, waitlist, app_calls TO dimts_caller_backend;
-GRANT USAGE ON SEQUENCE audit_events_id_seq, credit_ledger_id_seq TO dimts_caller_backend;
+  admin_passkeys, admin_challenges, waitlist, app_calls, app_call_signals TO dimts_caller_backend;
+GRANT USAGE ON SEQUENCE audit_events_id_seq, credit_ledger_id_seq, app_call_signals_id_seq TO dimts_caller_backend;
 
 DO $$
 DECLARE app_table TEXT;
@@ -24,7 +24,7 @@ BEGIN
     'email_actions', 'notification_devices', 'call_notifications', 'audit_events', 'rate_limits',
     'privacy_requests', 'privacy_request_targets', 'promise_states',
     'credit_ledger', 'subscriptions', 'billing_events', 'billing_alerts', 'payments', 'provider_costs',
-    'admin_passkeys', 'admin_challenges', 'waitlist', 'app_calls'
+    'admin_passkeys', 'admin_challenges', 'waitlist', 'app_calls', 'app_call_signals'
   ] LOOP
     EXECUTE format('DROP POLICY IF EXISTS dimts_backend_access ON public.%I', app_table);
     EXECUTE format('CREATE POLICY dimts_backend_access ON public.%I FOR ALL TO dimts_caller_backend USING (true) WITH CHECK (true)', app_table);

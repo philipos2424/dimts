@@ -24,6 +24,8 @@ mock.module('../db/reserve-call.js', { namedExports: {
     inserted.push([owner.id, owner.phone, caller, options.callSid, options.contactId]);
     return { call: reserved, created: true };
   },
+  // Imported by the app-call service that create-app mounts; inbound calls never reach it.
+  reserveCallInTransaction: async () => { throw new Error('unexpected app-call reservation'); },
 } });
 
 const balanceAlerts = [];

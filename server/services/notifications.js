@@ -21,13 +21,13 @@ export async function sendIncomingNotification(callId) {
       AND c.created_at>now()-interval '2 minutes'
       AND c.duration_sec IS NULL AND c.status IN ('ringing','in-progress') AND c.user_id=n.user_id
       AND d.id=n.device_id AND d.user_id=n.user_id AND NOT d.disabled AND s.token_hash=d.session_hash AND s.expires_at>now()
-    RETURNING n.id,n.call_id,n.device_id,n.user_id,d.push_token,d.session_hash`, [callId]);
+    RETURNING n.id,n.call_id,n.device_id,n.user_id,d.push_token,d.session_hash,c.app_call_id`, [callId]);
   if (!jobs.length) return;
   let tickets;
   try {
     const response = await fetch(SEND, { method: 'POST', headers: headers(),
       body: JSON.stringify(jobs.map(job => ({ to: job.push_token, title: 'Dimts incoming call',
-        body: 'Open Dimts to see your caller briefing.', data: { type: 'incoming-call', callId: job.call_id },
+        body: 'Open Dimts to see your caller briefing.', data: { type: 'incoming-call', callId: job.call_id, ...(job.app_call_id ? { appCallId: job.app_call_id } : {}) },
         sound: 'default', channelId: 'incoming-calls', priority: 'high', ttl: 60 }))),
       signal: AbortSignal.timeout(5000) });
     if (!response.ok) throw new Error('Push service unavailable');

@@ -103,3 +103,18 @@ test('owners who have not accepted the current terms cannot place recorded calls
     assert.equal(inbound.call.child_consent_at, null);
   } finally { await db.close(); }
 });
+
+test('an app call reservation has no carrier leg or surcharge but keeps the one-active-call rule', async () => {
+  const db = new PGlite();
+  try {
+    await db.exec(await readFile(new URL('./schema.sql', import.meta.url), 'utf8'));
+    const gulf = (await db.query("INSERT INTO users(phone,terms_version) VALUES('+971500000001','2026-10-21') RETURNING *")).rows[0];
+    const reserve = (key, options) => db.transaction(tx => reserveCallInTransaction(tx, gulf, '+971500000002', true, key, options));
+    process.env.TWILIO_ACCOUNT_SID = 'invalid'; // an app call needs no carrier account
+    const app = await reserve('app-call-key-1', { route: 'app' });
+    assert.deepEqual([app.call.route, app.call.surcharge_cents, app.call.twilio_call_sid, app.call.twilio_account_sid], ['app', 0, null, null]);
+    await assert.rejects(reserve('app-call-key-2', { route: 'app' }), { code: 'call_in_progress' });
+    await assert.rejects(reserve('app-call-key-1'), { code: 'request_key_reused' }, 'a phone request cannot reuse an app key');
+    process.env.TWILIO_ACCOUNT_SID = account;
+  } finally { await db.close(); }
+});

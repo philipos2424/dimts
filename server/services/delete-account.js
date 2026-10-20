@@ -35,6 +35,9 @@ export async function deleteAccount(userId) {
     const { rows } = await tx.query('SELECT * FROM calls WHERE user_id=$1 AND deleted_at IS NULL FOR UPDATE', [userId]);
     const ids = await scrubCalls(tx, rows);
     await tx.query('UPDATE privacy_request_targets SET resolved_at=COALESCE(resolved_at,now()) WHERE user_id=$1', [userId]);
+    // Signalling holds network addresses (offer/answer/candidates); it goes with the account.
+    await tx.query(`DELETE FROM app_call_signals WHERE from_user=$1
+      OR app_call_id IN (SELECT id FROM app_calls WHERE caller_id=$1 OR callee_id=$1)`, [userId]);
     for (const table of ['contacts', 'google_oauth_requests', 'google_connections', 'notification_devices', 'sessions', 'admin_passkeys', 'admin_challenges']) {
       await tx.query(`DELETE FROM ${table} WHERE user_id=$1`, [userId]);
     }
