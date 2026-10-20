@@ -1,7 +1,7 @@
 import { normalizePhone } from '../lib/phone.js';
 import { query, queryOne } from './pool.js';
 
-const COLUMNS = 'id, user_id, phone, display_name, company, name_source, name_confidence';
+const COLUMNS = 'id, user_id, phone, display_name, company, name_source, name_confidence, recording_pref';
 
 /**
  * Get the contact for a number, creating a blank one on first contact.

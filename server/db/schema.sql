@@ -67,6 +67,10 @@ CREATE TABLE IF NOT EXISTS contacts (
   UNIQUE (user_id, phone)
 );
 
+-- Which incoming calls are recorded: 'all' (default) or only callers marked Record.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS incoming_recording TEXT NOT NULL DEFAULT 'all' CHECK (incoming_recording IN ('all','chosen'));
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS recording_pref TEXT NOT NULL DEFAULT 'default' CHECK (recording_pref IN ('default','record','skip'));
+
 ALTER TABLE calls ADD COLUMN IF NOT EXISTS direction TEXT NOT NULL DEFAULT 'outbound';
 ALTER TABLE calls ADD COLUMN IF NOT EXISTS contact_id UUID REFERENCES contacts(id);
 ALTER TABLE calls ADD COLUMN IF NOT EXISTS next_moves JSONB;

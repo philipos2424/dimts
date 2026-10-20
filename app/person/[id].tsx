@@ -5,6 +5,7 @@ import { deleteContact, getPerson, renameContact, type Person } from '../../src/
 import { useApp } from '../../src/AppContext';
 import { Button } from '../../src/components/Button';
 import { Card } from '../../src/components/Card';
+import { CallerRecordingChoice } from '../../src/components/CallerRecordingChoice';
 import { PromisesStrip } from '../../src/components/PromisesStrip';
 import { Screen } from '../../src/components/Screen';
 import { Txt } from '../../src/components/Txt';
@@ -88,6 +89,8 @@ export default function PersonScreen() {
           {last.agreements!.map((a, i) => <Txt key={i}>{a.subject}: <Txt weight="bold">{a.value}</Txt></Txt>)}
         </Card>
       )}
+
+      <CallerRecordingChoice contactId={person.contact.id} value={person.contact.recording_pref ?? 'default'} />
 
       <PromisesStrip promises={person.promises} onChange={load} />
 
