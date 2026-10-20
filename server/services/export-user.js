@@ -18,6 +18,7 @@ export async function buildExport(userId) {
   const contacts = (await query(`SELECT id,phone,display_name,company,name_source,notes,first_seen_at,last_call_at
     FROM contacts WHERE user_id=$1 ORDER BY first_seen_at`, [userId])).rows;
   const google = (await query('SELECT kind,connected_at FROM google_connections WHERE user_id=$1 ORDER BY kind', [userId])).rows;
+  const signIn = (await query('SELECT provider,created_at,last_used_at FROM user_identities WHERE user_id=$1 ORDER BY created_at', [userId])).rows;
   const calendar = (await query('SELECT id,call_id,status,created_at FROM calendar_actions WHERE user_id=$1 ORDER BY created_at', [userId])).rows;
   const email = (await query('SELECT id,call_id,status,created_at FROM email_actions WHERE user_id=$1 ORDER BY created_at', [userId])).rows;
   const deletions = (await query(`SELECT id,deleted_at,provider_deletion_status,storage_deletion_status
@@ -30,7 +31,7 @@ export async function buildExport(userId) {
     format: 'dimts-export-v1',
     exported_at: new Date().toISOString(),
     README: 'Everything Dimts holds about your account. Audio for each call is downloadable at its audio_path while signed in.',
-    profile, calls, contacts, google_connections: google,
+    profile, calls, contacts, google_connections: google, sign_in_methods: signIn,
     calendar_actions: calendar, email_actions: email, deletions, promise_states: promiseStates, audit_events: auditEvents,
   };
 }

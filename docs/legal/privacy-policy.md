@@ -12,6 +12,15 @@ Dimts processes their data only on your instructions as your **processor**.
 
 ## What we collect
 - Your phone number and account settings.
+- If you choose Google, Apple, Telegram or ChatGPT sign-in, we keep a hash of
+  that provider's account identifier and the dates you linked and used it.
+  We do not keep your provider profile name, email or picture. Telegram may
+  suggest a phone number, which you must verify before it becomes your account number.
+  For Apple, we also keep an encrypted refresh token to revoke access when
+  you disconnect or delete your account. If Apple is unavailable, the encrypted
+  token remains only until revocation succeeds. Unfinished Apple sign-ups are
+  scheduled for revocation after 40 minutes. Hashed revocation security records are kept for 30 days to prevent replay. Sign-in does not give Dimts access
+  to your ChatGPT conversations or change how your calls are processed.
 - Calls you make or receive through your Dimts number: recordings,
   transcripts and AI notes.
 - Contacts Dimts creates from those calls (phone number, and a name and
