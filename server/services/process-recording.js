@@ -17,6 +17,7 @@ import { defer } from '../lib/defer.js';
 import { resolveAgreements } from '../lib/agreements.js';
 import { transcriptTurns } from '../lib/transcript-turns.js';
 import { checkConsistency } from './consistency.js';
+import { sendPromisedTelegram } from './telegram-promise.js';
 import { safeError } from '../lib/log-safe.js';
 import { notesReadyTimings } from '../lib/notes-timing.js';
 
@@ -229,6 +230,8 @@ export async function processRecording(callId, { force = false, signal: callerSi
     if (saved.rows.length) {
       // Both are best-effort and independent, so neither waits for the other.
       await Promise.all([nameContact(call, result.text, signal), checkConsistency(callId, { signal })]);
+      // "I'll send it on Telegram": MiniMe sends it, if the owner linked it.
+      defer(sendPromisedTelegram(callId), `telegram-promise:${callId}`);
       // Notes are safe and the audio is in EU storage: Twilio's copy can go.
       defer(removeArchivedFromProvider(callId), `archive-remove:${callId}`);
     }

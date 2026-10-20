@@ -8,6 +8,7 @@ import { Section } from '../src/components/Section';
 import { Txt } from '../src/components/Txt';
 import { BusinessNumber } from '../src/components/BusinessNumber';
 import { CallerIdSettings } from '../src/components/CallerIdSettings';
+import { MiniMeConnection } from '../src/components/MiniMeConnection';
 import { CallDeletionHistory } from '../src/components/CallDeletion';
 import { NotificationSettings } from '../src/components/NotificationSettings';
 import { FirstCallLink } from '../src/components/FirstCallLink';
@@ -40,6 +41,7 @@ export default function Settings() {
       <CallerIdSettings />
       <FirstCallLink />
       {/* Google sign-in is off until Google verifies the app; follow-ups use the phone's mail app and calendar. */}
+      <MiniMeConnection />
       <CallDeletionHistory />
       <NotificationSettings />
       <AppLockSetting />
