@@ -12,5 +12,7 @@
 | ElevenLabs | Speech-to-text | Call audio | United States (EU with `ELEVENLABS_BASE_URL`, Enterprise) | SCCs, ElevenLabs DPA |
 | Ollama (Ollama Cloud, open model) | Summaries, names, next steps, answers | Transcript text, not logged, retained or trained on | United States; overflow to Europe or Singapore | SCCs, provider terms |
 | Expo | Push notifications | Device push token, notification text with no call content | United States | SCCs, Expo DPA |
+| PostHog | Product analytics | Usage events tied to a random account ID; no call content, names, numbers or emails | EU (Frankfurt, `eu.i.posthog.com`) | Inside the EU |
+| Sentry | Error monitoring | Scrubbed error reports (stack frames, no call content or personal data) | EU (Germany, `ingest.de.sentry.io`) | Inside the EU |
 | Google | Calendar events and Gmail drafts, **only if the user connects them** | Approved event and draft content | Per the user's Google account | The user's own Google terms |
 | Polar | Payments as merchant of record: checkout, VAT and sales tax, receipts, plan management | Your Dimts account ID, name, email, billing address, payment method (cards are handled by Stripe for Polar; Dimts never sees card numbers) | United States | SCCs, Polar DPA |
