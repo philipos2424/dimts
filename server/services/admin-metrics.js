@@ -224,7 +224,7 @@ export async function compliance() {
     checks: [
       check('privacy_overdue', 'Deletion requests from people who were recorded', 'Answered within 30 days',
         'GDPR Art. 12(3), 17 · UK GDPR · CCPA §1798.105 · Privacy policy "Your rights"', overdue, 'fail',
-        'The account owner has not acted. Remind them; if they do not respond, act as processor on their documented instructions or escalate to privacy@dimts.app.'),
+        'The account owner has not acted. Remind them; if they do not respond, act as processor on their documented instructions or escalate to philiposw11@gmail.com.'),
       check('privacy_due_soon', 'Deletion requests due within 7 days', 'Warn before the 30-day deadline',
         'GDPR Art. 12(3)', dueSoon, 'warn', 'Send the owner a reminder (scripts/privacy-requests.js lists them).'),
       check('retention', 'Calls kept past the owner\'s retention period', 'Deleted automatically at the chosen period',

@@ -79,7 +79,7 @@ Activity-log entries are kept for one year and contain no call content.
 - **Erasure:** delete a call, a contact or your account in the app.
 - **People you have called:** they can ask for deletion at
   `dimts.vercel.app/privacy-request`. You are notified and must act within 30 days.
-- **Complaints:** contact `privacy@dimts.app` or your local data protection authority.
+- **Complaints:** contact `philiposw11@gmail.com` or your local data protection authority.
 
 ## Security
 - Encryption in transit (TLS).
@@ -102,4 +102,4 @@ Activity-log entries are kept for one year and contain no call content.
   reason and appears in your activity log.
 
 ## Contact
-`privacy@dimts.app`
+`philiposw11@gmail.com`

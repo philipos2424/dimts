@@ -31,7 +31,7 @@ async function owner(phone, contactPhone) {
   const contact = (await db.query('INSERT INTO contacts(user_id,phone) VALUES($1,$2) RETURNING id', [user.id, contactPhone])).rows[0];
   return { id: user.id, token, contact: contact.id };
 }
-const SENT = 'Your request was sent to the businesses who recorded calls with this number. They must act within 30 days. Contact privacy@dimts.app if they do not.';
+const SENT = 'Your request was sent to the businesses who recorded calls with this number. They must act within 30 days. Contact philiposw11@gmail.com if they do not.';
 
 test('an invalid phone number is refused before any code is sent', async () => {
   const response = await post('/api/privacy-requests/start', { phone: '0911' });
@@ -87,7 +87,7 @@ test('the privacy page never texts countries Dimts does not call, and its code c
   const japan = '+819012345678';
   const refused = await post('/api/privacy-requests/start', { phone: japan });
   assert.equal(refused.status, 403);
-  assert.match((await refused.json()).message, /privacy@dimts\.app/);
+  assert.match((await refused.json()).message, /philiposw11@gmail\.com/);
   assert.deepEqual(codesSent, [], 'no paid code was sent');
   // Even with a valid code from the shared verification service, sign-in refuses the country.
   const login = await post('/api/auth/verify', { phone: japan, code: '123456' });
