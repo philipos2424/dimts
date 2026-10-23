@@ -47,10 +47,16 @@ function countryCode(number, allowed) {
   return allowed.find(code => digits.startsWith(code)) ?? null;
 }
 
+// Calling codes switched off without a deploy, e.g. CLOSED_COUNTRY_CODES=251 to
+// pause Ethiopia while counsel reviews it. Read per call so an env change in
+// Vercel takes effect on the next request. Empty means nothing is closed.
+const closedCodes = () => (process.env.CLOSED_COUNTRY_CODES ?? '').split(',').map(c => c.trim().replace(/^\+/, '')).filter(Boolean);
+
 function permitted(number, allowed) {
   if (!isE164(number)) return false;
   const code = countryCode(number, allowed);
   if (!code) return false;
+  if (closedCodes().includes(code)) return false;
   if (code === '1' && (number.length !== 12 || NANP_FOREIGN.has(number.slice(2, 5)))) return false;
   return !PREMIUM.some(prefix => number.slice(1).startsWith(prefix));
 }
