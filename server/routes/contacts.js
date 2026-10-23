@@ -16,7 +16,7 @@ export function contactVCard(contact) {
 }
 contactsRouter.get('/', async (req, res) => {
   const user = await resolveUser(req);
-  const { rows } = await query(`SELECT id, phone, display_name, company, notes, name_source, last_call_at
+  const { rows } = await query(`SELECT id, phone, display_name, company, notes, name_source, last_call_at, recording_pref
     FROM contacts WHERE user_id = $1 ORDER BY last_call_at DESC NULLS LAST, first_seen_at DESC LIMIT 250`, [user.id]);
   res.json({ contacts: rows });
 });
@@ -30,10 +30,20 @@ contactsRouter.patch('/:id', async (req, res) => {
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.params.id)) throw new HttpError(404, 'contact_not_found');
   const row = await queryOne(`UPDATE contacts SET display_name = $3, company = $4,
     notes = $5, name_source = 'user' WHERE id = $1 AND user_id = $2
-    RETURNING id, phone, display_name, company, notes, name_source, last_call_at`,
+    RETURNING id, phone, display_name, company, notes, name_source, last_call_at, recording_pref`,
   [req.params.id, user.id, display_name.trim(), company.trim(),
     notes.trim() ? sealText(notes.trim(), { userId: user.id, rowId: req.params.id, field: 'contacts:notes' }) : '']);
   if (!row) throw new HttpError(404, 'contact_not_found');
+  res.json(row);
+});
+contactsRouter.patch('/:id/recording', async (req, res) => {
+  const user = await resolveUser(req);
+  const pref = req.body?.recording_pref;
+  if (!['default', 'record', 'skip'].includes(pref)) throw new HttpError(400, 'invalid_recording_pref');
+  const row = await queryOne('UPDATE contacts SET recording_pref=$3 WHERE id=$1 AND user_id=$2 RETURNING id, recording_pref',
+    [req.params.id, user.id, pref]);
+  if (!row) throw new HttpError(404, 'contact_not_found');
+  await audit({ userId: user.id, action: 'contact_recording_changed', targetType: 'contact', targetId: row.id, req });
   res.json(row);
 });
 contactsRouter.get('/:id/vcard', async (req, res) => {
@@ -56,7 +66,7 @@ contactsRouter.delete('/:id', async (req, res) => {
 contactsRouter.get('/:id', async (req, res, next) => {
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.params.id)) return next();
   const user = await resolveUser(req);
-  const contact = await queryOne(`SELECT id, phone, display_name, company, notes, name_source, last_call_at
+  const contact = await queryOne(`SELECT id, phone, display_name, company, notes, name_source, last_call_at, recording_pref
     FROM contacts WHERE id=$1 AND user_id=$2`, [req.params.id, user.id]);
   if (!contact) throw new HttpError(404, 'contact_not_found');
   const { rows: calls } = await query(`SELECT id, created_at, direction, status, duration_sec, summary, agreements

@@ -83,6 +83,7 @@ meRouter.get('/', async (req, res, next) => {
       retention_months: user.retention_months ?? null,
       timezone: user.timezone ?? null,
       caller_id: !!user.caller_id_verified_at,
+      incoming_recording: user.incoming_recording ?? 'all',
     });
   } catch (err) { next(err); }
 });
@@ -140,16 +141,19 @@ meRouter.patch('/', async (req, res, next) => {
   try {
     const user = await resolveUser(req);
     const body = req.body ?? {};
-    const setLanguage = 'language' in body, setRetention = 'retention_months' in body, setTimezone = 'timezone' in body;
+    const setLanguage = 'language' in body, setRetention = 'retention_months' in body, setTimezone = 'timezone' in body, setIncoming = 'incoming_recording' in body;
     if (setLanguage && !['en', 'am'].includes(body.language)) throw new HttpError(400, 'invalid_language');
     if (setRetention && body.retention_months !== null && !RETENTION_MONTHS.includes(body.retention_months)) throw new HttpError(400, 'invalid_retention');
     if (setTimezone && !validTimezone(body.timezone)) throw new HttpError(400, 'invalid_timezone');
-    if (!setLanguage && !setRetention && !setTimezone) throw new HttpError(400, 'nothing_to_change');
+    if (setIncoming && !['all', 'chosen'].includes(body.incoming_recording)) throw new HttpError(400, 'invalid_incoming_recording');
+    if (!setLanguage && !setRetention && !setTimezone && !setIncoming) throw new HttpError(400, 'nothing_to_change');
     const row = await queryOne(`UPDATE users SET language=CASE WHEN $2 THEN $3 ELSE language END,
       retention_months=CASE WHEN $4 THEN $5::int ELSE retention_months END,
-      timezone=CASE WHEN $6 THEN $7 ELSE timezone END WHERE id=$1 RETURNING language,retention_months,timezone`,
+      timezone=CASE WHEN $6 THEN $7 ELSE timezone END,
+      incoming_recording=CASE WHEN $8 THEN $9 ELSE incoming_recording END WHERE id=$1 RETURNING language,retention_months,timezone,incoming_recording`,
     [user.id, setLanguage, setLanguage ? body.language : null, setRetention, setRetention ? body.retention_months : null,
-      setTimezone, setTimezone ? body.timezone : null]);
+      setTimezone, setTimezone ? body.timezone : null, setIncoming, setIncoming ? body.incoming_recording : null]);
+    if (setIncoming) await audit({ userId: user.id, action: 'incoming_recording_changed', targetType: 'incoming_recording', targetId: body.incoming_recording, req });
     if (setRetention) await audit({ userId: user.id, action: 'retention_changed', targetType: 'retention', targetId: body.retention_months ?? 'off', req });
     res.json(row);
   } catch (err) { next(err); }
