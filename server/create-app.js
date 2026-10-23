@@ -88,7 +88,7 @@ export function createApp({ webRoot = fileURLToPath(new URL('../dist/', import.m
       setHeaders: (res, file) => { if (file.endsWith('.html')) res.set('Content-Security-Policy', WEB_SHELL_CSP); } }));
     // Expo's single-page export needs the app shell on browser refresh/deep
     // links. Whitelist app routes so missing APIs/webhooks/assets stay errors.
-    app.get(['/', '/onboarding', '/settings', '/first-call', '/dialer', '/ask', '/calls', '/in-call', '/call/:id', '/person/:id',
+    app.get(['/', '/onboarding', '/settings', '/first-call', '/demo-call', '/dialer', '/ask', '/calls', '/in-call', '/call/:id', '/person/:id',
       '/privacy', '/terms', '/privacy-request', '/subprocessors', '/terms-accept', '/plans'],
       (req,res,next) => {
         if (!req.accepts('html') || (req.params.id && !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(req.params.id))) return next();

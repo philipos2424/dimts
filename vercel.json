@@ -38,7 +38,7 @@
       "handle": "filesystem"
     },
     {
-      "src": "/(?:onboarding|first-call|settings|dialer|ask|calls|in-call|privacy|terms|privacy-request|subprocessors|terms-accept|plans)",
+      "src": "/(?:onboarding|first-call|demo-call|settings|dialer|ask|calls|in-call|privacy|terms|privacy-request|subprocessors|terms-accept|plans)",
       "dest": "/index.html"
     },
     {

@@ -6,7 +6,8 @@ import { query, queryOne } from '../db/pool.js';
 import { defer } from '../lib/defer.js';
 import { verifyTwilioSignature } from '../lib/twilio-signature.js';
 import { currentMonth } from '../lib/users.js';
-import { finishCall } from '../db/finish-call.js';
+import { finishCall, finishDemoCall } from '../db/finish-call.js';
+import { demoGreeting, demoScript, startDemoRecording } from '../services/demo-call.js';
 import { processRecording } from '../services/process-recording.js';
 import { askRecordingConsent, dialCall, issueRecordingNotice, offerVoicemail, recordsThroughDial, RECORDING_NOTICE } from '../lib/recording-consent.js';
 import { hasRecordingAuthorization, recordingAuthorizationSql } from '../lib/recording-policy.js';
@@ -78,6 +79,29 @@ twimlRouter.post('/bridge', async (req, res) => {
   if (call.record_enabled !== false && call.consent_mode !== 'notice') askRecordingConsent(twiml, `${base}/twiml/accept?callId=${call.id}`, call.consent_mode === 'owner_only');
   else dialCall(twiml, call);
 
+  res.type('text/xml').send(twiml.toString());
+});
+
+/** Fetched when the owner answers a demo call: greeting and notice, before any recording. */
+twimlRouter.post('/demo', async (req, res) => {
+  const callId = req.query.callId;
+  await adoptCallSid(callId, req.body?.CallSid);
+  const call = await resolveCall({ callId, callSid: req.body?.CallSid });
+  const twiml = new VoiceResponse();
+  if (!call?.demo || call.duration_sec != null || call.deleted_at) twiml.hangup();
+  else demoGreeting(twiml, call);
+  res.type('text/xml').send(twiml.toString());
+});
+
+/** The notice has played: start the recorder, then the pretend client speaks. */
+twimlRouter.post('/demo-script', async (req, res) => {
+  const twiml = new VoiceResponse();
+  const call = req.body?.CallSid && await resolveCall({ callId: req.query.callId, callSid: req.body.CallSid });
+  const recording = call?.demo && await startDemoRecording(call.id, req.body.CallSid);
+  if (!recording) {
+    twiml.say('Sorry, the demo could not start. Please try again later. Goodbye.');
+    twiml.hangup();
+  } else demoScript(twiml);
   res.type('text/xml').send(twiml.toString());
 });
 
@@ -282,7 +306,8 @@ webhooksRouter.post('/recording-ready', async (req, res) => {
     // conversation; use its length so minutes and history stay right.
     const recorded = /^\d{1,5}$/.test(req.body.RecordingDuration ?? '') ? Number(req.body.RecordingDuration) : null;
     if (call.duration_sec == null && !call.voicemail && recorded != null) {
-      await finishCall(call, recorded, 'completed', currentMonth());
+      if (call.demo) await finishDemoCall(call, recorded, 'completed');
+      else await finishCall(call, recorded, 'completed', currentMonth());
     }
     const accepted = await queryOne(
       `UPDATE calls SET recording_url = $2, status = 'processing', error=NULL,processing_requested_at=now(),

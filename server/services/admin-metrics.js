@@ -23,7 +23,8 @@ export const excludedPhones = () => [reviewDemoPhone(), ...adminPhones()].filter
 const demo = excludedPhones;
 const num = value => Number(value ?? 0);
 // A call counts as "used" once someone spoke: it connected, or a caller left a voicemail.
-export const CONNECTED = '(c.duration_sec > 0 OR c.voicemail)';
+// Demo calls are onboarding, not use: they never count as a real call.
+export const CONNECTED = '(NOT c.demo AND (c.duration_sec > 0 OR c.voicemail))';
 export const PAYING = "('active','trialing','past_due')";
 const CHURNED = "('canceled','unpaid','revoked','incomplete_expired')";
 

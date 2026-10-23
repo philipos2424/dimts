@@ -401,3 +401,8 @@ CREATE TABLE IF NOT EXISTS waitlist (
   source TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Onboarding demo calls, 19 October 2026: Dimts rings the owner and a recorded
+-- pretend client talks to them. Never billed and never part of the budget.
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS demo BOOLEAN NOT NULL DEFAULT false;
+CREATE INDEX IF NOT EXISTS calls_demo_idx ON calls(user_id) WHERE demo;

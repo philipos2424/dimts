@@ -9,7 +9,10 @@ const calls = id => ({ fetch: async () => ({ ...parent }), update: async options
 } });
 calls.list = async () => children;
 mock.module('twilio', { defaultExport: () => ({ calls }) });
-mock.module('../db/finish-call.js', { namedExports: { finishCall: async (_call, duration, status) => receipts.push({ duration, status }) } });
+mock.module('../db/finish-call.js', { namedExports: {
+  finishCall: async (_call, duration, status) => receipts.push({ duration, status }),
+  finishDemoCall: async (_call, duration, status) => receipts.push({ demo: true, duration, status }),
+} });
 const { reconcileCall } = await import('./end-call.js');
 const call = { id: 'owned-call', twilio_call_sid: sid, twilio_account_sid: process.env.TWILIO_ACCOUNT_SID };
 test.beforeEach(() => { parent = { status: 'completed', duration: '500' }; children = []; receipts = []; updates = []; });
@@ -38,4 +41,11 @@ test('rejects cross-account calls and ambiguous children without local finalizat
   children = [{ parentCallSid: sid }, { parentCallSid: sid }];
   await assert.rejects(reconcileCall(call));
   assert.equal(receipts.length, 0);
+});
+
+test('a demo is one leg: it ends on the parent alone, never through the billed finish', async () => {
+  children = [{ sid: 'CA' + 'c'.repeat(32), parentCallSid: sid, status: 'in-progress', duration: '0' }];
+  parent.duration = '61';
+  assert.deepEqual(await reconcileCall({ ...call, demo: true }), { ended: true });
+  assert.deepEqual(receipts, [{ demo: true, duration: 61, status: 'completed' }]);
 });

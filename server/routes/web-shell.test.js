@@ -15,7 +15,7 @@ test.after(async()=>{
   await rm(root,{recursive:true,force:true});
 });
 test('known browser routes and UUID call deep links serve the app shell on refresh',async()=>{
-  for(const route of ['/onboarding','/settings','/first-call','/dialer','/ask','/in-call','/person/01234567-89ab-cdef-0123-456789abcdef',
+  for(const route of ['/onboarding','/settings','/first-call','/demo-call','/dialer','/ask','/in-call','/person/01234567-89ab-cdef-0123-456789abcdef',
     '/call/01234567-89ab-cdef-0123-456789abcdef']) {
     const response=await fetch(base+route,{headers:{Accept:'text/html'}});
     assert.equal(response.status,200,route);assert.match(await response.text(),/Dimts app shell/);

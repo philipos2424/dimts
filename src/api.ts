@@ -21,6 +21,7 @@ export type CallSummary = {
   agreements?: Agreement[];
   conflict_count?: number;
   next_step?: { kind: 'meeting' | 'email' | 'move'; text: string } | null;
+  demo?: boolean;
 };
 
 export type Capture = 'both' | 'voicemail' | 'one_voice' | 'no_audio' | 'pending' | 'none' | 'unknown';
@@ -367,6 +368,9 @@ function publicErrorMessage(status: number, body: string): string {
     invalid_question: 'Ask a question between 3 and 500 characters.',
     ai_unavailable: 'Dimts AI is not answering right now. Try again in a minute.',
     promise_not_found: 'This promise is no longer available. Refresh and try again.',
+    demo_limit: 'You have used your demo calls. Make a real call to see notes from your own conversation.',
+    demo_busy: 'Demo calls are busy today. Try again tomorrow, or make a real call.',
+    review_demo: 'This sample account cannot use real phone lines.',
   };
   if (typeof code === 'string' && Object.prototype.hasOwnProperty.call(messages, code)) return messages[code];
   if (status === 401) return 'Please sign in again to continue.';
@@ -452,6 +456,11 @@ export function getNotificationStatus() {
 
 export function newCallRequestKey() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+}
+export type DemoLine = { client: string; reply: string | null };
+/** Onboarding: Dimts rings your phone and a pretend client talks to you. */
+export function startDemoCall() {
+  return request<{ callId: string; status: string; script: DemoLine[] }>('/api/calls/demo', '', { method: 'POST' });
 }
 export async function startCall(destination: string, userPhone: string, record = true, requestKey = newCallRequestKey()) {
   try {
