@@ -78,7 +78,7 @@ Activity-log entries are kept for one year and contain no call content.
 - **Correction:** edit contact names and notes in the app.
 - **Erasure:** delete a call, a contact or your account in the app.
 - **People you have called:** they can ask for deletion at
-  `dimts.app/privacy-request`. You are notified and must act within 30 days.
+  `dimts.vercel.app/privacy-request`. You are notified and must act within 30 days.
 - **Complaints:** contact `privacy@dimts.app` or your local data protection authority.
 
 ## Security
