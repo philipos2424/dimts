@@ -13,6 +13,23 @@ test('Ethiopia can sign up and be called', () => {
   assert.equal(canCall('+251911234567'), true);
 });
 
+test('CLOSED_COUNTRY_CODES switches a country off for signup and calls', () => {
+  const saved = process.env.CLOSED_COUNTRY_CODES;
+  try {
+    process.env.CLOSED_COUNTRY_CODES = ' +251 , 971';
+    for (const number of ['+251911234567', '+971501234567']) {
+      assert.equal(canSignUp(number), false, number);
+      assert.equal(canCall(number), false, number);
+      assert.equal(signupCountryCode(number), null, number);
+    }
+    assert.equal(canCall('+14155552671'), true); // other countries unaffected
+    process.env.CLOSED_COUNTRY_CODES = '';
+    assert.equal(canCall('+251911234567'), true); // empty closes nothing
+  } finally {
+    if (saved === undefined) delete process.env.CLOSED_COUNTRY_CODES; else process.env.CLOSED_COUNTRY_CODES = saved;
+  }
+});
+
 test('countries outside the launch list are refused', () => {
   for (const number of ['+2348012345678', '+79161234567', '+8613812345678', '+5491123456789', '+88216123456']) {
     assert.equal(canSignUp(number), false, number);
