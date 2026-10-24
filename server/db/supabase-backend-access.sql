@@ -7,7 +7,7 @@ GRANT CONNECT ON DATABASE postgres TO dimts_caller_backend;
 GRANT USAGE ON SCHEMA public TO dimts_caller_backend;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
   users, calls, usage_minutes, contacts, followup_events, call_budget_lock,
-  sessions, agent_number_pool, auth_rate_limits, google_oauth_requests,
+  sessions, agent_number_pool, trial_tombstones, auth_rate_limits, google_oauth_requests,
   google_connections, calendar_actions, email_actions, notification_devices,
   call_notifications, audit_events, rate_limits, privacy_requests, privacy_request_targets, promise_states,
   credit_ledger, subscriptions, billing_events, billing_alerts, payments, provider_costs,
@@ -21,7 +21,7 @@ DECLARE app_table TEXT;
 BEGIN
   FOREACH app_table IN ARRAY ARRAY[
     'users', 'calls', 'usage_minutes', 'contacts', 'followup_events',
-    'call_budget_lock', 'sessions', 'agent_number_pool', 'auth_rate_limits',
+    'call_budget_lock', 'sessions', 'agent_number_pool', 'trial_tombstones', 'auth_rate_limits',
     'google_oauth_requests', 'google_connections', 'calendar_actions',
     'email_actions', 'notification_devices', 'call_notifications', 'audit_events', 'rate_limits',
     'privacy_requests', 'privacy_request_targets', 'promise_states',

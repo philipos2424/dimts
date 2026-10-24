@@ -1,3 +1,4 @@
+process.env.AUDIT_SALT = 'test-trial-secret-at-least-32-characters';
 import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { PGlite } from '@electric-sql/pglite';

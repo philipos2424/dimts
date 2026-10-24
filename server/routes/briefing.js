@@ -6,6 +6,7 @@ import { weeklyBriefing, briefingIsEmpty } from '../services/briefing.js';
 import { sendBriefingNotification } from '../services/briefing-push.js';
 import { expireOldCalls } from '../services/retention.js';
 import { releaseExpiredNumbers } from '../services/release-numbers.js';
+import { retryPendingDeletions } from '../services/retry-deletions.js';
 import { syncProviderCosts } from '../services/provider-costs.js';
 import { encryptExisting } from '../services/encrypt-existing.js';
 import { encryptionEnabled } from '../lib/field-crypto.js';
@@ -46,18 +47,21 @@ cronRouter.get('/weekly-briefing', async (req, res) => {
 });
 
 // Daily housekeeping: delete calls past each owner's retention period,
-// release business numbers whose grace has ended, copy carrier costs, and
+// finish audio erasures that did not complete, release business numbers whose
+// grace has ended, copy carrier costs, and
 // encrypt a batch of anything stored before encryption at rest (or under an
 // old key) until nothing is left.
 // One cron path, because plans with few cron slots must still run all three.
 cronRouter.get('/retention', async (req, res) => {
   if (!authorizedCron(req)) return res.status(401).json({ error: 'unauthorized' });
   const result = await expireOldCalls();
+  // Audio erasures that did not finish when a call or account was deleted, whoever owned them.
+  const deletions = await retryPendingDeletions().catch(err => ({ error: err?.message }));
   const numbers = await releaseExpiredNumbers().catch(err => ({ error: err?.message }));
   const costs = await syncProviderCosts().catch(err => ({ error: err?.message }));
   // Recordings are copied one by one, so keep that batch small enough for one run.
   const encryption = encryptionEnabled()
     ? await encryptExisting({ limit: 200, audioLimit: 20 }).catch(err => ({ error: err?.message }))
     : { skipped: 'encryption_off' };
-  res.json({ ...result, numbers, costs, encryption });
+  res.json({ ...result, numbers, costs, encryption, deletions });
 });

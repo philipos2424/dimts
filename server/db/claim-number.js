@@ -43,6 +43,7 @@ export async function claimNumberInTransaction(db, userId, voiceUrl) {
   if (!countryFor(owner.phone)) throw numberCountryUnavailable();
   const available = (await db.query(`SELECT p.phone FROM agent_number_pool p
     WHERE p.enabled AND p.voice_url=$1 AND p.phone<>$2
+      AND (p.available_after IS NULL OR p.available_after <= now())
       AND NOT EXISTS(SELECT 1 FROM users u WHERE u.agent_number=p.phone OR u.phone=p.phone)
     ORDER BY p.checked_at, p.phone LIMIT 1 FOR UPDATE OF p SKIP LOCKED`, [voiceUrl, owner.phone])).rows[0];
   if (!available) throw new HttpError(409, 'number_pool_empty', 'No business number is available yet. Your account is saved; try again after a number is added.');

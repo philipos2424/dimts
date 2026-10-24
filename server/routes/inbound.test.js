@@ -19,6 +19,7 @@ mock.module('../services/notifications.js', { namedExports: {
 } });
 mock.module('../db/reserve-call.js', { namedExports: {
   reserveCall: async (owner, caller, record, key, options) => {
+    if (failReservation === 'released') throw Object.assign(new Error('released'), { code: 'number_not_in_service' });
     if (failReservation === 'out_of_credit' && !options.voicemailOnly) throw Object.assign(new Error('no credit'), { code: 'credits_required' });
     if (failReservation === true) throw new Error('budget exceeded');
     if (options.voicemailOnly) return { call: { ...reserved, status: 'missed', voicemail: true }, created: true };
@@ -152,6 +153,14 @@ test('rejects a call to a number nobody has claimed', async () => {
 
   assert.doesNotMatch(xml, /<Dial/);
   assert.match(xml, /<Hangup\/>/);
+});
+
+test('a release between lookup and reservation returns the neutral disconnected message', async () => {
+  failReservation = 'released';
+  const { xml } = await incoming(CALL);
+  assert.match(xml, /This number is not in service\./);
+  assert.match(xml, /<Hangup\/>/);
+  assert.doesNotMatch(xml, /<Dial|<Record|<Gather/);
 });
 
 test('still offers connection when the contact lookup fails', async () => {

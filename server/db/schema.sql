@@ -134,6 +134,14 @@ CREATE TABLE IF NOT EXISTS agent_number_pool (
   enabled BOOLEAN NOT NULL DEFAULT true,
   checked_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- NULL means never released; released numbers cannot be routed or claimed yet.
+ALTER TABLE agent_number_pool ADD COLUMN IF NOT EXISTS available_after TIMESTAMPTZ;
+-- Prior trial use recorded at deletion; no identifying data or account link.
+CREATE TABLE IF NOT EXISTS trial_tombstones (
+  phone_hash TEXT PRIMARY KEY CHECK (phone_hash ~ '^[0-9a-f]{64}$'),
+  trial_used_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS trial_tombstones_expiry_idx ON trial_tombstones(trial_used_at);
 CREATE TABLE IF NOT EXISTS auth_rate_limits (
   key TEXT NOT NULL,
   window_start TIMESTAMPTZ NOT NULL,

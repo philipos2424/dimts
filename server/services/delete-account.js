@@ -3,6 +3,8 @@ import { HttpError } from '../lib/users.js';
 import { defer } from '../lib/defer.js';
 import { assertDeletable, needsDeletionWork, scrubCall } from './scrub-call.js';
 import { processDeletion } from './process-deletion.js';
+import { numberQuarantineDays } from '../lib/number-quarantine.js';
+import { trialPhoneHash } from '../lib/trial-tombstone.js';
 
 async function scrubCalls(tx, rows) {
   // Only live work blocks erasure: an active lease, or a job queued in the
@@ -31,17 +33,24 @@ function queueRemoval(ids) {
  */
 export async function deleteAccount(userId) {
   const queued = await database.withTransaction(async tx => {
-    await tx.query('SELECT id FROM users WHERE id=$1 FOR UPDATE', [userId]);
+    // Same lock order as reservation: deletion cannot race a first trial call.
+    await tx.query('SELECT id FROM call_budget_lock WHERE id=1 FOR UPDATE');
+    const user = (await tx.query('SELECT phone, trial_ends_at, deleted_at FROM users WHERE id=$1 FOR UPDATE', [userId])).rows[0];
+    if (!user || user.deleted_at) return [];
     const { rows } = await tx.query('SELECT * FROM calls WHERE user_id=$1 AND deleted_at IS NULL FOR UPDATE', [userId]);
     const ids = await scrubCalls(tx, rows);
     await tx.query('UPDATE privacy_request_targets SET resolved_at=COALESCE(resolved_at,now()) WHERE user_id=$1', [userId]);
     for (const table of ['contacts', 'google_oauth_requests', 'google_connections', 'notification_devices', 'sessions', 'admin_passkeys', 'admin_challenges']) {
       await tx.query(`DELETE FROM ${table} WHERE user_id=$1`, [userId]);
     }
-    // Move the released number to the back of the queue so it is not
-    // immediately reissued to someone else while old contacts still dial it.
-    await tx.query(`UPDATE agent_number_pool SET checked_at=now()
-      WHERE phone=(SELECT agent_number FROM users WHERE id=$1)`, [userId]);
+    // The timestamp marks prior trial use at deletion, starting 12-month retention.
+    // Accounts that never used a trial leave no fingerprint.
+    if (user.trial_ends_at) {
+      await tx.query(`INSERT INTO trial_tombstones(phone_hash,trial_used_at) VALUES($1,now())
+        ON CONFLICT(phone_hash) DO UPDATE SET trial_used_at=EXCLUDED.trial_used_at`, [trialPhoneHash(user.phone)]);
+    }
+    await tx.query(`UPDATE agent_number_pool SET checked_at=now(), available_after=now() + make_interval(days => $2)
+      WHERE phone=(SELECT agent_number FROM users WHERE id=$1)`, [userId, numberQuarantineDays()]);
     await tx.query(`UPDATE users SET phone='deleted:'||id, agent_number=NULL, deleted_at=now(),
       terms_version=NULL, terms_accepted_at=NULL WHERE id=$1`, [userId]);
     return ids;
