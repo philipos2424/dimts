@@ -116,6 +116,13 @@ test('the app-review demo account stores its sample calls sealed, so the admin c
   }
   const { body } = await api(`/api/calls/${raw[0].id}`, o.token);
   assert.match(body.transcript, /^User: /);
+  // The structured facts (promises, agreed prices with quotes, next steps) are sealed too.
+  const unsealed = (await db.query(`SELECT count(*)::int AS n FROM calls WHERE user_id=$1 AND (
+    (next_moves IS NOT NULL AND jsonb_typeof(next_moves) <> 'string') OR (action_items IS NOT NULL AND jsonb_typeof(action_items) <> 'string')
+    OR (key_points IS NOT NULL AND jsonb_typeof(key_points) <> 'string') OR (agreements IS NOT NULL AND jsonb_typeof(agreements) <> 'string')
+    OR (conflicts IS NOT NULL AND jsonb_typeof(conflicts) <> 'string'))`, [o.id])).rows[0].n;
+  assert.equal(unsealed, 0, 'no demo call keeps readable facts');
+  assert.ok(Array.isArray(body.next_moves) && body.next_moves.length, 'the owner still reads them');
 });
 
 test('pasting another user\'s ciphertext into your own contact returns it as text, never decrypted', async () => {

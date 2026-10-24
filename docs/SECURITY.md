@@ -18,13 +18,20 @@ Written for the Dimts operator and anyone reviewing the system. Last updated
 ## Encryption at rest
 
 - **Sealed columns:** `calls.transcript`, `calls.transcript_data`,
-  `calls.summary`, `calls.recap`, `calls.followups`, `contacts.notes`, and
-  the Gmail/Calendar draft snapshots `email_actions.email` and
-  `calendar_actions.meeting`.
-- **Not sealed (yet):** the short structured notes `agreements`,
-  `action_items`, `next_moves` and `key_points`. Today, briefing and promise
-  queries read them inside SQL. Contact names and phone numbers are also
-  unsealed, because calls are routed by them.
+  `calls.summary`, `calls.recap`, `calls.followups`, the structured facts
+  `calls.agreements` (with their verbatim quotes), `calls.action_items`,
+  `calls.next_moves`, `calls.key_points` and `calls.conflicts`,
+  `contacts.notes`, and the Gmail/Calendar draft snapshots
+  `email_actions.email` and `calendar_actions.meeting`.
+- **Facts are not queryable in SQL.** A sealed JSON column holds one JSON
+  string, so SQL cannot unpack it (`jsonb_array_elements` and friends fail or
+  find nothing). Briefing, promises and the memory check select the calls and
+  read the facts in JavaScript. New code must do the same.
+- **Not sealed:** contact names and phone numbers, because calls are routed by
+  them, plus timestamps, call routing metadata and billing data.
+- **Rollback caveat:** once any call has been processed with this code, an
+  older release cannot read its facts (it does not know these columns are
+  JSON) and its briefing query errors on them. Roll forward, not back.
 - **Format:** `dmt1.<key id>.<table:column>.<user id>.<row id>.<payload>`,
   AES-256-GCM. Everything before the payload is the AAD.
 - **Per-user key:** `HKDF-SHA256(master, "dimts-user-data-v1", user id)`.

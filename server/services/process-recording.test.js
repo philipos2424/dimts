@@ -10,6 +10,7 @@ const transcriptions = [];
 const updates = [];
 let claimed = false;
 let errorAt;
+let summaryExtra;
 const failures = [];
 mock.module('../lib/sentry.js', { namedExports: {
   captureCallFailure: (error, metadata) => failures.push({ error, metadata }),
@@ -53,6 +54,7 @@ mock.module('./summarize.js', {
       next_moves: ['Send pricing'],
       action_items: [],
       key_points: [],
+      ...summaryExtra,
     }); },
   },
 });
@@ -203,6 +205,34 @@ test('with encryption keys set, the transcript, raw response and summary are sto
     assert.equal(openValue(summary), 'Pricing discussion.');
     assert.ok(transcript.includes(call.user_id) && transcript.includes(call.id), 'bound to this owner and call');
   } finally { delete process.env.DATA_ENCRYPTION_KEYS; }
+});
+
+test('with encryption keys set, next steps, action items, key points and agreements are stored sealed too', async () => {
+  const { randomBytes } = await import('node:crypto');
+  const { openValue } = await import('../lib/field-crypto.js');
+  process.env.DATA_ENCRYPTION_KEYS = `t1:${randomBytes(32).toString('base64')}`;
+  summaryExtra = {
+    next_moves: ['Send pricing'], key_points: ['Pricing was discussed'],
+    action_items: [{ task: 'Email the quote', owner: 'User', due: null }],
+    agreements: [{ kind: 'price', subject: 'Cement', value: '40,000 birr', said_by: 'User', source_lines: [2] }],
+  };
+  try {
+    call = { ...call, id: '0b3f2b6e-1111-4111-8111-111111111111', user_id: '0b3f2b6e-2222-4222-8222-222222222222' };
+    await processRecording(call.id);
+    const { params } = updates.find(u => /status = 'ready'/.test(u.sql));
+    const [nextMoves, actionItems, keyPoints] = [params[4], params[5], params[6]].map(p => JSON.parse(p));
+    const agreements = JSON.parse(params[10]);
+    for (const sealed of [nextMoves, actionItems, keyPoints, agreements]) {
+      assert.ok(typeof sealed === 'string' && sealed.startsWith('dmt1.'), 'stored as a sealed string');
+      assert.ok(!/Send pricing|Email the quote|Pricing was|Cement|hello/.test(sealed));
+      assert.ok(sealed.includes(call.user_id) && sealed.includes(call.id), 'bound to this owner and call');
+    }
+    assert.deepEqual(openValue(nextMoves), ['Send pricing']);
+    assert.deepEqual(openValue(actionItems), [{ task: 'Email the quote', owner: 'User', due: null }]);
+    assert.deepEqual(openValue(keyPoints), ['Pricing was discussed']);
+    const [agreement] = openValue(agreements);
+    assert.deepEqual([agreement.subject, agreement.quote], ['Cement', 'User: hello']);
+  } finally { delete process.env.DATA_ENCRYPTION_KEYS; summaryExtra = undefined; }
 });
 
 for (const stage of ['recording_fetch', 'transcription', 'summary']) {
