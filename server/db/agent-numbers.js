@@ -11,7 +11,8 @@ export async function findUserByAgentNumber(agentNumber) {
   if (!normalized) return undefined;
 
   return queryOne(
-    'SELECT id, phone, agent_number, terms_version, incoming_recording FROM users WHERE agent_number = $1 AND deleted_at IS NULL',
+    `SELECT id, phone, agent_number, terms_version, incoming_recording FROM users WHERE agent_number = $1 AND deleted_at IS NULL
+      AND NOT EXISTS (SELECT 1 FROM agent_number_pool p WHERE p.phone=$1 AND p.available_after > now())`,
     [normalized]
   );
 }
@@ -29,7 +30,9 @@ export async function assignAgentNumber(userPhone, agentNumber) {
   if (!agent) throw new Error(`Agent number must be E.164, got "${agentNumber}"`);
 
   return queryOne(
-    `INSERT INTO users (phone, agent_number) VALUES ($1, $2)
+    `WITH pooled AS (SELECT available_after FROM agent_number_pool WHERE phone=$2 FOR UPDATE)
+     INSERT INTO users (phone, agent_number) SELECT $1, $2
+       WHERE NOT EXISTS (SELECT 1 FROM pooled WHERE available_after > now())
        ON CONFLICT (phone) DO UPDATE SET agent_number = EXCLUDED.agent_number
      RETURNING id, phone, agent_number`,
     [user, agent]
