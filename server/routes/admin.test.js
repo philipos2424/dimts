@@ -70,13 +70,13 @@ test('the console is invisible to everyone but allowlisted staff with a recent s
 
 test('measurements never carry call content or full phone numbers, and every view is audited', async () => {
   const staff = await signedIn('+15555550100');
-  const a = await customerWithCall('+447700900123', { transcript: SECRET_WORDS });
+  const a = await customerWithCall('+447400900123', { transcript: SECRET_WORDS });
   await db.query(`INSERT INTO subscriptions(id,user_id,product_key,plan,billing_interval,status) VALUES
     ('sub_a',$1,'pro_month','pro','month','active')`, [a.id]);
   await db.query(`INSERT INTO payments(order_id,user_id,product_key,currency,total_amount,tax_amount) VALUES ('ord_1',$1,'pro_month','usd',2000,0)`, [a.id]);
   const { status, body, text } = await api('/api/admin/overview', staff.token);
   assert.equal(status, 200);
-  assert.ok(!text.includes('confidential') && !text.includes('+447700900123') && !text.includes('+15555559999'));
+  assert.ok(!text.includes('confidential') && !text.includes('+447400900123') && !text.includes('+15555559999'));
   assert.ok(body.accounts.total >= 1); assert.ok(body.accounts.by_region.UK >= 1);
   assert.equal(body.revenue.mrr_usd_cents, 2000); assert.equal(body.revenue.paying_users, 1);
   assert.ok(body.calls_30d.connected >= 1); assert.equal(body.signups_daily.length, 90); assert.equal(body.calls_daily.length, 30);
@@ -256,11 +256,11 @@ test('Operations reports failure categories and countries, never error text or d
   const staff = await signedIn('+15555550100');
   const owner = (await db.query("INSERT INTO users(phone) VALUES('+15555551401') RETURNING id")).rows[0];
   await db.query(`INSERT INTO calls(user_id,user_phone,destination,status,error,direction) VALUES
-    ($1,'+15555551401','+447700900555','failed','ElevenLabs transcription failed: speaker said the secret price',  'outbound'),
-    ($1,'+15555551401','+447700900556','failed','Call no-answer','outbound')`, [owner.id]);
+    ($1,'+15555551401','+447400900555','failed','ElevenLabs transcription failed: speaker said the secret price',  'outbound'),
+    ($1,'+15555551401','+447400900556','failed','Call no-answer','outbound')`, [owner.id]);
   const { status, body, text } = await api('/api/admin/operations?days=30', staff.token);
   assert.equal(status, 200);
-  assert.ok(!text.includes('secret price') && !text.includes('+447700900555') && !text.includes('ElevenLabs transcription failed'));
+  assert.ok(!text.includes('secret price') && !text.includes('+447400900555') && !text.includes('ElevenLabs transcription failed'));
   assert.ok(body.failure_reasons.some(r => r.reason === 'Transcription'));
   assert.ok(body.failure_reasons.some(r => r.reason === 'No answer'));
   const uk = body.by_destination.find(r => r.country_code === '44');
