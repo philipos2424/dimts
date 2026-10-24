@@ -5,7 +5,7 @@ import { audit } from '../lib/audit.js';
 import { hit } from '../lib/rate-limit.js';
 import { HttpError } from '../lib/users.js';
 import {
-  accessLog, cohorts, compliance, customerDetail, customerPhone, customers, grantCredits, overview,
+  accessLog, cohorts, compliance, customerDetail, customerPhone, customers, grantCredits, overview, waitlist,
 } from '../services/admin-metrics.js';
 import { funnel, operations, rangeOf, today } from '../services/admin-ops.js';
 import {
@@ -43,6 +43,7 @@ adminApiRouter.get('/customers', handler('searched_customers', req => customers(
   q: String(req.query.q ?? '').slice(0, 64), plan: String(req.query.plan ?? ''), page: req.query.page,
 })));
 adminApiRouter.get('/access-log', handler('viewed_access_log', () => accessLog()));
+adminApiRouter.get('/waitlist', handler('viewed_waitlist', () => waitlist()));
 
 // Passkeys: add one while signed in (phone code, once), then sign in with Face ID or a fingerprint alone.
 adminApiRouter.post('/passkeys/register/options', handler('passkey_setup_started', (_req, staff) => registrationOptions(staff)));

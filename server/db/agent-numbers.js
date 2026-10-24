@@ -11,7 +11,7 @@ export async function findUserByAgentNumber(agentNumber) {
   if (!normalized) return undefined;
 
   return queryOne(
-    `SELECT id, phone, agent_number, terms_version FROM users WHERE agent_number = $1 AND deleted_at IS NULL
+    `SELECT id, phone, agent_number, terms_version, incoming_recording FROM users WHERE agent_number = $1 AND deleted_at IS NULL
       AND NOT EXISTS (SELECT 1 FROM agent_number_pool p WHERE p.phone=$1 AND p.available_after > now())`,
     [normalized]
   );

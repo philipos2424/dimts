@@ -1,0 +1,99 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "cleanUrls": true,
+  "trailingSlash": false,
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Strict-Transport-Security",
+          "value": "max-age=63072000; includeSubDomains"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(), geolocation=(), microphone=()"
+        },
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; script-src 'self'; style-src-attr 'unsafe-inline'; connect-src https://dimts.vercel.app; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+        }
+      ]
+    },
+    {
+      "source": "/(styles.css|app.js|favicon.svg|og.png|apple-touch-icon.png)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=3600, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/pitch/(.*)",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/pitch",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/pitch/download",
+      "headers": [
+        {
+          "key": "Content-Disposition",
+          "value": "attachment; filename=\"dimts-pitch.mp4\""
+        },
+        {
+          "key": "Content-Type",
+          "value": "video/mp4"
+        }
+      ]
+    },
+    {
+      "source": "/pitch/reel-download",
+      "headers": [
+        {
+          "key": "Content-Disposition",
+          "value": "attachment; filename=\"dimts-reel.mp4\""
+        },
+        {
+          "key": "Content-Type",
+          "value": "video/mp4"
+        }
+      ]
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/pitch/download",
+      "destination": "/pitch/dimts-pitch.mp4"
+    },
+    {
+      "source": "/pitch/reel-download",
+      "destination": "/pitch/dimts-reel.mp4"
+    }
+  ]
+}

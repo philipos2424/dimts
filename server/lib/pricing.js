@@ -110,14 +110,11 @@ export function affordableSeconds({ planSecondsLeft, credits, surcharge, overage
 }
 
 /**
- * Regional pricing. The region comes from the user's verified phone number,
- * not their IP address, so a VPN cannot move someone into a cheaper region.
- * `lite` is for countries where the standard price is out of reach; it only
- * lowers plan prices. Credits cost the same everywhere because they pay real
- * carrier costs.
+ * One price list everywhere, from $20 a month (founder, 2026-10-12). A regional
+ * discount for Ethiopia existed until then; it put Pro at $7, below the cost of
+ * card fees plus the minutes. Ethiopian numbers can still sign up and buy.
  */
-const LITE_REGION = new Set(['251']);
-export const priceRegion = phone => (LITE_REGION.has(callingCode(phone)) ? 'lite' : 'standard');
+export const priceRegion = () => 'standard';
 
 const CANADA_AREA_CODES = new Set([
   '204', '226', '236', '249', '250', '263', '289', '306', '343', '354', '365', '367', '368', '382', '403', '416',
@@ -133,7 +130,6 @@ export const EEA_CODES = new Set([
 /** The currency prices are shown and charged in. Polar handles VAT and sales tax on top. */
 export function displayCurrency(phone) {
   const code = callingCode(phone);
-  if (priceRegion(phone) === 'lite') return 'usd';
   if (code === '1') return CANADA_AREA_CODES.has(phone.slice(2, 5)) ? 'cad' : 'usd';
   if (code === '44') return 'gbp';
   if (EEA_CODES.has(code)) return 'eur';
@@ -150,17 +146,13 @@ export function displayCurrency(phone) {
 export const PLAN_PRICES = {
   standard: {
     pro: {
-      month: { usd: 1900, eur: 1900, gbp: 1600, cad: 2600, aed: 6900, sar: 6900 },
-      year: { usd: 19000, eur: 19000, gbp: 16000, cad: 26000, aed: 69000, sar: 69000 },
+      month: { usd: 2000, eur: 2000, gbp: 1600, cad: 2800, aed: 7500, sar: 7500 },
+      year: { usd: 20000, eur: 20000, gbp: 16000, cad: 28000, aed: 75000, sar: 75000 },
     },
     business: {
-      month: { usd: 4900, eur: 4900, gbp: 4200, cad: 6600, aed: 17900, sar: 17900 },
-      year: { usd: 49000, eur: 49000, gbp: 42000, cad: 66000, aed: 179000, sar: 179000 },
+      month: { usd: 5000, eur: 5000, gbp: 4000, cad: 7000, aed: 18500, sar: 19000 },
+      year: { usd: 50000, eur: 50000, gbp: 40000, cad: 70000, aed: 185000, sar: 190000 },
     },
-  },
-  lite: {
-    pro: { month: { usd: 700 }, year: { usd: 7000 } },
-    business: { month: { usd: 1900 }, year: { usd: 19000 } },
   },
 };
 
@@ -171,8 +163,8 @@ export const CREDIT_PACKS = {
   credits_50: { credits: 5500, prices: { usd: 5000, eur: 5000, gbp: 4300, cad: 6900, aed: 18400, sar: 18800 } },
 };
 
-/** Polar product key for a plan, e.g. `pro_month` or `business_year_lite`. */
-export const planProductKey = (plan, interval, region) => `${plan}_${interval}${region === 'lite' ? '_lite' : ''}`;
+/** Polar product key for a plan, e.g. `pro_month` or `business_year`. */
+export const planProductKey = (plan, interval) => `${plan}_${interval}`;
 
 /** Price in the wanted currency, falling back to US dollars where a local price is not set. */
 export function pick(prices, currency) {
@@ -201,17 +193,17 @@ export function catalogFor(phone) {
 }
 
 /**
- * A new account tries Pro for 21 days, capped at 20 minutes, from its first
+ * A new account tries Pro for 21 days, capped at 5 minutes, from its first
  * call: a trial converts several times better than a permanent free tier, and
- * the cap bounds what one account can cost (about $0.45 in the US). The
+ * the cap bounds what one account can cost (about $0.15 in the US). The
  * shared monthly pool (GLOBAL_CALL_MINUTES_PER_MONTH) bounds all trials together.
  */
 export const TRIAL_DAYS = 21;
-// Twenty minutes: two or three real calls, so the memory across calls can show itself.
-export const TRIAL_MINUTES = 20;
-// A trial call that starts with minutes left may finish, up to this long. Cutting a
-// first call off mid-sentence, with the owner's customer on the line, loses the user.
-export const TRIAL_CALL_GRACE_SECONDS = 15 * 60;
+// Five minutes: one short real call. Every trial minute is a carrier cost to us.
+export const TRIAL_MINUTES = 5;
+// A trial call that starts with a minute left may run this long, so the last call
+// is not cut off mid-sentence; kept short because we pay for it.
+export const TRIAL_CALL_GRACE_SECONDS = 2 * 60;
 export const onTrial = (user, now = Date.now()) => (user?.tier ?? 'free') === 'free'
   && !!user?.trial_ends_at && new Date(user.trial_ends_at).getTime() > now;
 export const planOf = user => (onTrial(user) ? 'pro' : PLANS[user?.tier] ? user.tier : 'free');

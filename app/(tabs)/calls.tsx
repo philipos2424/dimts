@@ -1,12 +1,13 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { FlatList, RefreshControl, View } from 'react-native';
+import { FlatList, RefreshControl, ScrollView, View } from 'react-native';
 import { useApp } from '../../src/AppContext';
 import { getPromises, type Promises } from '../../src/api';
 import { Banner } from '../../src/components/Banner';
 import { BusinessNumber } from '../../src/components/BusinessNumber';
 import { Button } from '../../src/components/Button';
 import { CallCard } from '../../src/components/CallCard';
+import { ExampleNotes } from '../../src/components/ExampleNotes';
 import { PromisesStrip } from '../../src/components/PromisesStrip';
 import { syncPromiseReminders } from '../../src/reminders';
 import { Txt } from '../../src/components/Txt';
@@ -38,15 +39,21 @@ export default function Calls() {
 
   if (!loading && calls.length === 0) {
     return (
-      <View style={{ flex: 1, backgroundColor: c.bg, padding: space.md, gap: space.lg }}>
+      <ScrollView style={{ flex: 1, backgroundColor: c.bg }}
+        contentContainerStyle={{ padding: space.md, gap: space.lg, width: '100%', maxWidth: 720, alignSelf: 'center' }}>
         {header}
-        <BusinessNumber />
         <View style={{ gap: space.sm }}>
           <Txt size="title" serif>Your calls will appear here</Txt>
-          <Txt tone="muted">After each call, Dimts writes down what was agreed and drafts your next step.</Txt>
+          <Txt tone="muted">After each call, Dimts writes down what was agreed and what everyone promised, like this:</Txt>
         </View>
-        <Button label="Make your first call" onPress={() => router.push('/dialer')} />
-      </View>
+        <ExampleNotes />
+        <View style={{ gap: space.sm }}>
+          <Button label="Try a 1-minute demo call" onPress={() => router.push('/demo-call')} />
+          <Txt size="caption" tone="muted">Dimts calls you and a pretend client talks to you. Free, and no second person needed.</Txt>
+          <Button label="Make your first call" variant="quiet" onPress={() => router.push('/dialer')} />
+        </View>
+        <BusinessNumber />
+      </ScrollView>
     );
   }
 

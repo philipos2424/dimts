@@ -31,7 +31,7 @@ async function owner(phone, contactPhone) {
   const contact = (await db.query('INSERT INTO contacts(user_id,phone) VALUES($1,$2) RETURNING id', [user.id, contactPhone])).rows[0];
   return { id: user.id, token, contact: contact.id };
 }
-const SENT = 'Your request was sent to the businesses who recorded calls with this number. They must act within 30 days. Contact privacy@dimts.app if they do not.';
+const SENT = 'Your request was sent to the businesses who recorded calls with this number. They must act within 30 days. Contact philiposw11@gmail.com if they do not.';
 
 test('an invalid phone number is refused before any code is sent', async () => {
   const response = await post('/api/privacy-requests/start', { phone: '0911' });
@@ -81,4 +81,25 @@ test('a wrong code is refused and creates nothing', async () => {
 test('codes for one number are limited to five an hour', async () => {
   for (let i = 0; i < 5; i++) assert.equal((await post('/api/privacy-requests/start', { phone: '+15555550730' })).status, 202);
   assert.equal((await post('/api/privacy-requests/start', { phone: '+15555550730' })).status, 429);
+});
+
+test('the privacy page never texts countries Dimts does not call, and its code cannot open an account there', async () => {
+  const japan = '+819012345678';
+  const refused = await post('/api/privacy-requests/start', { phone: japan });
+  assert.equal(refused.status, 403);
+  assert.match((await refused.json()).message, /philiposw11@gmail\.com/);
+  assert.deepEqual(codesSent, [], 'no paid code was sent');
+  // Even with a valid code from the shared verification service, sign-in refuses the country.
+  const login = await post('/api/auth/verify', { phone: japan, code: '123456' });
+  assert.equal(login.status, 403);
+  assert.equal((await db.query('SELECT count(*)::int n FROM users WHERE phone=$1', [japan])).rows[0].n, 0);
+});
+
+test('privacy codes count against the same per-country ceiling as sign-in codes', async () => {
+  const { hashToken } = await import('../lib/users.js');
+  const keys = [hashToken('send-country:1'), hashToken('send-all')];
+  const before = (await db.query('SELECT coalesce(sum(hits),0)::int n FROM rate_limits WHERE key = ANY($1)', [keys])).rows[0].n;
+  assert.equal((await post('/api/privacy-requests/start', { phone: '+15555550731' })).status, 202);
+  const after = (await db.query('SELECT coalesce(sum(hits),0)::int n FROM rate_limits WHERE key = ANY($1)', [keys])).rows[0].n;
+  assert.equal(after - before, 2, 'the shared country and global counters were charged');
 });

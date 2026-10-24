@@ -23,14 +23,15 @@ export const excludedPhones = () => [reviewDemoPhone(), ...adminPhones()].filter
 const demo = excludedPhones;
 const num = value => Number(value ?? 0);
 // A call counts as "used" once someone spoke: it connected, or a caller left a voicemail.
-export const CONNECTED = '(c.duration_sec > 0 OR c.voicemail)';
+// Demo calls are onboarding, not use: they never count as a real call.
+export const CONNECTED = '(NOT c.demo AND (c.duration_sec > 0 OR c.voicemail))';
 export const PAYING = "('active','trialing','past_due')";
 const CHURNED = "('canceled','unpaid','revoked','incomplete_expired')";
 
-/** List price of a subscription per month in US cents, from its Polar product key (e.g. pro_year_lite). */
+/** List price of a subscription per month in US cents, from its Polar product key (e.g. pro_year). Retired `_lite` keys count at the list price. */
 export function monthlyListCents(productKey) {
-  const [plan, interval, lite] = String(productKey).split('_');
-  const cents = pricing.PLAN_PRICES[lite === 'lite' ? 'lite' : 'standard']?.[plan]?.[interval]?.usd;
+  const [plan, interval] = String(productKey).split('_');
+  const cents = pricing.PLAN_PRICES.standard?.[plan]?.[interval]?.usd;
   if (cents == null) return 0;
   return interval === 'year' ? Math.round(cents / 12) : cents;
 }
@@ -223,7 +224,7 @@ export async function compliance() {
     checks: [
       check('privacy_overdue', 'Deletion requests from people who were recorded', 'Answered within 30 days',
         'GDPR Art. 12(3), 17 · UK GDPR · CCPA §1798.105 · Privacy policy "Your rights"', overdue, 'fail',
-        'The account owner has not acted. Remind them; if they do not respond, act as processor on their documented instructions or escalate to privacy@dimts.app.'),
+        'The account owner has not acted. Remind them; if they do not respond, act as processor on their documented instructions or escalate to philiposw11@gmail.com.'),
       check('privacy_due_soon', 'Deletion requests due within 7 days', 'Warn before the 30-day deadline',
         'GDPR Art. 12(3)', dueSoon, 'warn', 'Send the owner a reminder (scripts/privacy-requests.js lists them).'),
       check('retention', 'Calls kept past the owner\'s retention period', 'Deleted automatically at the chosen period',
@@ -367,4 +368,23 @@ export async function accessLog() {
     FROM audit_events a LEFT JOIN users u ON u.id = a.user_id
     WHERE a.action LIKE 'admin\\_%' ORDER BY a.created_at DESC, a.id DESC LIMIT 300`);
   return { events: rows.map(({ phone, ...row }) => ({ ...row, staff: maskPhone(phone) })) };
+}
+
+/**
+ * Marketing-site waitlist. Visitors gave these emails to hear about the apps,
+ * so unlike customer data they are shown in full. `source` is the form plus
+ * the link's ?ref= ("home-hero:linkedin"); the part after the colon is the channel.
+ */
+export async function waitlist() {
+  const [totals, channels, platforms, days, people] = await Promise.all([
+    query(`SELECT count(*)::int AS total, count(*) FILTER (WHERE created_at > now() - interval '7 days')::int AS last_7d,
+      count(*) FILTER (WHERE created_at > now() - interval '1 day')::int AS last_24h FROM waitlist`),
+    query(`SELECT COALESCE(NULLIF(split_part(source, ':', 2), ''), 'direct') AS channel, count(*)::int AS n
+      FROM waitlist GROUP BY 1 ORDER BY 2 DESC, 1`),
+    query(`SELECT COALESCE(platform, 'not given') AS platform, count(*)::int AS n FROM waitlist GROUP BY 1 ORDER BY 2 DESC`),
+    query(`SELECT to_char(date_trunc('day', created_at), 'YYYY-MM-DD') AS day, count(*)::int AS n
+      FROM waitlist WHERE created_at > now() - interval '30 days' GROUP BY 1 ORDER BY 1`),
+    query('SELECT email, platform, work, country, source, created_at FROM waitlist ORDER BY created_at DESC LIMIT 5000'),
+  ]);
+  return { ...totals.rows[0], channels: channels.rows, platforms: platforms.rows, days: days.rows, people: people.rows };
 }

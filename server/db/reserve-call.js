@@ -40,8 +40,8 @@ async function callBudget(db, user, destination, direction, tier) {
   const pooled = override == null && (tier === 'free' || trial);
   const pooledSecondsLeft = pooled ? Math.min(ownPlanSeconds, Math.max(0, freePool)) : ownPlanSeconds;
   const surcharge = callSurcharge(user.phone, destination, direction);
-  // A trial call is never cut off when its minutes run out: with a minute left it may
-  // run to the grace length, paid from the shared pool, never from the owner's card.
+  // A trial call is not cut off the moment its minutes run out: with a minute left it
+  // may run to the grace length, paid from the shared pool, never from the owner's card.
   const planSecondsLeft = trial && pooled && surcharge === 0 && pooledSecondsLeft >= 60
     ? Math.max(pooledSecondsLeft, Math.min(TRIAL_CALL_GRACE_SECONDS, Math.max(0, freePool)))
     : pooledSecondsLeft;

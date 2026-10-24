@@ -11,7 +11,7 @@ export const canBuyHere = Platform.OS === 'web';
 
 const locale = (lang: Lang) => (lang === 'am' ? 'am-ET' : undefined);
 
-/** £16, €19, AED 69: whole amounts drop the cents. */
+/** £16, €20, AED 75: whole amounts drop the cents. */
 export function formatPrice({ amount, currency }: Price, lang: Lang = 'en') {
   const value = amount / 100;
   try {

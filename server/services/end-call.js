@@ -1,6 +1,6 @@
 import { isCallSid, providerRest } from '../lib/carrier.js';
 import { config } from '../config.js';
-import { finishCall } from '../db/finish-call.js';
+import { finishCall, finishDemoCall } from '../db/finish-call.js';
 import { currentMonth } from '../lib/users.js';
 
 const TERMINAL = new Set(['completed', 'failed', 'busy', 'no-answer', 'canceled']);
@@ -36,6 +36,12 @@ export async function reconcileCall(call, { stop = false } = {}) {
     parent = await client.calls(sid).fetch();
   }
   if (!TERMINAL.has(parent.status)) return { ended: false };
+  // A demo is one leg: there is no dialled person to wait for.
+  if (call.demo) {
+    const seconds = Number(parent.duration ?? 0);
+    await finishDemoCall(call, Number.isSafeInteger(seconds) && seconds >= 0 ? seconds : 0, parent.status);
+    return { ended: true };
+  }
   let children = await dialledLegs(client, call);
   if (children.length > 1 || children.some(child => child.parentCallSid !== sid)) throw new Error('Ambiguous provider call legs');
   if (stop) {

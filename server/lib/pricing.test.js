@@ -35,7 +35,7 @@ test('the affordable call length respects plan minutes, credits and the 30-minut
 });
 
 test('the verified phone number sets region and currency, not the IP address', () => {
-  assert.equal(priceRegion(ET), 'lite');
+  assert.equal(priceRegion(ET), 'standard', 'one price list everywhere since 2026-10-12');
   assert.equal(priceRegion(UAE), 'standard');
   assert.deepEqual([US, TORONTO, UK, DE, UAE, '+966501234567', '+97455123456', ET].map(displayCurrency),
     ['usd', 'cad', 'gbp', 'eur', 'aed', 'sar', 'usd', 'usd']);
@@ -47,10 +47,11 @@ test('every price has a US-dollar fallback and yearly is two months free', () =>
     assert.ok(plan.month.usd > 0);
   }
   for (const pack of Object.values(CREDIT_PACKS)) assert.ok(pack.prices.usd > 0 && pack.credits >= pack.prices.usd);
-  const lite = catalogFor(ET);
-  assert.equal(lite.plans.find(p => p.id === 'pro').prices.month.amount, 700);
+  const ethiopia = catalogFor(ET);
+  assert.deepEqual(ethiopia.plans.find(p => p.id === 'pro').prices.month, { amount: 2000, currency: 'usd' }, 'plans start at $20 everywhere');
+  assert.deepEqual(catalogFor(US).plans.find(p => p.id === 'pro').prices.year, { amount: 20000, currency: 'usd' });
   const gulf = catalogFor('+97455123456');
-  assert.deepEqual(gulf.plans.find(p => p.id === 'business').prices.year, { amount: 49000, currency: 'usd' });
+  assert.deepEqual(gulf.plans.find(p => p.id === 'business').prices.year, { amount: 50000, currency: 'usd' });
   assert.deepEqual(catalogFor(UK).credit_packs[0].price, { amount: 900, currency: 'gbp' });
   assert.equal(catalogFor(US).plans.find(p => p.id === 'free').prices, null);
 });
@@ -58,8 +59,9 @@ test('every price has a US-dollar fallback and yearly is two months free', () =>
 test('POLAR_PRODUCTS must name a product for every key', () => {
   const ids = Object.fromEntries(PRODUCT_KEYS.map((key, i) => [key, `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`]));
   const env = { POLAR_PRODUCTS: JSON.stringify(ids) };
-  assert.equal(PRODUCT_KEYS.length, 11);
-  assert.equal(productKeyFor(ids.business_year_lite, env), 'business_year_lite');
+  assert.equal(PRODUCT_KEYS.length, 7, '4 plans and 3 credit packs');
+  assert.ok(!PRODUCT_KEYS.some(key => key.endsWith('_lite')), 'the regional plans are retired');
+  assert.equal(productKeyFor(ids.business_year, env), 'business_year');
   assert.equal(productKeyFor('00000000-0000-4000-8000-999999999999', env), null);
   assert.deepEqual(parsePlanKey('business_year_lite'), { plan: 'business', interval: 'year' });
   assert.equal(parsePlanKey('credits_10'), null);
@@ -78,7 +80,7 @@ test('over-plan minutes cover UK and EU carrier costs; US calls keep the base ra
   assert.deepEqual(['+14155550100', '+447400900123', '+4915112345678', '+971501234567'].map(p => planMinutes('pro', p)), [500, 300, 200, 500]);
   assert.equal(planMinutes('business', '+33612345678'), 500);
   assert.equal(planMinutes('free', '+33612345678'), 0, 'after the trial, Free is read-only');
-  assert.equal(planMinutes('pro', '+33612345678', { trial: true }), 20, 'the trial is capped everywhere');
+  assert.equal(planMinutes('pro', '+33612345678', { trial: true }), 5, 'the trial is capped everywhere');
 });
 
 test('a free account on its trial is treated as Pro until the trial ends', async () => {

@@ -84,7 +84,8 @@ test('the web shell policy lets the app load its own bundled fonts', async () =>
 test('Vercel serves the same security headers and shell policy for static files', async () => {
   const { WEB_SHELL_CSP } = await import('./security-headers.js');
   const vercel = JSON.parse(await readFile(new URL('../../vercel.json', import.meta.url), 'utf8'));
-  const all = Object.fromEntries((vercel.headers ?? []).flatMap(rule => rule.headers.map(h => [h.key, h.value])));
+  // Legacy routes make Vercel ignore top-level headers; they ride on a route.
+  const all = vercel.routes.find(route => route.headers?.["Content-Security-Policy"])?.headers ?? {};
   assert.equal(all['Content-Security-Policy'], WEB_SHELL_CSP);
   assert.equal(all['X-Content-Type-Options'], 'nosniff');
   assert.equal(all['X-Frame-Options'], 'DENY');

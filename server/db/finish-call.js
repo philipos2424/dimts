@@ -36,6 +36,21 @@ export const FINISH_CALL_SQL = `WITH changed AS (
 )
 SELECT id, user_id FROM changed`;
 
+/**
+ * A demo call ended. Nothing is billed. With a recorder running it waits for
+ * the recording (expire-recording-wait.js fails it if none arrives).
+ */
+export async function finishDemoCall(call, seconds, status) {
+  if (!Number.isSafeInteger(seconds) || seconds < 0) throw new Error('Invalid call duration');
+  return queryOne(`UPDATE calls SET duration_sec=$2, completed_at=now(), plan_seconds=0,
+      status=CASE WHEN deleted_at IS NOT NULL THEN 'deleted' WHEN status='ready' THEN status
+        WHEN record_enabled AND recording_start_status IS NOT NULL THEN 'processing' ELSE 'failed' END,
+      error=CASE WHEN record_enabled AND recording_start_status IS NOT NULL THEN error
+        WHEN $3='completed' THEN 'The demo call ended before the pretend client spoke. Try it again.'
+        ELSE 'The demo call was not answered. Try it again when you can pick up.' END
+    WHERE id=$1 AND demo AND duration_sec IS NULL RETURNING id`, [call.id, seconds, status]);
+}
+
 export async function finishCall(call, seconds, status, month) {
   if (!Number.isSafeInteger(seconds) || seconds < 0) throw new Error('Invalid call duration');
   const connected = status === 'completed' && seconds > 0;

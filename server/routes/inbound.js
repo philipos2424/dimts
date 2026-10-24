@@ -10,6 +10,7 @@ import { queryOne } from '../db/pool.js';
 import { config } from '../config.js';
 import { sendIncomingNotification } from '../services/notifications.js';
 import { defer } from '../lib/defer.js';
+import { shouldRecordIncoming } from '../lib/incoming-recording.js';
 import { safeError } from '../lib/log-safe.js';
 
 const { VoiceResponse } = twilio.twiml;
@@ -21,12 +22,12 @@ inboundRouter.use(verifyTwilioSignature);
  * Best-effort contact resolution.
  *
  * A failure here costs us the contact link on this call - it must never cost
- * the user the call itself, so it resolves to null instead of throwing.
+ * the user the call itself, so it resolves to null instead of throwing
+ * (and the owner's default recording choice applies).
  */
 async function resolveContact(userId, callerNumber) {
   try {
-    const contact = await findOrCreateContact(userId, callerNumber);
-    return contact?.id ?? null;
+    return (await findOrCreateContact(userId, callerNumber)) ?? null;
   } catch (err) {
     console.error('[inbound] contact lookup failed', safeError(err));
     return null;
@@ -66,12 +67,13 @@ inboundRouter.post('/', async (req, res) => {
     return res.type('text/xml').send(twiml.toString());
   }
 
-  const contactId = await resolveContact(user.id, caller);
+  const contact = await resolveContact(user.id, caller);
+  const contactId = contact?.id ?? null;
 
   let call;
   try {
     if (!CallSid || !caller || caller === agentNumber || caller === user.phone) throw new Error('Invalid incoming call');
-    ({ call } = await reserveCall(user, caller, true, `incoming-${CallSid}`, { direction: 'inbound', callSid: CallSid, contactId }));
+    ({ call } = await reserveCall(user, caller, shouldRecordIncoming(user, contact), `incoming-${CallSid}`, { direction: 'inbound', callSid: CallSid, contactId }));
   } catch (err) {
     if (['number_not_in_service', 'account_not_found'].includes(err?.code)) {
       twiml.say('This number is not in service.');

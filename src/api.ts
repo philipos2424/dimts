@@ -21,6 +21,7 @@ export type CallSummary = {
   agreements?: Agreement[];
   conflict_count?: number;
   next_step?: { kind: 'meeting' | 'email' | 'move'; text: string } | null;
+  demo?: boolean;
 };
 
 export type Capture = 'both' | 'voicemail' | 'one_voice' | 'no_audio' | 'pending' | 'none' | 'unknown';
@@ -35,8 +36,10 @@ export type Promises = { you_owe: PromiseItem[]; waiting_on: PromiseItem[] };
 export type Citation = { call_id: string; contact_name: string | null; created_at: string; line: number; quote: string; start: number | null };
 export type AskDraft = { subject: string; body: string };
 export type AskAnswer = { answer: string | null; grounded: boolean; citations: Citation[]; draft?: AskDraft };
+export type RecordingPref = 'default' | 'record' | 'skip';
+export type IncomingRecording = 'all' | 'chosen';
 export type Person = {
-  contact: { id: string; phone: string; display_name: string | null; company: string | null; notes: string | null; name_source: string };
+  contact: { id: string; phone: string; display_name: string | null; company: string | null; notes: string | null; name_source: string; recording_pref?: RecordingPref };
   calls: { id: string; created_at: string; direction: string; status: string; duration_sec: number | null; summary: string | null; agreements: Agreement[] | null }[];
   promises: Promises;
 };
@@ -69,6 +72,12 @@ export function askQuestion(question: string, history: AskTurn[] = []) {
 export function getPerson(id: string) { return request<Person>(`/api/contacts/${encodeURIComponent(id)}`, ''); }
 export function renameContact(id: string, display_name: string, company: string, notes: string) {
   return request(`/api/contacts/${encodeURIComponent(id)}`, '', { method: 'PATCH', body: JSON.stringify({ display_name, company, notes }) });
+}
+export function patchIncomingRecording(incoming_recording: IncomingRecording) {
+  return request<{ incoming_recording: IncomingRecording }>('/api/me', '', { method: 'PATCH', body: JSON.stringify({ incoming_recording }) });
+}
+export function setContactRecording(id: string, recording_pref: RecordingPref) {
+  return request<{ id: string; recording_pref: RecordingPref }>(`/api/contacts/${encodeURIComponent(id)}/recording`, '', { method: 'PATCH', body: JSON.stringify({ recording_pref }) });
 }
 /** The phone's IANA time zone, so the server reads "tomorrow at noon" in the owner's own time. */
 export function patchTimezone(timezone: string) {
@@ -259,7 +268,7 @@ export function endOtherSessions(all = false) {
   return request<{ ended: number }>(`/api/me/sessions/revoke${all ? '?all=1' : ''}`, '', { method: 'POST' });
 }
 export function getMe() {
-  return request<{ phone: string; tier: string; agent_number: string | null; terms_required: boolean; language: 'en' | 'am'; retention_months: Retention; timezone?: string | null; caller_id?: boolean; number_release_at?: string | null }>('/api/me', '');
+  return request<{ phone: string; tier: string; agent_number: string | null; terms_required: boolean; language: 'en' | 'am'; retention_months: Retention; timezone?: string | null; caller_id?: boolean; incoming_recording?: IncomingRecording; number_release_at?: string | null }>('/api/me', '');
 }
 export function startCallerId(method: 'call' | 'sms' = 'call') {
   return request<{ status: 'code_sent' | 'verified' }>('/api/me/caller-id/start', '', { method: 'POST', body: JSON.stringify({ method }) });
@@ -367,6 +376,9 @@ function publicErrorMessage(status: number, body: string): string {
     invalid_question: 'Ask a question between 3 and 500 characters.',
     ai_unavailable: 'Dimts AI is not answering right now. Try again in a minute.',
     promise_not_found: 'This promise is no longer available. Refresh and try again.',
+    demo_limit: 'You have used your demo calls. Make a real call to see notes from your own conversation.',
+    demo_busy: 'Demo calls are busy today. Try again tomorrow, or make a real call.',
+    review_demo: 'This sample account cannot use real phone lines.',
   };
   if (typeof code === 'string' && Object.prototype.hasOwnProperty.call(messages, code)) return messages[code];
   if (status === 401) return 'Please sign in again to continue.';
@@ -452,6 +464,11 @@ export function getNotificationStatus() {
 
 export function newCallRequestKey() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+}
+export type DemoLine = { client: string; reply: string | null };
+/** Onboarding: Dimts rings your phone and a pretend client talks to you. */
+export function startDemoCall() {
+  return request<{ callId: string; status: string; script: DemoLine[] }>('/api/calls/demo', '', { method: 'POST' });
 }
 export async function startCall(destination: string, userPhone: string, record = true, requestKey = newCallRequestKey()) {
   try {

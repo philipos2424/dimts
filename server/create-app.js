@@ -22,6 +22,7 @@ import { eventsRouter } from './routes/events.js';
 import { briefingRouter, cronRouter } from './routes/briefing.js';
 import { myPrivacyRequestsRouter, privacyRequestsRouter } from './routes/privacy-requests.js';
 import { inboundRouter } from './routes/inbound.js';
+import { waitlistRouter } from './routes/waitlist.js';
 import { billingRouter, polarWebhookRouter } from './routes/billing.js';
 import { adminApiRouter, adminPageRouter } from './routes/admin.js';
 import { twimlRouter, webhooksRouter } from './routes/webhooks.js';
@@ -74,6 +75,7 @@ export function createApp({ webRoot = fileURLToPath(new URL('../dist/', import.m
   app.use('/api/me/privacy-requests', myPrivacyRequestsRouter);
   app.use('/api/me', meRouter);
   app.use('/api/privacy-requests', privacyRequestsRouter);
+  app.use('/api/waitlist', waitlistRouter);
   app.use('/api/admin', adminApiRouter);
   app.use('/admin', adminPageRouter);
   app.use('/twiml/incoming', inboundRouter);
@@ -86,7 +88,7 @@ export function createApp({ webRoot = fileURLToPath(new URL('../dist/', import.m
       setHeaders: (res, file) => { if (file.endsWith('.html')) res.set('Content-Security-Policy', WEB_SHELL_CSP); } }));
     // Expo's single-page export needs the app shell on browser refresh/deep
     // links. Whitelist app routes so missing APIs/webhooks/assets stay errors.
-    app.get(['/', '/onboarding', '/settings', '/first-call', '/dialer', '/ask', '/calls', '/in-call', '/call/:id', '/person/:id',
+    app.get(['/', '/onboarding', '/settings', '/first-call', '/demo-call', '/dialer', '/ask', '/calls', '/in-call', '/call/:id', '/person/:id',
       '/privacy', '/terms', '/privacy-request', '/subprocessors', '/terms-accept', '/plans'],
       (req,res,next) => {
         if (!req.accepts('html') || (req.params.id && !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(req.params.id))) return next();

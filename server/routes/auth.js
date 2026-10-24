@@ -56,6 +56,11 @@ authRouter.post('/verify', async (req, res) => {
   await limit(`check-phone:${phone}`, 15);
   await limit(`check-ip:${req.ip}`, 40);
   const demo = isReviewDemo(phone);
+  // A code from another flow (the public privacy-request page shares the
+  // verification service) must not open an account where sign-up is closed.
+  if (!demo && !signupCountryCode(phone) && !(await signInException(phone))) {
+    throw new HttpError(403, 'country_not_supported', 'Dimts is not available for phone numbers in this country yet.');
+  }
   if (!(demo ? checkReviewDemoCode(code) : await checkPhoneCode(phone, code))) throw new HttpError(401, 'invalid_code');
   const user = await queryOne(
     `INSERT INTO users (phone) VALUES ($1)

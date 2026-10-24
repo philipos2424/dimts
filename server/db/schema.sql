@@ -67,6 +67,10 @@ CREATE TABLE IF NOT EXISTS contacts (
   UNIQUE (user_id, phone)
 );
 
+-- Which incoming calls are recorded: 'all' (default) or only callers marked Record.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS incoming_recording TEXT NOT NULL DEFAULT 'all' CHECK (incoming_recording IN ('all','chosen'));
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS recording_pref TEXT NOT NULL DEFAULT 'default' CHECK (recording_pref IN ('default','record','skip'));
+
 ALTER TABLE calls ADD COLUMN IF NOT EXISTS direction TEXT NOT NULL DEFAULT 'outbound';
 ALTER TABLE calls ADD COLUMN IF NOT EXISTS contact_id UUID REFERENCES contacts(id);
 ALTER TABLE calls ADD COLUMN IF NOT EXISTS next_moves JSONB;
@@ -399,3 +403,18 @@ CREATE TABLE IF NOT EXISTS admin_challenges (
   kind TEXT NOT NULL CHECK (kind IN ('register','login')),
   expires_at TIMESTAMPTZ NOT NULL DEFAULT now() + interval '5 minutes'
 );
+
+-- Marketing site waitlist, 12 October 2026. One row per email; no phone, no call data.
+CREATE TABLE IF NOT EXISTS waitlist (
+  email TEXT PRIMARY KEY,
+  platform TEXT CHECK (platform IN ('iphone','android','web')),
+  work TEXT,
+  country TEXT,
+  source TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Onboarding demo calls, 19 October 2026: Dimts rings the owner and a recorded
+-- pretend client talks to them. Never billed and never part of the budget.
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS demo BOOLEAN NOT NULL DEFAULT false;
+CREATE INDEX IF NOT EXISTS calls_demo_idx ON calls(user_id) WHERE demo;

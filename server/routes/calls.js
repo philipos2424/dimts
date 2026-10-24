@@ -23,12 +23,13 @@ import { scheduleArchiveRetries } from '../services/archive-audio.js';
 import { audit } from '../lib/audit.js';
 import { isReviewDemo } from '../lib/review-demo.js';
 import { createReviewDemoCall } from '../services/review-demo.js';
+import { createDemoCall } from '../services/demo-call.js';
 
 export const callsRouter = express.Router();
 
 const LIST_COLUMNS = `
   c.id, c.destination, c.status, c.duration_sec, c.direction, c.summary,
-  c.created_at, k.display_name AS contact_name, k.company, c.contact_id,
+  c.created_at, COALESCE(k.display_name, CASE WHEN c.demo THEN 'Demo call' END) AS contact_name, k.company, c.contact_id, c.demo,
   c.followups, c.next_moves, c.error, c.agreements, c.conflicts, c.voicemail,
   (c.recording_url IS NOT NULL OR c.audio_object_key IS NOT NULL) AS has_audio
 `;
@@ -126,6 +127,17 @@ callsRouter.post('/', async (req, res, next) => {
   }
 });
 
+/** Onboarding: Dimts rings the owner and a pretend client talks to them. */
+callsRouter.post('/demo', async (req, res, next) => {
+  try {
+    const user = await resolveUser(req);
+    await reapStaleCalls(user.id);
+    res.status(201).json(await createDemoCall(user));
+  } catch (err) {
+    next(err);
+  }
+});
+
 callsRouter.post('/:id/end', async (req, res, next) => {
   try {
     const user = await resolveUser(req);
@@ -189,7 +201,7 @@ callsRouter.get('/:id', async (req, res, next) => {
               c.consent_mode, c.consent_scope, c.other_party_notice_issued_at,
               c.deleted_at,c.provider_deletion_status,c.provider_deletion_error,c.provider_deleted_at,
               c.agreements, c.conflicts, c.contact_id, c.audio_object_key,
-              k.display_name AS contact_name, k.company
+              COALESCE(k.display_name, CASE WHEN c.demo THEN 'Demo call' END) AS contact_name, k.company, c.demo
          FROM calls c
          LEFT JOIN contacts k ON k.id = c.contact_id
         WHERE c.id = $1 AND c.user_id = $2`,

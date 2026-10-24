@@ -10,6 +10,7 @@ let contact;
 let failContactLookup = false;
 let failReservation = false;
 let reserved;
+let recordArg;
 const inserted = [];
 const notified = [];
 mock.module('../services/notifications.js', { namedExports: {
@@ -23,6 +24,7 @@ mock.module('../db/reserve-call.js', { namedExports: {
     if (failReservation === true) throw new Error('budget exceeded');
     if (options.voicemailOnly) return { call: { ...reserved, status: 'missed', voicemail: true }, created: true };
     inserted.push([owner.id, owner.phone, caller, options.callSid, options.contactId]);
+    recordArg = record;
     return { call: reserved, created: true };
   },
 } });
@@ -195,4 +197,17 @@ test('without recording consent the out-of-credit caller is turned away, not rec
   const { xml } = await incoming(CALL);
   assert.match(xml, /cannot connect this call/);
   assert.doesNotMatch(xml, /<Record/);
+});
+
+test('a caller the owner chose to skip is reserved as unrecorded; a chosen caller is recorded', async () => {
+  contact = { ...contact, recording_pref: 'skip' };
+  await incoming(CALL);
+  assert.equal(recordArg, false);
+  user = { ...user, incoming_recording: 'chosen' };
+  contact = { ...contact, recording_pref: 'record' };
+  await incoming({ ...CALL, CallSid: 'CA_IN_2' });
+  assert.equal(recordArg, true);
+  contact = { ...contact, recording_pref: 'default' };
+  await incoming({ ...CALL, CallSid: 'CA_IN_3' });
+  assert.equal(recordArg, false);
 });
