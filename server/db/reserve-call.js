@@ -7,6 +7,8 @@ import { recordingPolicy } from '../lib/recording-policy.js';
 import { hasAcceptedTerms } from '../lib/terms.js';
 import { PLAN_SECONDS_SQL } from './plan-usage.js';
 import { VOICEMAIL_MAX_SECONDS } from '../lib/recording-consent.js';
+import { trialPhoneHash } from '../lib/trial-tombstone.js';
+import { canCall } from '../lib/destinations.js';
 import { TRIAL_CALL_GRACE_SECONDS, TRIAL_DAYS, affordableSeconds, callSurcharge, onTrial, overageRate, planMinutes, planOf } from '../lib/pricing.js';
 
 function limit(name, fallback) {
@@ -69,6 +71,16 @@ export async function reserveCallInTransaction(db, user, destination, record, re
   // Serialize budget reads and reservations globally. Separate statements after
   // the lock see prior committed reservations under PostgreSQL READ COMMITTED.
   await db.query('SELECT id FROM call_budget_lock WHERE id=1 FOR UPDATE');
+  const current = (await db.query('SELECT phone, tier, trial_ends_at, deleted_at, agent_number FROM users WHERE id=$1 FOR UPDATE', [user.id])).rows[0];
+  if (!current || current.deleted_at) throw new HttpError(404, 'account_not_found');
+  // The inbound lookup may have happened just before a number was released.
+  if (direction === 'inbound' && user.agent_number && current.agent_number !== user.agent_number) {
+    throw new HttpError(404, 'number_not_in_service');
+  }
+  user = { ...user, ...current };
+  // Inbound forwarding also originates a paid leg to the owner's handset.
+  if (!options.voicemailOnly && !canCall(user.phone)) throw new HttpError(403, 'handset_not_supported');
+  if (direction === 'outbound' && !canCall(destination)) throw new HttpError(403, 'destination_not_supported');
   const existing = (await db.query('SELECT * FROM calls WHERE user_id=$1 AND request_key=$2', [user.id, requestKey])).rows[0];
   if (existing) {
     if (existing.destination !== destination || existing.record_enabled !== record || existing.direction !== direction) throw new HttpError(409, 'request_key_reused', 'Use a new request key for a different call.');
@@ -83,6 +95,9 @@ export async function reserveCallInTransaction(db, user, destination, record, re
   // A free account's first call starts its trial; the trial is never restarted.
   // Re-read it afterwards: a concurrent first call may have started it.
   if (!options.voicemailOnly && (user.tier ?? 'free') === 'free' && !user.trial_ends_at) {
+    const used = (await db.query(`SELECT 1 FROM trial_tombstones
+      WHERE phone_hash=$1 AND trial_used_at > now() - interval '12 months'`, [trialPhoneHash(user.phone)])).rows[0];
+    if (used) throw new HttpError(403, 'trial_already_used', 'This phone number has already used a free trial. Choose a paid plan to call.');
     const started = await db.query(`UPDATE users SET trial_ends_at = now() + make_interval(days => $2)
       WHERE id=$1 AND tier='free' AND trial_ends_at IS NULL RETURNING id`, [user.id, TRIAL_DAYS]);
     if (started.rows.length) capture(user.id, 'trial_started');
