@@ -11,8 +11,10 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
   google_connections, calendar_actions, email_actions, notification_devices,
   call_notifications, audit_events, rate_limits, privacy_requests, privacy_request_targets, promise_states,
   credit_ledger, subscriptions, billing_events, billing_alerts, payments, provider_costs,
-  admin_passkeys, admin_challenges, waitlist TO dimts_caller_backend;
+  admin_passkeys, admin_challenges, admin_setup_links, waitlist TO dimts_caller_backend;
 GRANT USAGE ON SEQUENCE audit_events_id_seq, credit_ledger_id_seq TO dimts_caller_backend;
+-- A used setup link is permanent: the app may record and read one, never change or remove it.
+REVOKE UPDATE, DELETE ON TABLE admin_setup_links FROM dimts_caller_backend;
 
 DO $$
 DECLARE app_table TEXT;
@@ -24,7 +26,7 @@ BEGIN
     'email_actions', 'notification_devices', 'call_notifications', 'audit_events', 'rate_limits',
     'privacy_requests', 'privacy_request_targets', 'promise_states',
     'credit_ledger', 'subscriptions', 'billing_events', 'billing_alerts', 'payments', 'provider_costs',
-    'admin_passkeys', 'admin_challenges', 'waitlist'
+    'admin_passkeys', 'admin_challenges', 'admin_setup_links', 'waitlist'
   ] LOOP
     EXECUTE format('DROP POLICY IF EXISTS dimts_backend_access ON public.%I', app_table);
     EXECUTE format('CREATE POLICY dimts_backend_access ON public.%I FOR ALL TO dimts_caller_backend USING (true) WITH CHECK (true)', app_table);

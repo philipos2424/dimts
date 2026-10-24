@@ -403,6 +403,12 @@ CREATE TABLE IF NOT EXISTS admin_challenges (
   kind TEXT NOT NULL CHECK (kind IN ('register','login')),
   expires_at TIMESTAMPTZ NOT NULL DEFAULT now() + interval '5 minutes'
 );
+-- Operator setup links that have been used (SHA-256 of the secret). Permanent on
+-- purpose: "already used" must never be inferred from audit events, which expire.
+CREATE TABLE IF NOT EXISTS admin_setup_links (
+  link_id TEXT PRIMARY KEY CHECK (link_id ~ '^[0-9a-f]{64}$'),
+  consumed_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 
 -- Marketing site waitlist, 12 October 2026. One row per email; no phone, no call data.
 CREATE TABLE IF NOT EXISTS waitlist (
