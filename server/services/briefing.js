@@ -24,26 +24,30 @@ export async function weeklyBriefing(userId, now = new Date()) {
   const activity = await queryOne(`SELECT count(*)::int AS calls, coalesce(sum(duration_sec),0)::int AS seconds
     FROM calls c WHERE ${recent}`, [userId, weekAgo]);
 
-  const { rows: money } = await query(`SELECT c.id AS call_id, c.created_at, c.contact_id, k.display_name AS contact_name,
-      a.value->>'kind' AS kind, a.value->>'subject' AS subject, a.value->>'value' AS value,
-      a.value->>'quote' AS quote, (a.value->>'line')::int AS line, (a.value->>'start')::float AS start
-    FROM calls c
-    CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(c.agreements)='array' THEN c.agreements ELSE '[]'::jsonb END) a(value)
-    LEFT JOIN contacts k ON k.id = c.contact_id
-    WHERE ${recent} AND a.value->>'kind' IN ('amount','price')
-    ORDER BY c.created_at DESC LIMIT 6`, [userId, twoWeeksAgo]);
-
-  const { rows: conflicts } = await query(`SELECT c.id AS call_id, c.created_at, k.display_name AS contact_name,
-      jsonb_array_length(c.conflicts) AS count, c.conflicts->0->>'note' AS note
+  // Agreements, contradictions and next steps are sealed at rest, so the database
+  // cannot look inside them: it picks the newest calls and the lists are built here.
+  const { rows: recentCalls } = await query(`SELECT c.id AS call_id, c.created_at, c.contact_id, k.display_name AS contact_name,
+      c.agreements, c.conflicts, c.next_moves
     FROM calls c LEFT JOIN contacts k ON k.id = c.contact_id
-    WHERE ${recent} AND jsonb_typeof(c.conflicts)='array' AND jsonb_array_length(c.conflicts) > 0
-    ORDER BY c.created_at DESC LIMIT 5`, [userId, twoWeeksAgo]);
+    WHERE ${recent} ORDER BY c.created_at DESC LIMIT 300`, [userId, twoWeeksAgo]);
+  const list = value => (Array.isArray(value) ? value : []);
+  const text = value => (value == null ? null : String(value));
+  const number = value => (value == null || value === '' || !Number.isFinite(Number(value)) ? null : Number(value));
 
-  const { rows: nextMoves } = await query(`SELECT c.id AS call_id, c.created_at, k.display_name AS contact_name,
-      c.next_moves->>0 AS move
-    FROM calls c LEFT JOIN contacts k ON k.id = c.contact_id
-    WHERE ${recent} AND jsonb_typeof(c.next_moves)='array' AND jsonb_array_length(c.next_moves) > 0
-    ORDER BY c.created_at DESC LIMIT 5`, [userId, weekAgo]);
+  const money = recentCalls.flatMap(({ call_id, created_at, contact_id, contact_name, agreements }) =>
+    list(agreements).filter(a => a?.kind === 'amount' || a?.kind === 'price').map(a => ({
+      call_id, created_at, contact_id, contact_name, kind: a.kind, subject: text(a.subject), value: text(a.value),
+      quote: text(a.quote), line: number(a.line) === null ? null : Math.trunc(number(a.line)), start: number(a.start),
+    }))).slice(0, 6);
+
+  const conflicts = recentCalls.filter(c => list(c.conflicts).length).slice(0, 5).map(c => ({
+    call_id: c.call_id, created_at: c.created_at, contact_name: c.contact_name,
+    count: list(c.conflicts).length, note: text(c.conflicts[0]?.note),
+  }));
+
+  const nextMoves = recentCalls.filter(c => new Date(c.created_at) > weekAgo && list(c.next_moves).length).slice(0, 5).map(c => ({
+    call_id: c.call_id, created_at: c.created_at, contact_name: c.contact_name, move: text(c.next_moves[0]),
+  }));
 
   const promises = await listPromises(userId);
   const youOwe = rank(promises.you_owe, now), waitingOn = rank(promises.waiting_on, now);

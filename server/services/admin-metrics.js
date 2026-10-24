@@ -211,7 +211,11 @@ export async function compliance() {
     one(`SELECT count(*)::int AS n FROM calls WHERE (audio_object_key IS NOT NULL OR recording_url IS NOT NULL OR recording_sid IS NOT NULL)
       AND deleted_at IS NULL AND NOT COALESCE(${recordingAuthorizationSql}, false)`),
     one(`SELECT (SELECT count(*) FROM calls WHERE deleted_at IS NULL AND (
-        (transcript IS NOT NULL AND transcript NOT LIKE 'dmt1.%') OR (summary IS NOT NULL AND summary NOT LIKE 'dmt1.%')))
+        (transcript IS NOT NULL AND transcript NOT LIKE 'dmt1.%') OR (summary IS NOT NULL AND summary NOT LIKE 'dmt1.%')
+        -- A sealed JSON column holds one JSON string; an array or object there is readable plaintext.
+        OR (next_moves IS NOT NULL AND jsonb_typeof(next_moves) <> 'string') OR (action_items IS NOT NULL AND jsonb_typeof(action_items) <> 'string')
+        OR (key_points IS NOT NULL AND jsonb_typeof(key_points) <> 'string') OR (agreements IS NOT NULL AND jsonb_typeof(agreements) <> 'string')
+        OR (conflicts IS NOT NULL AND jsonb_typeof(conflicts) <> 'string')))
       + (SELECT count(*) FROM contacts WHERE notes IS NOT NULL AND notes <> '' AND notes NOT LIKE 'dmt1.%') AS n`),
     one(`SELECT count(*)::int AS n FROM audit_events WHERE created_at < now() - interval '1 year'`),
     one(`SELECT count(*)::int AS n FROM users WHERE deleted_at IS NULL AND terms_version IS DISTINCT FROM $1`, [TERMS_VERSION]),

@@ -17,7 +17,9 @@ export async function encryptExisting({ dryRun = false, limit = 500, audioLimit 
   // because the database layer opens sealed values on the way out.
   const stale = column => `(${column} IS NOT NULL AND ${column} NOT LIKE 'dmt1.${current}.%')`;
   const staleJson = column => `(${column} IS NOT NULL AND (jsonb_typeof(${column}) <> 'string' OR ${column} #>> '{}' NOT LIKE 'dmt1.${current}.%'))`;
-  const TEXT = ['transcript', 'summary', 'recap'], JSON_COLUMNS = ['transcript_data', 'followups'];
+  const TEXT = ['transcript', 'summary', 'recap'];
+  // The structured facts of a call (promises, agreed prices with their verbatim quotes, next steps, contradictions).
+  const JSON_COLUMNS = ['transcript_data', 'followups', 'next_moves', 'action_items', 'key_points', 'agreements', 'conflicts'];
 
   const { rows: calls } = await query(`SELECT id, user_id, ${[...TEXT, ...JSON_COLUMNS].join(', ')} FROM calls
     WHERE status <> 'processing' AND deleted_at IS NULL AND (${[...TEXT.map(stale), ...JSON_COLUMNS.map(staleJson)].join(' OR ')})
@@ -28,7 +30,8 @@ export async function encryptExisting({ dryRun = false, limit = 500, audioLimit 
     // Values arrive opened; sealing them again under the current key is idempotent.
     const values = [...TEXT.map(c => call[c] == null ? null : sealText(call[c], context(c))),
       ...JSON_COLUMNS.map(c => call[c] == null ? null : sealJson(call[c], context(c)))];
-    const saved = await queryOne(`UPDATE calls SET transcript=$2, summary=$3, recap=$4, transcript_data=$5::jsonb, followups=$6::jsonb
+    const assignments = [...TEXT, ...JSON_COLUMNS].map((column, i) => `${column}=$${i + 2}${JSON_COLUMNS.includes(column) ? '::jsonb' : ''}`);
+    const saved = await queryOne(`UPDATE calls SET ${assignments.join(', ')}
       WHERE id=$1 AND status <> 'processing' AND deleted_at IS NULL RETURNING id`, [call.id, ...values]);
     // A deletion that commits between the read and this write wins: deleted_at stops it.
     if (saved) totals.calls++;
