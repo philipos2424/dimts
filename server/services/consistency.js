@@ -1,6 +1,7 @@
 import { captureCallFailure } from '../lib/sentry.js';
 import { query, queryOne } from '../db/pool.js';
 import { completeJson } from './llm.js';
+import { sealJson } from '../lib/field-crypto.js';
 
 const PROMPT = `You compare what was agreed on a business call with what the same
 person agreed on earlier calls. A conflict is when the same subject has a
@@ -23,10 +24,13 @@ export async function checkConsistency(callId, { signal } = {}) {
       WHERE id=$1 AND deleted_at IS NULL`, [callId]);
     const current = Array.isArray(call?.agreements) ? call.agreements : [];
     if (!call?.contact_id || !current.length) return [];
-    const { rows } = await query(`SELECT id,created_at,agreements FROM calls
+    // Agreements are sealed at rest, so the database cannot tell which calls have
+    // any: look at a window of recent calls and keep the first five that do.
+    const { rows: recent } = await query(`SELECT id,created_at,agreements FROM calls
       WHERE user_id=$1 AND contact_id=$2 AND id<>$3 AND status='ready' AND deleted_at IS NULL
-        AND created_at < $4 AND jsonb_typeof(agreements)='array' AND jsonb_array_length(agreements)>0
-      ORDER BY created_at DESC LIMIT 5`, [call.user_id, call.contact_id, call.id, call.created_at]);
+        AND created_at < $4 AND agreements IS NOT NULL
+      ORDER BY created_at DESC LIMIT 50`, [call.user_id, call.contact_id, call.id, call.created_at]);
+    const rows = recent.filter(row => Array.isArray(row.agreements) && row.agreements.length).slice(0, 5);
     const previous = [];
     for (const row of rows) for (const [index, agreement] of row.agreements.entries()) {
       if (previous.length < 20) previous.push({ call_id: row.id, index, agreement, date: row.created_at });
@@ -43,7 +47,8 @@ export async function checkConsistency(callId, { signal } = {}) {
       conflicts.push({ new_index: Number(n) - 1, previous_call_id: before.call_id, previous_index: before.index,
         note: item.note.trim().slice(0, 300) });
     }
-    await query('UPDATE calls SET conflicts=$2 WHERE id=$1 AND deleted_at IS NULL', [call.id, JSON.stringify(conflicts)]);
+    await query('UPDATE calls SET conflicts=$2 WHERE id=$1 AND deleted_at IS NULL',
+      [call.id, sealJson(conflicts, { userId: call.user_id, rowId: call.id, field: 'calls:conflicts' })]);
     return conflicts;
   } catch (err) {
     captureCallFailure(err, { callId, stage: 'consistency' });

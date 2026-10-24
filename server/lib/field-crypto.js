@@ -20,7 +20,8 @@ const KEY_ID = /^[a-z0-9]{1,8}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const FIELD = /^[a-z_]+:[a-z_]+$/;
 // Columns whose plaintext is JSON: opened values are parsed back into objects.
-const JSON_FIELDS = new Set(['calls:transcript_data', 'calls:followups', 'calendar_actions:meeting', 'email_actions:email']);
+const JSON_FIELDS = new Set(['calls:transcript_data', 'calls:followups', 'calendar_actions:meeting', 'email_actions:email',
+  'calls:next_moves', 'calls:action_items', 'calls:key_points', 'calls:agreements', 'calls:conflicts']);
 
 let parsed; let parsedFrom;
 function keyring(env = process.env) {

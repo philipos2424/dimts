@@ -85,12 +85,11 @@ After account deletion, we keep a one-way fingerprint of your phone number for 1
 
 ## Security
 - Encryption in transit (TLS).
-- Call recordings, transcripts, summaries, drafts and contact notes are
-  encrypted before they are stored, with a key unique to your account
-  (AES-256-GCM). The master keys are kept outside the database, so a copy of
-  the database or its backups alone does not reveal any conversation.
-  Short structured notes (agreements, next steps) are protected by the
-  storage provider's disk encryption only.
+- Call recordings, transcripts, summaries, agreements, next steps, drafts and
+  contact notes are encrypted before they are stored, with a key unique to
+  your account (AES-256-GCM). The master keys are kept outside the database,
+  so a copy of the database or its backups alone does not reveal any
+  conversation.
 - Private storage that only our server can read, per-account access control
   and rate limiting.
 - An optional app lock (Face ID, fingerprint or passcode) that also hides

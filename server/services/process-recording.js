@@ -20,6 +20,9 @@ import { checkConsistency } from './consistency.js';
 import { safeError } from '../lib/log-safe.js';
 import { notesReadyTimings } from '../lib/notes-timing.js';
 
+// Columns holding JSON documents rather than text; the rest are sealed as text.
+const JSON_COLUMNS = new Set(['transcript_data', 'next_moves', 'action_items', 'key_points', 'agreements']);
+
 const DOWNLOAD_ATTEMPTS = 3;
 const DOWNLOAD_BACKOFF_MS = 2000;
 
@@ -138,7 +141,7 @@ export async function processRecording(callId, { force = false, signal: callerSi
   }
 
   // Conversation content is encrypted for this call's owner before it is stored.
-  const seal = (column, value) => column === 'transcript_data'
+  const seal = (column, value) => JSON_COLUMNS.has(column)
     ? sealJson(value, { userId: call.user_id, rowId: callId, field: `calls:${column}` })
     : sealText(value, { userId: call.user_id, rowId: callId, field: `calls:${column}` });
 
@@ -213,13 +216,13 @@ export async function processRecording(callId, { force = false, signal: callerSi
         seal('transcript', result.text),
         seal('transcript_data', result.raw),
         seal('summary', summary.summary),
-        JSON.stringify(summary.next_moves),
-        JSON.stringify(summary.action_items),
-        JSON.stringify(summary.key_points),
+        seal('next_moves', summary.next_moves),
+        seal('action_items', summary.action_items),
+        seal('key_points', summary.key_points),
         result.language,
         result.languageProbability,
         lease,
-        JSON.stringify(agreements),
+        seal('agreements', agreements),
       ]
     );
     if (saved.rows.length) capture(call.user_id, 'notes_ready', { direction: call.direction, voicemail: !!call.voicemail,

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import * as database from '../db/pool.js';
 import { resolveAgreements } from '../lib/agreements.js';
-import { sealText } from '../lib/field-crypto.js';
+import { sealJson, sealText } from '../lib/field-crypto.js';
 
 // A renovation contractor's last ten days: a quote, a price that changed
 // between calls, a voicemail and the follow-ups they created. Numbers are in
@@ -171,7 +171,8 @@ async function insertCall(db, user, call, { contactId, destination, at }) {
   const transcript = call.transcript.join('\n');
   const inbound = call.direction === 'inbound';
   // Sealed like real calls, so the admin encryption check stays at zero after every demo sign-in.
-  const id = randomUUID(), seal = (column, value) => sealText(value, { userId: user.id, rowId: id, field: `calls:${column}` });
+  const id = randomUUID(), context = column => ({ userId: user.id, rowId: id, field: `calls:${column}` });
+  const seal = (column, value) => sealText(value, context(column)), sealFacts = (column, value) => sealJson(value, context(column));
   await db.query(
     `INSERT INTO calls (id, user_id, user_phone, destination, status, direction, voicemail, contact_id,
         duration_sec, transcript, summary, next_moves, action_items, key_points, agreements, conflicts,
@@ -180,9 +181,10 @@ async function insertCall(db, user, call, { contactId, destination, at }) {
      VALUES ($19,$1,$2,$3,'ready',$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'en',1,true,'notice',$15,
         $16,$17,'started',$15,$18)`,
     [user.id, user.phone, destination, inbound ? 'inbound' : 'outbound', !!call.voicemail, contactId,
-      call.duration, seal('transcript', transcript), seal('summary', call.summary), JSON.stringify(call.next_moves), JSON.stringify(call.action_items),
-      JSON.stringify(call.key_points), JSON.stringify(resolveAgreements(call.agreements, transcript, [])),
-      JSON.stringify(call.conflicts ?? []), at, inbound ? null : at, inbound ? at : null,
+      call.duration, seal('transcript', transcript), seal('summary', call.summary), sealFacts('next_moves', call.next_moves),
+      sealFacts('action_items', call.action_items), sealFacts('key_points', call.key_points),
+      sealFacts('agreements', resolveAgreements(call.agreements, transcript, [])),
+      sealFacts('conflicts', call.conflicts ?? []), at, inbound ? null : at, inbound ? at : null,
       new Date(at.getTime() + call.duration * 1000), id]
   );
   return id;

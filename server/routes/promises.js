@@ -9,24 +9,33 @@ export const promisesRouter = express.Router();
 // or a bare date). `due_at` is that moment as an instant: the end of the day
 // for a bare date. Overdue promises come first, then the soonest due.
 export async function listPromises(userId, contactId = null) {
-  const { rows } = await query(`WITH owner AS (SELECT coalesce(timezone, 'UTC') AS tz FROM users WHERE id=$1)
-    SELECT c.id AS call_id, item.ordinality - 1 AS index, item.value->>'task' AS task,
-      item.value->>'owner' AS owner, c.contact_id, k.display_name AS contact_name, c.destination AS phone, c.created_at,
-      due.value AS due,
-      CASE WHEN due.value ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}$' THEN due.value::timestamp AT TIME ZONE owner.tz
-           WHEN due.value ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' THEN (due.value::date + 1)::timestamp AT TIME ZONE owner.tz END AS due_at
-    FROM calls c
-    CROSS JOIN owner
-    CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(c.action_items)='array' THEN c.action_items ELSE '[]'::jsonb END)
-      WITH ORDINALITY AS item(value, ordinality)
-    CROSS JOIN LATERAL (SELECT item.value->>'due' AS value) due
-    LEFT JOIN contacts k ON k.id = c.contact_id
-    LEFT JOIN promise_states s ON s.call_id = c.id AND s.item_index = item.ordinality - 1
+  // Action items are sealed at rest, so the database cannot unpack them: it picks
+  // the calls and works out deadlines in the owner's time zone; the items are read here.
+  const { rows: calls } = await query(`SELECT c.id AS call_id, c.contact_id, k.display_name AS contact_name,
+      c.destination AS phone, c.created_at, c.action_items
+    FROM calls c LEFT JOIN contacts k ON k.id = c.contact_id
     WHERE c.user_id=$1 AND c.status='ready' AND c.deleted_at IS NULL
       AND ($2::uuid IS NULL OR c.contact_id = $2::uuid)
-      AND c.created_at > now() - interval '90 days'
-      AND item.value->>'owner' IN ('User','Caller') AND coalesce(s.status,'open')='open'
-    ORDER BY c.created_at DESC, item.ordinality`, [userId, contactId]);
+      AND c.created_at > now() - interval '90 days' AND c.action_items IS NOT NULL
+    ORDER BY c.created_at DESC`, [userId, contactId]);
+  const items = calls.flatMap(({ action_items, ...call }) => (Array.isArray(action_items) ? action_items : [])
+    .map((item, index) => ({ item, index, call }))
+    .filter(({ item }) => item?.owner === 'User' || item?.owner === 'Caller'));
+  const handled = items.length ? (await query(`SELECT call_id, item_index FROM promise_states
+    WHERE call_id = ANY($1::uuid[]) AND status <> 'open'`, [[...new Set(items.map(({ call }) => call.call_id))]])).rows : [];
+  const closed = new Set(handled.map(row => `${row.call_id}:${row.item_index}`));
+  const open = items.filter(({ call, index }) => !closed.has(`${call.call_id}:${index}`));
+  const dues = [...new Set(open.map(({ item }) => item.due).filter(due => typeof due === 'string'))];
+  const instants = dues.length ? (await query(`WITH owner AS (SELECT coalesce(timezone, 'UTC') AS tz FROM users WHERE id=$1)
+    SELECT due.value,
+      CASE WHEN due.value ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}$' THEN due.value::timestamp AT TIME ZONE owner.tz
+           WHEN due.value ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' THEN (due.value::date + 1)::timestamp AT TIME ZONE owner.tz END AS due_at
+    FROM unnest($2::text[]) AS due(value) CROSS JOIN owner`, [userId, dues])).rows : [];
+  const dueAt = new Map(instants.map(row => [row.value, row.due_at]));
+  const rows = open.map(({ item, index, call }) => ({
+    ...call, index, task: item.task == null ? null : String(item.task), owner: item.owner,
+    due: typeof item.due === 'string' ? item.due : null, due_at: dueAt.get(item.due) ?? null,
+  }));
   const now = Date.now();
   const shape = ({ owner, index, due_at, ...rest }) => {
     const at = due_at ? new Date(due_at) : null;
@@ -51,9 +60,9 @@ promisesRouter.post('/:callId/:index', async (req, res) => {
   if (!['open', 'done', 'dismissed'].includes(status)) throw new HttpError(400, 'invalid_status');
   const index = Number(req.params.index);
   if (!Number.isInteger(index) || index < 0 || !/^[0-9a-f-]{36}$/i.test(req.params.callId)) throw new HttpError(404, 'promise_not_found');
-  const call = await queryOne(`SELECT id FROM calls WHERE id=$1 AND user_id=$2 AND deleted_at IS NULL
-    AND jsonb_typeof(action_items)='array' AND jsonb_array_length(action_items) > $3`, [req.params.callId, user.id, index]);
-  if (!call) throw new HttpError(404, 'promise_not_found');
+  const call = await queryOne('SELECT id, action_items FROM calls WHERE id=$1 AND user_id=$2 AND deleted_at IS NULL',
+    [req.params.callId, user.id]);
+  if (!call || !Array.isArray(call.action_items) || call.action_items.length <= index) throw new HttpError(404, 'promise_not_found');
   await query(`INSERT INTO promise_states(call_id,item_index,status) VALUES($1,$2,$3)
     ON CONFLICT (call_id,item_index) DO UPDATE SET status=EXCLUDED.status, updated_at=now()`, [call.id, index, status]);
   res.json({ status });
