@@ -12,7 +12,7 @@ import {
 import * as database from '../db/pool.js';
 import { config } from '../config.js';
 import { HttpError, hashToken } from '../lib/users.js';
-import { isE164 } from '../lib/phone.js';
+import { parseSetupToken } from '../lib/admin-setup.js';
 import { audit } from '../lib/audit.js';
 import { ADMIN_SESSION_HOURS, adminPhones, maskPhone } from '../lib/admin.js';
 
@@ -60,16 +60,25 @@ export async function registrationOptions(staff) {
   return options;
 }
 
-export async function finishRegistration(staff, response) {
+/** Check a new passkey's response against the challenge we issued; returns the credential, stores nothing. */
+async function verifyRegistration(staff, response) {
   const expectedChallenge = await takeChallenge(challengeOf(response), 'register', staff.id);
   const { origin, rpID } = relyingParty();
   const { verified, registrationInfo } = await verifyRegistrationResponse({
     response, expectedChallenge, expectedOrigin: origin, expectedRPID: rpID, requireUserVerification: true,
   }).catch(() => ({ verified: false }));
   if (!verified) throw new HttpError(400, 'passkey_not_verified', 'The passkey could not be verified.');
-  const { credential } = registrationInfo;
-  await database.query(`INSERT INTO admin_passkeys(id, user_id, public_key, counter, transports) VALUES($1, $2, $3, $4, $5)
-    ON CONFLICT (id) DO NOTHING`, [credential.id, staff.id, b64url(credential.publicKey), credential.counter, credential.transports ?? null]);
+  return registrationInfo.credential;
+}
+
+/** `db` is the pool, or a transaction when the passkey must be saved together with something else. */
+const storePasskey = (db, staff, credential) => db.query(`INSERT INTO admin_passkeys(id, user_id, public_key, counter, transports)
+  VALUES($1, $2, $3, $4, $5) ON CONFLICT (id) DO NOTHING`,
+[credential.id, staff.id, b64url(credential.publicKey), credential.counter, credential.transports ?? null]);
+
+export async function finishRegistration(staff, response) {
+  const credential = await verifyRegistration(staff, response);
+  await storePasskey(database, staff, credential);
   return { id: credential.id };
 }
 
@@ -120,31 +129,40 @@ export async function removePasskey(staff, idPrefix) {
 
 /**
  * First passkey without a text or call: a one-time setup link. The operator
- * sets ADMIN_SETUP_TOKEN="<staff phone>:<64 hex>" in Vercel; the link is
- * /admin/#setup=<64 hex>. It works once (its use is recorded in the audit
- * log and checked before every use), only for a number on ADMIN_PHONES, and
- * a new value in the variable issues a new link (for a lost device).
+ * sets ADMIN_SETUP_TOKEN="<staff phone>:<64 hex>:<expiry>" in Vercel (made by
+ * scripts/admin-setup-link.js); the link is /admin/#setup=<64 hex>. It works
+ * once and only until its expiry, only for a number on ADMIN_PHONES, and a new
+ * value in the variable issues a new link (for a lost device).
+ *
+ * "Once" is a permanent row in admin_setup_links, inserted in the same
+ * transaction that stores the passkey: either both happen or neither, and two
+ * people holding the link cannot both succeed. It is never inferred from the
+ * audit log, which expires and whose writes may fail. Links used before that
+ * table existed are recorded only as audit events, which are still honoured.
  */
 const digest = value => createHash('sha256').update(String(value)).digest();
+const LINK_USED = 'This setup link has already been used. Sign in with Face ID or fingerprint.';
 
 function setupGrant(token) {
-  const [phone, secret] = String(process.env.ADMIN_SETUP_TOKEN ?? '').trim().split(':');
-  if (!isE164(phone) || !/^[a-f0-9]{64}$/.test(secret ?? '') || !adminPhones().has(phone)) return null;
-  if (typeof token !== 'string' || !timingSafeEqual(digest(token), digest(secret))) return null;
-  return { phone, linkId: digest(secret).toString('hex').slice(0, 16) };
+  const parsed = parseSetupToken(process.env.ADMIN_SETUP_TOKEN);
+  if (!parsed || !adminPhones().has(parsed.phone)) return null;
+  if (typeof token !== 'string' || !timingSafeEqual(digest(token), digest(parsed.secret))) return null;
+  const hash = digest(parsed.secret).toString('hex');
+  return { phone: parsed.phone, expiresAt: parsed.expiresAt, grantId: hash, legacyId: hash.slice(0, 16) };
 }
 
 async function setupUser(token) {
   const grant = setupGrant(token);
   if (!grant) throw new HttpError(404, 'not_found');
-  const used = await database.queryOne(`SELECT 1 AS used FROM audit_events
-    WHERE action = 'admin_setup_link_used' AND target_id = $1`, [grant.linkId]);
-  if (used) throw new HttpError(410, 'link_used', 'This setup link has already been used. Sign in with Face ID or fingerprint.');
+  if (grant.expiresAt.getTime() <= Date.now()) throw new HttpError(410, 'link_expired', 'This setup link has expired. Ask for a new one.');
+  const used = await database.queryOne(`SELECT 1 AS used FROM admin_setup_links WHERE link_id = $1
+    UNION ALL SELECT 1 FROM audit_events WHERE action = 'admin_setup_link_used' AND target_id = $2 LIMIT 1`, [grant.grantId, grant.legacyId]);
+  if (used) throw new HttpError(410, 'link_used', LINK_USED);
   // The founder may not have an app account yet on this database; the link is enough proof.
   await database.query('INSERT INTO users(phone) VALUES($1) ON CONFLICT (phone) DO NOTHING', [grant.phone]);
   const user = await database.queryOne('SELECT id, phone FROM users WHERE phone = $1 AND deleted_at IS NULL', [grant.phone]);
   if (!user) throw new HttpError(404, 'not_found');
-  return { user, linkId: grant.linkId };
+  return { user, grant };
 }
 
 export async function setupOptions(token) {
@@ -153,8 +171,15 @@ export async function setupOptions(token) {
 }
 
 export async function finishSetup(token, response, req) {
-  const { user, linkId } = await setupUser(token);
-  await finishRegistration(user, response);
-  await audit({ userId: user.id, action: 'admin_setup_link_used', targetType: 'setup_link', targetId: linkId, req });
+  const { user, grant } = await setupUser(token);
+  const credential = await verifyRegistration(user, response);
+  await database.withTransaction(async tx => {
+    // The primary key decides between two holders who both passed the check above.
+    const consumed = await tx.query('INSERT INTO admin_setup_links(link_id) VALUES($1) ON CONFLICT DO NOTHING RETURNING link_id', [grant.grantId]);
+    if (!consumed.rows.length) throw new HttpError(410, 'link_used', LINK_USED);
+    await storePasskey(tx, user, credential);
+  });
+  // A record for people to read, not part of the decision: a failed write here changes nothing.
+  await audit({ userId: user.id, action: 'admin_setup_link_used', targetType: 'setup_link', targetId: grant.legacyId, req });
   return { token: await openStaffSession(user.id), userId: user.id };
 }

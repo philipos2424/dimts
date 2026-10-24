@@ -7,23 +7,30 @@ Written for the Dimts founder and anyone given staff access. Branch
 
 1. Apply `server/db/migrations/20261007_master_admin.sql` to production
    **before deploying** (audit reasons, passkey tables with row-level security
-   and backend grants). It is additive and safe to run twice.
+   and backend grants). It is additive and safe to run twice. Also apply
+   `server/db/migrations/20261024_admin_setup_links.sql` (the permanent record
+   of used setup links) before deploying the release that contains it.
 2. Set `ADMIN_PHONES=+251…` (comma-separated E.164) in Vercel, Production.
 3. Deploy.
 
 ## Signing in
 
 - **First time, with no text or call (one-time setup link):**
-  1. Generate a secret: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`.
-  2. Set `ADMIN_SETUP_TOKEN=<staff phone>:<secret>` in Vercel (Production) and redeploy.
+  1. Run `node server/scripts/admin-setup-link.js <staff phone> [hours]`. It
+     prints the value for `ADMIN_SETUP_TOKEN` (`<staff phone>:<secret>:<expiry>`)
+     and the link. The link lasts 24 hours unless you say otherwise, and never
+     more than 7 days.
+  2. Set `ADMIN_SETUP_TOKEN` in Vercel (Production) and redeploy.
   3. Open `https://dimts.vercel.app/admin/#setup=<secret>` and press **Set up Face ID or fingerprint**.
+  4. Delete `ADMIN_SETUP_TOKEN` in Vercel.
 
   How the link stays safe:
-  - It works once: its use is recorded in the audit log and checked before every use.
+  - It works once. The use is a permanent row in `admin_setup_links`, saved in the same database transaction as the passkey: both happen or neither does, and two people holding the link cannot both succeed. Nothing relies on the audit log, which expires after a year.
+  - It stops working at its expiry. A value with no expiry, or one more than 7 days away, is refused.
   - It only works for a number on `ADMIN_PHONES`.
   - The secret sits after `#`, so browsers never send it to the server or its logs, and the page clears it from the address bar.
 
-  For a lost device, set a new secret: each value is a new one-time link. Delete the variable when you don't need it.
+  For a lost device, make a new link: each value is a new one-time link. Links used before `admin_setup_links` existed are recorded only in the audit log and stay refused while those entries last.
 - **First time, the other way:** sign in to `https://dimts.vercel.app` with your
   staff number (one text or call code), open `/admin/` and press **Set up Face
   ID or fingerprint**.
