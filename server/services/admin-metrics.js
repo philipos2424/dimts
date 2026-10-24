@@ -232,7 +232,7 @@ export async function compliance() {
         'Check that the daily /api/cron/retention job runs and look for skipped calls in its logs.'),
       check('deletion_backlog', 'Deleted calls whose audio is still stored', 'Removed from storage and the carrier after deletion',
         'GDPR Art. 17 · Privacy policy "Deleted recordings are removed"', deletion, 'fail',
-        'Re-run processDeletion for these calls; check carrier and storage credentials.'),
+        'The daily job (02:30 UTC) retries these on its own, even after the owner deleted their account, and reports any older than 3 days to Sentry as deletion_overdue. If the count is still above 0 after a day or two, check carrier and storage credentials: some errors (account_changed, invalid_reference) never resolve by themselves.'),
       check('archive_backlog', 'Recordings still held only by the carrier', 'Audio moved to EU storage (Ireland)',
         'GDPR Art. 44-46 transfers · Privacy policy "Where your data lives"', archive, 'warn',
         'Archive retries run when the owner opens the app; investigate upload failures.'),
