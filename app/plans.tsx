@@ -18,6 +18,7 @@ const COPY = {
     trial: (days: number) => `Pro trial · ${days} ${days === 1 ? 'day' : 'days'} left`,
     trialStart: 'Your free trial starts with your first call: 5 minutes of recorded calls with AI notes, for 21 days. No card needed.',
     trialOver: 'Your trial has ended. Your calls and notes stay readable. Choose a plan to make new calls.',
+    trialOverHere: 'Your trial has ended. Your calls and notes stay readable.',
     credits: 'Credits', renews: (d: string) => `Renews on ${d}`, ends: (d: string) => `Ends on ${d}, then returns to Free`,
     pastDue: 'Your last payment failed. Update your card to keep your plan.',
     manage: 'Manage plan, card and invoices', monthly: 'Monthly', yearly: 'Yearly', twoFree: '2 months free',
@@ -37,6 +38,7 @@ const COPY = {
     perDay: (daily: string) => `About ${daily} a day.`,
     archiveOnly: 'Every past call stays readable, searchable and exportable. New calls need a plan.',
     numberGrace: (n: string, d: string) => `Your business number ${n} stays yours until ${d}. Choose a plan to keep it; after that it is released.`,
+    numberGraceHere: (n: string, d: string) => `Your business number ${n} stays yours until ${d}, then it is released.`,
     free: 'Free', pro: 'Pro', business: 'Business',
   },
   am: {
@@ -44,6 +46,7 @@ const COPY = {
     trial: (days: number) => `የፕሮ ሙከራ · ${days} ቀን ቀርቷል`,
     trialStart: 'ነፃ ሙከራዎ በመጀመሪያ ጥሪዎ ይጀምራል፦ ለ21 ቀናት 20 ደቂቃ የተቀዳ ጥሪ ከAI ማስታወሻ ጋር። የሙከራ ደቂቃዎ ሲያልቅ ጥሪ አይቋረጥም።',
     trialOver: 'ሙከራዎ አልቋል። ጥሪዎችዎና ማስታወሻዎችዎ ይቆያሉ። አዲስ ጥሪ ለማድረግ ዕቅድ ይምረጡ።',
+    trialOverHere: 'ሙከራዎ አልቋል። ጥሪዎችዎና ማስታወሻዎችዎ ይቆያሉ።',
     credits: 'ክሬዲት', renews: (d: string) => `${d} ላይ ይታደሳል`, ends: (d: string) => `${d} ላይ ያበቃል፣ ከዚያ ወደ ነፃ ይመለሳል`,
     pastDue: 'የመጨረሻው ክፍያ አልተሳካም። ዕቅድዎን ለማቆየት ካርድዎን ያዘምኑ።',
     manage: 'ዕቅድ፣ ካርድ እና ደረሰኞችን ያስተዳድሩ', monthly: 'ወርሃዊ', yearly: 'ዓመታዊ', twoFree: '2 ወር ነፃ',
@@ -63,6 +66,7 @@ const COPY = {
     perDay: (daily: string) => `About ${daily} a day.`,
     archiveOnly: 'Every past call stays readable, searchable and exportable. New calls need a plan.',
     numberGrace: (n: string, d: string) => `የንግድ ቁጥርዎ ${n} እስከ ${d} የእርስዎ ነው። ለማቆየት ዕቅድ ይምረጡ፤ ከዚያ በኋላ ይለቀቃል።`,
+    numberGraceHere: (n: string, d: string) => `Your business number ${n} stays yours until ${d}, then it is released.`,
     free: 'ነፃ', pro: 'ፕሮ', business: 'ቢዝነስ',
   },
 };
@@ -141,14 +145,14 @@ export default function Plans() {
           {subscription && <Txt tone="muted">{subscription.interval === 'year' ? copy.yearly : copy.monthly}</Txt>}
         </View>
         {billing.tier === 'free' && trialDays == null
-          ? <Txt tone="muted">{billing.trial_used ? copy.trialOver : copy.trialStart}</Txt>
+          ? <Txt tone="muted">{billing.trial_used ? (canBuyHere ? copy.trialOver : copy.trialOverHere) : copy.trialStart}</Txt>
           : <Txt tone="muted">{copy.minutes(Math.round(billing.minutes_used), billing.minutes_included)}</Txt>}
         <View style={{ height: 8, borderRadius: radius.pill, backgroundColor: c.line, overflow: 'hidden' }}>
           <View style={{ width: `${usedPct * 100}%`, height: '100%', backgroundColor: usedPct >= 0.9 ? c.warn : c.ok }} />
         </View>
         <Txt>{copy.credits}: <Txt weight="bold">{formatCredits(billing.credits_cents, lang)}</Txt></Txt>
         {subscription?.status === 'past_due' && <Txt tone="danger">{copy.pastDue}</Txt>}
-        {billing.business_number && billing.number_release_at && <Txt tone="warn">{copy.numberGrace(billing.business_number, date(billing.number_release_at))}</Txt>}
+        {billing.business_number && billing.number_release_at && <Txt tone="warn">{(canBuyHere ? copy.numberGrace : copy.numberGraceHere)(billing.business_number, date(billing.number_release_at))}</Txt>}
         {subscription?.renews_at && <Txt tone="muted">{copy.renews(date(subscription.renews_at))}</Txt>}
         {subscription?.ends_at && <Txt tone="muted">{copy.ends(date(subscription.ends_at))}</Txt>}
         {shop && subscription && <Button variant="quiet" label={copy.manage} busy={busy === 'portal'} onPress={manage} />}
@@ -207,7 +211,7 @@ export default function Plans() {
         </View>
       )}
 
-      <Section title={copy.addCredits}>
+      <Section title={canBuyHere ? copy.addCredits : copy.credits}>
         <Txt tone="muted">{copy.creditsHelp}</Txt>
         {shop && (
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
