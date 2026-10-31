@@ -3,6 +3,7 @@ import { Pressable, Share, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { captureSessionGuard, claimBusinessNumber, getMe } from '../api';
 import { useApp } from '../AppContext';
+import { canBuyHere } from '../billing';
 import { space } from '../theme';
 import { Txt } from './Txt';
 
@@ -43,13 +44,14 @@ function BusinessNumberForAccount() {
         <Txt tone="accent">Share business number</Txt>
       </Pressable>
       {releaseAt && <Pressable accessibilityRole="link" onPress={() => router.push('/plans')}>
-        <Txt tone="warn">Your plan has ended. This number stays yours until {new Date(releaseAt).toLocaleDateString(undefined, { day: 'numeric', month: 'long' })}. Choose a plan to keep it ›</Txt>
+        <Txt tone="warn">Your plan has ended. This number stays yours until {new Date(releaseAt).toLocaleDateString(undefined, { day: 'numeric', month: 'long' })}.{canBuyHere ? ' Choose a plan to keep it ›' : ''}</Txt>
       </Pressable>}
     </> : loaded && tier === 'free' ? <>
       <Txt tone="muted">A business number for incoming calls comes with Pro and Business. Callers reach you on it, and every call becomes notes.</Txt>
-      <Pressable accessibilityRole="link" onPress={() => router.push('/plans')} style={{ paddingVertical: space.sm }}>
+      {/* Store rules: no path toward buying from a native app. */}
+      {canBuyHere && <Pressable accessibilityRole="link" onPress={() => router.push('/plans')} style={{ paddingVertical: space.sm }}>
         <Txt tone="accent" weight="bold">See plans</Txt>
-      </Pressable>
+      </Pressable>}
     </> : <>
       <Txt tone="muted">{loaded ? 'Get a dedicated local number for incoming calls. It takes a few seconds.' : 'Loading your business number…'}</Txt>
       {loaded && <Pressable accessibilityRole="button" disabled={busy} onPress={claim} style={{ paddingVertical: space.sm }}>

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import { getCallQuote, type CallQuote } from '../api';
-import { formatCredits } from '../billing';
+import { canBuyHere, formatCredits } from '../billing';
 import { useApp } from '../AppContext';
 import { Txt } from './Txt';
 
@@ -12,6 +12,7 @@ const COPY = {
     credits: (rate: string, max: number) => `${rate} a minute from credits · enough for ${max} min`,
     overage: (rate: string, max: number) => `Plan minutes used up · ${rate} a minute from credits · enough for ${max} min`,
     empty: (rate: string) => `${rate} a minute from credits · add credits to call`,
+    emptyHere: (rate: string) => `${rate} a minute from credits · not enough credit for this call`,
     balance: (b: string) => `Balance ${b}`,
   },
   am: {
@@ -19,6 +20,7 @@ const COPY = {
     credits: (rate: string, max: number) => `ከክሬዲት በደቂቃ ${rate} · ለ${max} ደቂቃ ይበቃል`,
     overage: (rate: string, max: number) => `የዕቅድ ደቂቃ አልቋል · ከክሬዲት በደቂቃ ${rate} · ለ${max} ደቂቃ ይበቃል`,
     empty: (rate: string) => `ከክሬዲት በደቂቃ ${rate} · ለመደወል ክሬዲት ይጨምሩ`,
+    emptyHere: (rate: string) => `${rate} a minute from credits · not enough credit for this call`,
     balance: (b: string) => `ቀሪ ${b}`,
   },
 };
@@ -40,7 +42,7 @@ export function CallPrice({ phone }: { phone: string }) {
   const money = (cents: number) => formatCredits(cents, lang);
   const rate = quote.surcharge_cents_per_min + (quote.plan_minutes_left > 0 ? 0 : quote.overage_cents_per_min);
   const text = quote.pays_with === 'plan' ? copy.plan(quote.plan_minutes_left)
-    : quote.max_minutes < 1 ? copy.empty(money(rate))
+    : quote.max_minutes < 1 ? (canBuyHere ? copy.empty : copy.emptyHere)(money(rate))
     : quote.surcharge_cents_per_min > 0 ? copy.credits(money(rate), quote.max_minutes)
     : copy.overage(money(rate), quote.max_minutes);
   return (
